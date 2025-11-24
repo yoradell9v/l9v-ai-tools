@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     }
 
     // Check if user's organization is deactivated
-    const userOrganizations = await prisma.userOrganization.findMany({
+    const userOrganizations: any = await prisma.userOrganization.findMany({
       where: { userId: user.id },
       include: {
         organization: {
@@ -57,13 +57,13 @@ export async function POST(request: Request) {
             id: true,
             name: true,
             deactivatedAt: true,
-          },
+          } as any,
         },
       },
     });
 
-    const deactivatedOrg = userOrganizations.find(
-      (uo) => (uo.organization as any).deactivatedAt !== null
+    const deactivatedOrg: any = userOrganizations.find(
+      (uo: any) => uo.organization && uo.organization.deactivatedAt !== null
     );
 
     if (deactivatedOrg) {

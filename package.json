@@ -18,11 +18,15 @@
     "framer-motion": "^12.23.24",
     "jose": "^6.1.2",
     "lucide-react": "^0.554.0",
+    "mammoth": "^1.11.0",
     "next": "16.0.3",
     "nodemailer": "^7.0.10",
+    "openai": "^6.9.1",
+    "pdf-parse": "^2.4.5",
     "pg": "^8.16.3",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "word-extractor": "^1.0.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

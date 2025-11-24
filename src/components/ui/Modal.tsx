@@ -67,14 +67,16 @@ export default function Modal({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className={`relative rounded-xl sm:rounded-2xl border shadow-xl ${maxWidthClasses[maxWidth]} w-full max-h-[calc(100vh-1rem)] sm:max-h-[calc(100vh-2rem)] flex flex-col pointer-events-auto`}
+              className={`relative rounded-lg border ${maxWidthClasses[maxWidth]} w-full max-h-[calc(100vh-2rem)] flex flex-col pointer-events-auto`}
               style={{
+                boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
                 backgroundColor: "var(--card-bg)",
                 borderColor: "var(--border-color)",
               }}
+            
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
-              <div className="flex-1 flex flex-col overflow-hidden p-4 sm:p-6">
+              <div className="flex-1 flex flex-col overflow-hidden p-4">
                 {/* Title */}
                 {title && (
                   <h3

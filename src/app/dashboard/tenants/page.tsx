@@ -895,22 +895,21 @@ export default function TenantsPage() {
                             <div className="flex flex-col h-full">
                                 {/* Header */}
                                 <div
-                                    className="flex items-center justify-between p-6 border-b sticky top-0 z-10"
+                                    className="flex items-center justify-between p-4 border-b sticky top-0 z-10"
                                     style={{
                                         borderColor: "var(--border-color)",
                                         backgroundColor: "var(--card-bg)",
-                                        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)"
                                     }}
                                 >
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
                                         <div
-                                            className="p-2 rounded-lg"
+                                            className="p-1.5 rounded-lg"
                                             style={{ backgroundColor: "var(--hover-bg)" }}
                                         >
-                                            <Building2 size={20} style={{ color: "var(--accent)" }} />
+                                            <Building2 size={16} style={{ color: "var(--accent)" }} />
                                         </div>
                                         <h2
-                                            className="text-xl font-semibold"
+                                            className="text-lg font-semibold"
                                             style={{ color: "var(--text-primary)" }}
                                         >
                                             Tenant Details
@@ -918,18 +917,18 @@ export default function TenantsPage() {
                                     </div>
                                     <button
                                         onClick={handleClosePanel}
-                                        className="p-2 rounded-lg hover:bg-[var(--hover-bg)] transition-all duration-150 hover:scale-110 active:scale-95"
+                                        className="p-1.5 rounded hover:bg-[var(--hover-bg)] transition-colors"
                                         aria-label="Close panel"
                                     >
-                                        <X size={20} style={{ color: "var(--text-primary)" }} />
+                                        <X size={18} style={{ color: "var(--text-secondary)" }} />
                                     </button>
                                 </div>
 
                                 {/* Content */}
-                                <div className="flex-1 overflow-y-auto p-6">
+                                <div className="flex-1 overflow-y-auto p-4">
                                     {isLoadingTenantDetails ? (
                                         <div className="flex items-center justify-center py-12">
-                                            <svg className="animate-spin h-8 w-8" viewBox="0 0 24 24" style={{ color: "var(--text-secondary)" }}>
+                                            <svg className="animate-spin h-6 w-6" viewBox="0 0 24 24" style={{ color: "var(--text-secondary)" }}>
                                                 <circle
                                                     className="opacity-25"
                                                     cx="12"
@@ -947,177 +946,151 @@ export default function TenantsPage() {
                                             </svg>
                                         </div>
                                     ) : (
-                                        <div className="space-y-6">
+                                        <div className="space-y-4">
                                             {/* Tenant Name and Created At */}
-                                            <div className="mb-6 pb-6 border-b" style={{ borderColor: "var(--border-color)" }}>
+                                            <div className="pb-4 border-b" style={{ borderColor: "var(--border-color)" }}>
                                                 <h3
-                                                    className="text-2xl font-bold mb-2"
+                                                    className="text-lg font-semibold mb-1"
                                                     style={{ color: "var(--text-primary)" }}
                                                 >
                                                     {selectedTenant.name}
                                                 </h3>
                                                 <p
-                                                    className="text-sm"
+                                                    className="text-xs"
                                                     style={{ color: "var(--text-secondary)" }}
                                                 >
                                                     Created {new Date(selectedTenant.createdAt).toLocaleDateString('en-US', {
                                                         year: 'numeric',
-                                                        month: 'long',
+                                                        month: 'short',
                                                         day: 'numeric'
                                                     })}
                                                 </p>
                                             </div>
 
                                             {/* Send Invitation Section */}
-                                            <div className="mb-6">
-                                                <div className="flex items-center gap-2 mb-4">
-                                                    <UserPlus size={18} style={{ color: "var(--accent)" }} />
-                                                    <h4
-                                                        className="text-base font-semibold"
-                                                        style={{ color: "var(--text-primary)" }}
-                                                    >
-                                                        Invite a collaborator
-                                                    </h4>
-                                                </div>
-                                                <div className="space-y-4">
-                                                    <div>
-
-                                                        <div className="relative">
-                                                            <Mail
-                                                                size={18}
-                                                                className="absolute left-3 top-1/2 transform -translate-y-1/2"
-                                                                style={{ color: "var(--text-secondary)" }}
-                                                            />
-                                                            <input
-                                                                type="email"
-                                                                id="invite-email"
-                                                                value={inviteEmail}
-                                                                onChange={(e) => setInviteEmail(e.target.value)}
-                                                                placeholder="Enter email address"
-                                                                className="w-full pl-10 pr-4 py-2.5 rounded-lg border transition-all duration-200 focus:outline-none focus:ring-2"
-                                                                style={{
-                                                                    borderColor: "var(--border-color)",
-                                                                    backgroundColor: "var(--card-bg)",
-                                                                    color: "var(--text-primary)",
-                                                                }}
-                                                                onFocus={(e) => {
-                                                                    e.currentTarget.style.borderColor = "var(--accent)";
-                                                                    e.currentTarget.style.boxShadow = "0 0 0 2px rgba(250, 193, 51, 0.1)";
-                                                                }}
-                                                                onBlur={(e) => {
-                                                                    e.currentTarget.style.borderColor = "var(--border-color)";
-                                                                    e.currentTarget.style.boxShadow = "none";
-                                                                }}
-                                                            />
-                                                        </div>
+                                            <div>
+                                                <h4
+                                                    className="text-sm font-medium mb-3"
+                                                    style={{ color: "var(--text-primary)" }}
+                                                >
+                                                    Invite a collaborator
+                                                </h4>
+                                                <div className="space-y-3">
+                                                    <div className="relative">
+                                                        <Mail
+                                                            size={16}
+                                                            className="absolute left-3 top-1/2 transform -translate-y-1/2"
+                                                            style={{ color: "var(--text-secondary)" }}
+                                                        />
+                                                        <input
+                                                            type="email"
+                                                            id="invite-email"
+                                                            value={inviteEmail}
+                                                            onChange={(e) => setInviteEmail(e.target.value)}
+                                                            placeholder="Enter email address"
+                                                            className="w-full pl-9 pr-3 py-2 rounded-lg border text-sm transition-all duration-200 focus:outline-none"
+                                                            style={{
+                                                                borderColor: "var(--border-color)",
+                                                                backgroundColor: "var(--card-bg)",
+                                                                color: "var(--text-primary)",
+                                                            }}
+                                                            onFocus={(e) => {
+                                                                e.currentTarget.style.borderColor = "var(--accent)";
+                                                            }}
+                                                            onBlur={(e) => {
+                                                                e.currentTarget.style.borderColor = "var(--border-color)";
+                                                            }}
+                                                        />
                                                     </div>
 
                                                     {/* Role Select Dropdown */}
-                                                    <div>
-                                                        <label
-                                                            htmlFor="invite-role"
-                                                            className="block text-xs font-medium mb-2"
-                                                            style={{ color: "var(--text-secondary)" }}
-                                                        >
-                                                            Role
-                                                        </label>
-                                                        <Listbox value={inviteRole} onChange={setInviteRole}>
-                                                            {({ open }) => (
-                                                                <div className="relative">
-                                                                    <Listbox.Button
-                                                                        className="relative w-full pl-4 pr-10 py-2.5 text-left rounded-lg border transition-all duration-200 focus:outline-none focus:ring-2 cursor-pointer"
-                                                                        style={{
-                                                                            borderColor: "var(--border-color)",
-                                                                            backgroundColor: "var(--card-bg)",
-                                                                            color: "var(--text-primary)",
-                                                                        }}
-                                                                        onFocus={(e) => {
-                                                                            e.currentTarget.style.borderColor = "var(--accent)";
-                                                                            e.currentTarget.style.boxShadow = "0 0 0 2px rgba(250, 193, 51, 0.1)";
-                                                                        }}
-                                                                        onBlur={(e) => {
-                                                                            e.currentTarget.style.borderColor = "var(--border-color)";
-                                                                            e.currentTarget.style.boxShadow = "none";
-                                                                        }}
-                                                                    >
-                                                                        <span className="block truncate">
-                                                                            {roleOptions.find((opt) => opt.value === inviteRole)?.label}
-                                                                        </span>
-                                                                        <span className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                                                                            <ChevronDown
-                                                                                size={18}
-                                                                                className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-                                                                                style={{ color: "var(--text-secondary)" }}
-                                                                            />
-                                                                        </span>
-                                                                    </Listbox.Button>
-                                                                    <Listbox.Options
-                                                                        className="absolute z-10 mt-1 w-full rounded-lg border shadow-lg focus:outline-none overflow-hidden"
-                                                                        style={{
-                                                                            borderColor: "var(--border-color)",
-                                                                            backgroundColor: "var(--card-bg)",
-                                                                        }}
-                                                                    >
-                                                                        {roleOptions.map((option) => (
-                                                                            <Listbox.Option
-                                                                                key={option.value}
-                                                                                value={option.value}
-                                                                                className={({ active }) =>
-                                                                                    `relative cursor-pointer select-none py-2.5 px-4 transition-colors`
-                                                                                }
-                                                                            >
-                                                                                {({ active, selected }: { active: boolean; selected: boolean }) => (
-                                                                                    <div
-                                                                                        className="flex items-center justify-between"
-                                                                                        style={{
-                                                                                            backgroundColor: active ? "var(--hover-bg)" : "transparent",
-                                                                                            color: "var(--text-primary)",
-                                                                                            margin: "-0.625rem -1rem",
-                                                                                            padding: "0.625rem 1rem",
-                                                                                        }}
-                                                                                    >
-                                                                                        <span
-                                                                                            className={`block truncate ${selected ? "font-medium" : "font-normal"
-                                                                                                }`}
-                                                                                        >
-                                                                                            {option.label}
+                                                    <Listbox value={inviteRole} onChange={setInviteRole}>
+                                                        {({ open }) => (
+                                                            <div className="relative">
+                                                                <Listbox.Button
+                                                                    className="relative w-full pl-3 pr-8 py-2 text-left rounded-lg border text-sm transition-all duration-200 focus:outline-none cursor-pointer"
+                                                                    style={{
+                                                                        borderColor: "var(--border-color)",
+                                                                        backgroundColor: "var(--card-bg)",
+                                                                        color: "var(--text-primary)",
+                                                                    }}
+                                                                    onFocus={(e) => {
+                                                                        e.currentTarget.style.borderColor = "var(--accent)";
+                                                                    }}
+                                                                    onBlur={(e) => {
+                                                                        e.currentTarget.style.borderColor = "var(--border-color)";
+                                                                    }}
+                                                                >
+                                                                    <span className="block truncate">
+                                                                        {roleOptions.find((opt) => opt.value === inviteRole)?.label}
+                                                                    </span>
+                                                                    <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                                                                        <ChevronDown
+                                                                            size={16}
+                                                                            className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+                                                                            style={{ color: "var(--text-secondary)" }}
+                                                                        />
+                                                                    </span>
+                                                                </Listbox.Button>
+                                                                <Listbox.Options
+                                                                    className="absolute z-10 mt-1 w-full rounded-lg border shadow-md focus:outline-none overflow-hidden"
+                                                                    style={{
+                                                                        borderColor: "var(--border-color)",
+                                                                        backgroundColor: "var(--card-bg)",
+                                                                    }}
+                                                                >
+                                                                    {roleOptions.map((option) => (
+                                                                        <Listbox.Option
+                                                                            key={option.value}
+                                                                            value={option.value}
+                                                                            className={({ active }) =>
+                                                                                `relative cursor-pointer select-none text-sm transition-colors`
+                                                                            }
+                                                                        >
+                                                                            {({ active, selected }: { active: boolean; selected: boolean }) => (
+                                                                                <div
+                                                                                    className="flex items-center justify-between"
+                                                                                    style={{
+                                                                                        backgroundColor: active ? "var(--hover-bg)" : "transparent",
+                                                                                        color: "var(--text-primary)",
+                                                                                        padding: active ? "0.75rem 0.75rem" : "0.5rem 0.75rem",
+                                                                                    }}
+                                                                                >
+                                                                                    <span className={`block truncate ${selected ? "font-medium" : "font-normal"}`}>
+                                                                                        {option.label}
+                                                                                    </span>
+                                                                                    {selected && (
+                                                                                        <span className="text-xs" style={{ color: "var(--accent)" }}>
+                                                                                            ✓
                                                                                         </span>
-                                                                                        {selected && (
-                                                                                            <span
-                                                                                                className="text-xs"
-                                                                                                style={{ color: "var(--accent)" }}
-                                                                                            >
-                                                                                                ✓
-                                                                                            </span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                )}
-                                                                            </Listbox.Option>
-                                                                        ))}
-                                                                    </Listbox.Options>
-                                                                </div>
-                                                            )}
-                                                        </Listbox>
-                                                    </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            )}
+                                                                        </Listbox.Option>
+                                                                    ))}
+                                                                </Listbox.Options>
+                                                            </div>
+                                                        )}
+                                                    </Listbox>
 
                                                     {inviteError && (
-                                                        <div className="p-3 border rounded-md" style={{ backgroundColor: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }}>
-                                                            <p className="text-sm" style={{ color: "rgb(220, 38, 38)" }}>{inviteError}</p>
+                                                        <div className="p-2 border rounded text-xs" style={{ backgroundColor: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }}>
+                                                            <p style={{ color: "rgb(220, 38, 38)" }}>{inviteError}</p>
                                                         </div>
                                                     )}
 
                                                     <button
                                                         onClick={handleSendInvitation}
                                                         disabled={!inviteEmail.trim() || isSendingInvitation}
-                                                        className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 hover:brightness-110 w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg active:scale-95"
+                                                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
                                                         style={{
                                                             backgroundColor: "var(--accent)",
-                                                            color: "#000",
+                                                            color: "var(--text-primary)",
                                                         }}
                                                     >
                                                         {isSendingInvitation ? (
                                                             <>
-                                                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                                                <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24">
                                                                     <circle
                                                                         className="opacity-25"
                                                                         cx="12"
@@ -1136,31 +1109,28 @@ export default function TenantsPage() {
                                                                 <span>Sending...</span>
                                                             </>
                                                         ) : (
-                                                            <>
-                                                                <Mail size={18} />
-                                                                <span>Send Invitation</span>
-                                                            </>
+                                                            <span>Send Invitation</span>
                                                         )}
                                                     </button>
                                                 </div>
                                             </div>
 
                                             {/* Divider */}
-                                            <div className="border-t my-6" style={{ borderColor: "var(--border-color)" }} />
+                                            <div className="border-t my-4" style={{ borderColor: "var(--border-color)" }} />
 
                                             {/* Pending Invites Section */}
-                                            <div className="mb-6">
-                                                <div className="flex items-center gap-2 mb-4">
-                                                    <Mail size={18} style={{ color: "var(--accent)" }} />
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-3">
+                                                    <Mail size={16} style={{ color: "var(--accent)" }} />
                                                     <h4
-                                                        className="text-base font-semibold"
+                                                        className="text-sm font-medium"
                                                         style={{ color: "var(--text-primary)" }}
                                                     >
                                                         Pending Invites
                                                     </h4>
                                                     {selectedTenant.pendingInvites && selectedTenant.pendingInvites.length > 0 && (
                                                         <span
-                                                            className="px-2 py-0.5 text-xs font-medium rounded-full"
+                                                            className="px-1.5 py-0.5 text-xs font-medium rounded-full"
                                                             style={{
                                                                 backgroundColor: "var(--accent-bg)",
                                                                 color: "var(--accent)",
@@ -1172,42 +1142,42 @@ export default function TenantsPage() {
                                                 </div>
 
                                                 {!selectedTenant.pendingInvites || selectedTenant.pendingInvites.length === 0 ? (
-                                                    <div className="py-8 text-center">
+                                                    <div className="py-6 text-center rounded-lg border border-dashed" style={{ borderColor: "var(--border-color)" }}>
                                                         <p
-                                                            className="text-sm"
+                                                            className="text-xs"
                                                             style={{ color: "var(--text-secondary)" }}
                                                         >
-                                                            (No pending invites)
+                                                            No pending invites
                                                         </p>
                                                     </div>
                                                 ) : (
-                                                    <div className="space-y-3">
+                                                    <div className="space-y-2">
                                                         {selectedTenant.pendingInvites.map((invite) => (
                                                             <div
                                                                 key={invite.id}
-                                                                className="p-4 rounded-lg border transition-all duration-150 hover:shadow-md"
+                                                                className="p-3 rounded-lg border transition-all duration-150 hover:shadow-sm"
                                                                 style={{
                                                                     borderColor: "var(--border-color)",
                                                                     backgroundColor: "var(--hover-bg)",
                                                                 }}
                                                             >
-                                                                <div className="flex items-center justify-between gap-3">
+                                                                <div className="flex items-center justify-between gap-2">
                                                                     <div className="flex-1 min-w-0">
                                                                         <p
-                                                                            className="font-medium text-sm mb-1 truncate"
+                                                                            className="font-medium text-xs mb-0.5 truncate"
                                                                             style={{ color: "var(--text-primary)" }}
                                                                             title={invite.email}
                                                                         >
                                                                             {invite.email}
                                                                         </p>
-                                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                                        <div className="flex items-center gap-1.5 flex-wrap">
                                                                             <p
                                                                                 className="text-xs"
                                                                                 style={{ color: "var(--text-secondary)" }}
                                                                             >
-                                                                                Invited {new Date(invite.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                                                {new Date(invite.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                                                             </p>
-                                                                            <span style={{ color: "var(--text-secondary)" }}>•</span>
+                                                                            <span className="text-xs" style={{ color: "var(--text-secondary)" }}>•</span>
                                                                             <p
                                                                                 className="text-xs"
                                                                                 style={{ color: "var(--text-secondary)" }}
@@ -1216,9 +1186,9 @@ export default function TenantsPage() {
                                                                             </p>
                                                                         </div>
                                                                     </div>
-                                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                                    <div className="flex items-center gap-1.5 flex-shrink-0">
                                                                         <span
-                                                                            className="px-2.5 py-1 text-xs font-medium rounded-full"
+                                                                            className="px-2 py-0.5 text-xs font-medium rounded-full"
                                                                             style={{
                                                                                 backgroundColor: invite.role === "ADMIN" ? "rgba(250, 193, 51, 0.2)" : "rgba(59, 130, 246, 0.2)",
                                                                                 color: invite.role === "ADMIN" ? "var(--accent)" : "rgb(59, 130, 246)",
@@ -1229,12 +1199,12 @@ export default function TenantsPage() {
                                                                         <button
                                                                             onClick={() => handleCancelInvite(invite.id)}
                                                                             disabled={cancellingInviteId === invite.id}
-                                                                            className="p-1.5 rounded-lg transition-all duration-150 hover:bg-red-500/20 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                                                            className="p-1 rounded transition-colors hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                                                                             style={{ color: "rgb(239, 68, 68)" }}
                                                                             title="Cancel invitation"
                                                                         >
                                                                             {cancellingInviteId === invite.id ? (
-                                                                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                                                                <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24">
                                                                                     <circle
                                                                                         className="opacity-25"
                                                                                         cx="12"
@@ -1251,7 +1221,7 @@ export default function TenantsPage() {
                                                                                     />
                                                                                 </svg>
                                                                             ) : (
-                                                                                <Trash2 size={16} />
+                                                                                <Trash2 size={14} />
                                                                             )}
                                                                         </button>
                                                                     </div>
@@ -1263,21 +1233,21 @@ export default function TenantsPage() {
                                             </div>
 
                                             {/* Divider */}
-                                            <div className="border-t my-6" style={{ borderColor: "var(--border-color)" }} />
+                                            <div className="border-t my-4" style={{ borderColor: "var(--border-color)" }} />
 
                                             {/* Collaborators Section */}
                                             <div>
-                                                <div className="flex items-center gap-2 mb-4">
-                                                    <UserPlus size={18} style={{ color: "var(--accent)" }} />
+                                                <div className="flex items-center gap-2 mb-3">
+                                                    <UserPlus size={16} style={{ color: "var(--accent)" }} />
                                                     <h4
-                                                        className="text-base font-semibold"
+                                                        className="text-sm font-medium"
                                                         style={{ color: "var(--text-primary)" }}
                                                     >
                                                         Collaborators
                                                     </h4>
                                                     {selectedTenant.collaborators && selectedTenant.collaborators.length > 0 && (
                                                         <span
-                                                            className="px-2 py-0.5 text-xs font-medium rounded-full"
+                                                            className="px-1.5 py-0.5 text-xs font-medium rounded-full"
                                                             style={{
                                                                 backgroundColor: "var(--accent-bg)",
                                                                 color: "var(--accent)",
@@ -1289,30 +1259,29 @@ export default function TenantsPage() {
                                                 </div>
 
                                                 {selectedTenant.collaborators.length === 0 ? (
-                                                    <div className="py-8 text-center rounded-lg border border-dashed" style={{ borderColor: "var(--border-color)" }}>
-                                                        <UserPlus size={32} className="mx-auto mb-3 opacity-50" style={{ color: "var(--text-secondary)" }} />
+                                                    <div className="py-6 text-center rounded-lg border border-dashed" style={{ borderColor: "var(--border-color)" }}>
                                                         <p
-                                                            className="text-sm"
+                                                            className="text-xs"
                                                             style={{ color: "var(--text-secondary)" }}
                                                         >
-                                                            No collaborators yet. Invite someone to get started.
+                                                            No collaborators yet
                                                         </p>
                                                     </div>
                                                 ) : (
-                                                    <div className="space-y-3">
+                                                    <div className="space-y-2">
                                                         {selectedTenant.collaborators.map((collaborator) => (
                                                             <div
                                                                 key={collaborator.id}
-                                                                className="p-4 rounded-lg border transition-all duration-150 hover:shadow-md"
+                                                                className="p-3 rounded-lg border transition-all duration-150 hover:shadow-sm"
                                                                 style={{
                                                                     borderColor: "var(--border-color)",
                                                                     backgroundColor: "var(--hover-bg)",
                                                                 }}
                                                             >
-                                                                <div className="flex items-center justify-between gap-3">
+                                                                <div className="flex items-center justify-between gap-2">
                                                                     <div className="flex-1 min-w-0">
                                                                         <p
-                                                                            className="font-medium text-sm mb-1"
+                                                                            className="font-medium text-xs mb-0.5"
                                                                             style={{ color: "var(--text-primary)" }}
                                                                         >
                                                                             {collaborator.firstname} {collaborator.lastname}
@@ -1325,14 +1294,14 @@ export default function TenantsPage() {
                                                                             {collaborator.email}
                                                                         </p>
                                                                         <p
-                                                                            className="text-xs mt-1"
+                                                                            className="text-xs mt-0.5"
                                                                             style={{ color: "var(--text-secondary)" }}
                                                                         >
                                                                             Joined {new Date(collaborator.joinedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                                                                         </p>
                                                                     </div>
                                                                     <span
-                                                                        className="px-2.5 py-1 text-xs font-medium rounded-full flex-shrink-0"
+                                                                        className="px-2 py-0.5 text-xs font-medium rounded-full flex-shrink-0"
                                                                         style={{
                                                                             backgroundColor: collaborator.role === "ADMIN" ? "rgba(250, 193, 51, 0.2)" : "rgba(59, 130, 246, 0.2)",
                                                                             color: collaborator.role === "ADMIN" ? "var(--accent)" : "rgb(59, 130, 246)",

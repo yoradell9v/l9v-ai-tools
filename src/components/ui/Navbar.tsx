@@ -7,6 +7,8 @@ import { useState, useEffect } from "react";
 import {
     ChevronLeft,
     ChevronRight,
+    ChevronUp,
+    ChevronDown,
     Wrench,
     Building2,
     User,
@@ -14,7 +16,8 @@ import {
     FileText,
     BookOpen,
     Brain,
-    Users
+    Users,
+    Bookmark
 } from "lucide-react";
 
 export interface User {
@@ -30,6 +33,7 @@ export default function Navbar() {
     const { user } = useUser() as { user: User | null };
     const pathname = usePathname();
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isJdBuilderExpanded, setIsJdBuilderExpanded] = useState(false);
 
     // Update CSS variable for sidebar width
     useEffect(() => {
@@ -140,14 +144,49 @@ export default function Navbar() {
                                 </h3>
                             </div>
                         )}
-                        <Link
-                            href="/dashboard/jd-builder"
-                            className={`${navItemClasses("/dashboard/jd-builder")} ${isCollapsed ? "justify-center" : ""}`}
-                            title={isCollapsed ? "JD Builder" : undefined}
-                        >
-                            <FileText size={iconSize} className="flex-shrink-0" />
-                            {!isCollapsed && <span>JD Builder</span>}
-                        </Link>
+                        <div>
+                            <Link
+                                href="/dashboard/jd-builder"
+                                className={`${navItemClasses("/dashboard/jd-builder")} ${isCollapsed ? "justify-center" : ""}`}
+                                title={isCollapsed ? "JD Builder" : undefined}
+                            >
+                                <FileText size={iconSize} className="flex-shrink-0" />
+                                {!isCollapsed && <span>JD Builder</span>}
+                                {!isCollapsed && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setIsJdBuilderExpanded(!isJdBuilderExpanded);
+                                        }}
+                                        className="ml-auto p-1 rounded hover:bg-[var(--hover-bg)] transition-colors"
+                                        aria-label={isJdBuilderExpanded ? "Collapse" : "Expand"}
+                                    >
+                                        {isJdBuilderExpanded ? (
+                                            <ChevronUp size={16} style={{ color: "var(--text-primary)" }} />
+                                        ) : (
+                                            <ChevronDown size={16} style={{ color: "var(--text-primary)" }} />
+                                        )}
+                                    </button>
+                                )}
+                            </Link>
+                            {!isCollapsed && (
+                                <div
+                                    className="ml-8 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out"
+                                    style={{
+                                        maxHeight: isJdBuilderExpanded ? "200px" : "0",
+                                        opacity: isJdBuilderExpanded ? 1 : 0,
+                                    }}
+                                >
+                                    <Link
+                                        href="/dashboard/jd-builder/saved"
+                                        className={`${navItemClasses("/dashboard/jd-builder/saved")} text-xs py-2`}
+                                    >
+                                        <Bookmark size={16} className="flex-shrink-0" />
+                                        <span>Saved Items</span>
+                                    </Link>
+                                </div>
+                            )}
+                        </div>
                         <Link
                             href="/dashboard/sop-generator"
                             className={`${navItemClasses("/dashboard/sop-generator")} ${isCollapsed ? "justify-center" : ""}`}

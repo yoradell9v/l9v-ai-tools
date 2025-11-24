@@ -26,7 +26,8 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             slug: true,
-          },
+            deactivatedAt: true,
+          } as any,
         },
       },
     }) as any;
@@ -136,7 +137,7 @@ export async function POST(request: Request) {
             id: true,
             name: true,
             deactivatedAt: true,
-          },
+          } as any,
         },
       },
     }) as any;
