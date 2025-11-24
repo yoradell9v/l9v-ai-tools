@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deactivatedAt DateTime?
+  
+  users     UserOrganization[]
+  invitations InvitationToken[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  firstname String
+  lastname  String
+  email     String   @unique
+  password  String   
+  
+  globalRole GlobalRole? 
+  timezone  String?  @default("America/New_York")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLoginAt DateTime?
+  
+  resetToken       String?   @unique
+  resetTokenExpiry DateTime?
+  
+  organizations UserOrganization[]
+  refreshTokens RefreshToken[]
+  
+  @@index([email])
+  @@index([globalRole])
+}
+
+enum GlobalRole {
+  SUPERADMIN
+  ADMIN
+  MEMBER
+}
+
+model UserOrganization {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  role           TenantRole
+  createdAt      DateTime @default(now())
+  
+  savedAnalyses SavedAnalysis[]
+  refinementMessages RefinementMessage[]
+  sops          SOP[]
+  businessBrains BusinessBrain[]
+  
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+enum TenantRole {
+  ADMIN
+  MEMBER
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model InvitationToken {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  email          String
+  role           TenantRole
+  token          String   @unique
+  expiresAt      DateTime
+  
+  acceptedAt     DateTime?
+  acceptedBy     String?
+  cancelledAt    DateTime?
+  
+  createdAt      DateTime @default(now())
+  createdBy      String
+  
+  @@unique([organizationId, email])
+  @@index([token])
+  @@index([organizationId])
+}
+
+model SavedAnalysis {
+  id                    String   @id @default(cuid())
+  userOrganizationId    String
+  userOrganization      UserOrganization @relation(fields: [userOrganizationId], references: [id], onDelete: Cascade)
+  
+  title                 String
+  intakeData            Json
+  analysis              Json
+  
+  isFinalized           Boolean @default(false)
+  finalizedAt           DateTime?
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  refinements           RefinementMessage[]
+  
+  @@index([userOrganizationId])
+  @@index([createdAt])
+  @@index([isFinalized])
+}
+
+model RefinementMessage {
+  id                    String   @id @default(cuid())
+  analysisId            String
+  analysis              SavedAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  
+  userOrganizationId    String
+  userOrganization      UserOrganization @relation(fields: [userOrganizationId], references: [id], onDelete: Cascade)
+  
+  role                  MessageRole
+  content               String @db.Text
+  
+  changedSections       String[]
+  analysisSnapshot      Json?
+  
+  sequenceNumber        Int
+  createdAt             DateTime @default(now())
+  
+  @@unique([analysisId, sequenceNumber])
+  @@index([analysisId])
+  @@index([userOrganizationId])
+  @@index([sequenceNumber])
+}
+
+enum MessageRole {
+  user
+  assistant
+}
+
+model SOP {
+  id                 String   @id @default(cuid())
+  userOrganizationId String
+  userOrganization   UserOrganization @relation(fields: [userOrganizationId], references: [id], onDelete: Cascade)
+  
+  title              String
+  content            Json
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  @@index([userOrganizationId])
+}
+
+model BusinessBrain {
+  id                 String   @id @default(cuid())
+  userOrganizationId String
+  userOrganization   UserOrganization @relation(fields: [userOrganizationId], references: [id], onDelete: Cascade)
+  
+  trainingData       Json
+  knowledgeBase      Json
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  @@index([userOrganizationId])
+}
