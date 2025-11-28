@@ -1500,185 +1500,222 @@ export async function POST(request: Request) {
     });
 
     // ========================================================================
-    // PROCESS SOP (if provided)
-    // ========================================================================
-    let sopText: string | null = null;
-
-    if (sopFile) {
-      console.log(
-        "Processing SOP file:",
-        sopFile.name,
-        sopFile.type,
-        sopFile.size
-      );
-
-      const validation = validateSopFile(sopFile);
-      if (!validation.valid) {
-        console.error("SOP validation failed:", validation.error);
-        return NextResponse.json({ error: validation.error }, { status: 400 });
-      }
-
-      try {
-        console.log("Extracting text from SOP...");
-        sopText = await extractTextFromSop(sopFile);
-        console.log("Successfully extracted text, length:", sopText?.length);
-      } catch (extractionError) {
-        console.error("SOP extraction failed:", extractionError);
-        return NextResponse.json(
-          {
-            error:
-              extractionError instanceof Error
-                ? extractionError.message
-                : "Failed to parse the SOP file.",
-          },
-          { status: 400 }
-        );
-      }
-    }
-
-    // ========================================================================
-    // MULTI-STAGE ANALYSIS PIPELINE
+    // MULTI-STAGE ANALYSIS PIPELINE WITH STREAMING PROGRESS
     // ========================================================================
 
-    console.log("Stage 1: Running deep discovery...");
-    const discovery = await runDeepDiscovery(
-      openai,
-      augmentedIntakeJson,
-      sopText
-    );
+    // Create a streaming response
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
 
-    console.log("Stage 1.5: Classifying service type...");
-    const serviceClassification = await classifyServiceType(
-      openai,
-      augmentedIntakeJson,
-      discovery
-    );
+        const sendProgress = (stage: string) => {
+          const progress = JSON.stringify({ type: "progress", stage });
+          controller.enqueue(encoder.encode(progress + "\n"));
+        };
 
-    const recommendedService =
-      serviceClassification.service_type_analysis.recommended_service;
-    console.log("Stage 2: Designing role architecture for", recommendedService);
-    const architecture = await designRoleArchitecture(
-      openai,
-      augmentedIntakeJson,
-      discovery,
-      serviceClassification
-    );
+        try {
+          // Process SOP (if provided)
+          let sopText: string | null = null;
 
-    console.log("Stage 3: Generating detailed specifications...");
-    let detailedSpecs;
+          if (sopFile) {
+            sendProgress("Processing SOP file...");
+            console.log(
+              "Processing SOP file:",
+              sopFile.name,
+              sopFile.type,
+              sopFile.size
+            );
 
-    if (recommendedService === "Dedicated VA") {
-      detailedSpecs = await generateDetailedJD(
-        openai,
-        architecture.dedicated_va_role,
-        discovery,
-        augmentedIntakeJson
-      );
-    } else if (recommendedService === "Projects on Demand") {
-      detailedSpecs = await generateProjectSpecs(
-        openai,
-        architecture.projects,
-        discovery,
-        augmentedIntakeJson
-      );
-    } else if (recommendedService === "Unicorn VA Service") {
-      detailedSpecs = {
-        core_va_jd: await generateDetailedJD(
-          openai,
-          architecture.core_va_role,
-          discovery,
-          augmentedIntakeJson
-        ),
-        team_support_specs: architecture.team_support_areas,
-      };
-    }
+            const validation = validateSopFile(sopFile);
+            if (!validation.valid) {
+              console.error("SOP validation failed:", validation.error);
+              const errorMsg = JSON.stringify({
+                type: "error",
+                error: validation.error,
+              });
+              controller.enqueue(encoder.encode(errorMsg + "\n"));
+              controller.close();
+              return;
+            }
 
-    console.log("Stage 4: Validating and analyzing risks...");
-    const validation = await validateAndAnalyzeRisks(
-      openai,
-      architecture,
-      detailedSpecs,
-      discovery,
-      augmentedIntakeJson,
-      serviceClassification
-    );
+            try {
+              console.log("Extracting text from SOP...");
+              sopText = await extractTextFromSop(sopFile);
+              console.log("Successfully extracted text, length:", sopText?.length);
+            } catch (extractionError) {
+              console.error("SOP extraction failed:", extractionError);
+              const errorMsg = JSON.stringify({
+                type: "error",
+                error: "Failed to parse the SOP file.",
+                details:
+                  extractionError instanceof Error
+                    ? extractionError.message
+                    : "Unknown error",
+              });
+              controller.enqueue(encoder.encode(errorMsg + "\n"));
+              controller.close();
+              return;
+            }
+          }
 
-    console.log("Stage 5: Assembling client package...");
-    const clientPackage = assembleClientPackage(
-      discovery,
-      architecture,
-      detailedSpecs,
-      validation,
-      augmentedIntakeJson,
-      serviceClassification
-    );
+          sendProgress("Stage 1: Running deep discovery...");
+          const discovery = await runDeepDiscovery(
+            openai,
+            augmentedIntakeJson,
+            sopText
+          );
 
-    // ========================================================================
-    // BUILD RESPONSE
-    // ========================================================================
+          sendProgress("Stage 1.5: Classifying service type...");
+          const serviceClassification = await classifyServiceType(
+            openai,
+            augmentedIntakeJson,
+            discovery
+          );
 
-    const preview: any = {
-      summary: clientPackage.executive_summary.what_you_told_us,
-      primary_outcome: augmentedIntakeJson.outcome_90d,
+          const recommendedService =
+            serviceClassification.service_type_analysis.recommended_service;
+          sendProgress(`Stage 2: Designing role architecture for ${recommendedService}...`);
+          const architecture = await designRoleArchitecture(
+            openai,
+            augmentedIntakeJson,
+            discovery,
+            serviceClassification
+          );
 
-      service_type: recommendedService,
-      service_confidence:
-        serviceClassification.service_type_analysis.confidence,
-      service_reasoning:
-        serviceClassification.service_type_analysis.decision_logic,
+          sendProgress("Stage 3: Generating detailed specifications...");
+          let detailedSpecs;
 
-      confidence: validation.quality_assessment.overall_confidence,
-      key_risks: validation.risk_analysis
-        .filter((r: any) => r.severity === "high")
-        .slice(0, 3)
-        .map((r: any) => r.risk),
-      critical_questions: [
-        ...discovery.context_gaps.slice(0, 2).map((q: any) => q.question),
-        ...serviceClassification.service_type_analysis.client_validation_questions
-          .slice(0, 1)
-          .map((q: any) => q.question),
-      ],
-    };
+          if (recommendedService === "Dedicated VA") {
+            detailedSpecs = await generateDetailedJD(
+              openai,
+              architecture.dedicated_va_role,
+              discovery,
+              augmentedIntakeJson
+            );
+          } else if (recommendedService === "Projects on Demand") {
+            detailedSpecs = await generateProjectSpecs(
+              openai,
+              architecture.projects,
+              discovery,
+              augmentedIntakeJson
+            );
+          } else if (recommendedService === "Unicorn VA Service") {
+            detailedSpecs = {
+              core_va_jd: await generateDetailedJD(
+                openai,
+                architecture.core_va_role,
+                discovery,
+                augmentedIntakeJson
+              ),
+              team_support_specs: architecture.team_support_areas,
+            };
+          }
 
-    if (recommendedService === "Dedicated VA") {
-      preview.role_title = architecture.dedicated_va_role.title;
-      preview.hours_per_week = architecture.dedicated_va_role.hours_per_week;
-    } else if (recommendedService === "Projects on Demand") {
-      preview.project_count = architecture.projects.length;
-      preview.total_hours = architecture.total_investment.hours;
-      preview.estimated_timeline = architecture.total_investment.timeline;
-    } else if (recommendedService === "Unicorn VA Service") {
-      preview.core_va_title = architecture.core_va_role.title;
-      preview.core_va_hours = architecture.core_va_role.hours_per_week;
-      preview.team_support_areas = architecture.team_support_areas.length;
-    }
+          sendProgress("Stage 4: Validating and analyzing risks...");
+          const validation = await validateAndAnalyzeRisks(
+            openai,
+            architecture,
+            detailedSpecs,
+            discovery,
+            augmentedIntakeJson,
+            serviceClassification
+          );
 
-    // Build final response
-    const response = {
-      preview,
-      full_package: clientPackage,
-      metadata: {
-        stages_completed: [
-          "Discovery",
-          "Service Classification",
-          "Architecture",
-          "Specification Generation",
-          "Validation",
-        ],
-        service_type: recommendedService,
-        service_classification_scores:
-          serviceClassification.service_type_analysis.service_fit_scores,
-        sop_processed: Boolean(sopText),
-        discovery_insights_count: discovery.task_analysis.task_clusters.length,
-        risks_identified: validation.risk_analysis.length,
-        quality_scores: validation.quality_assessment,
+          sendProgress("Stage 5: Assembling client package...");
+          const clientPackage = assembleClientPackage(
+            discovery,
+            architecture,
+            detailedSpecs,
+            validation,
+            augmentedIntakeJson,
+            serviceClassification
+          );
+
+          // Build final response
+          const preview: any = {
+            summary: clientPackage.executive_summary.what_you_told_us,
+            primary_outcome: augmentedIntakeJson.outcome_90d,
+
+            service_type: recommendedService,
+            service_confidence:
+              serviceClassification.service_type_analysis.confidence,
+            service_reasoning:
+              serviceClassification.service_type_analysis.decision_logic,
+
+            confidence: validation.quality_assessment.overall_confidence,
+            key_risks: validation.risk_analysis
+              .filter((r: any) => r.severity === "high")
+              .slice(0, 3)
+              .map((r: any) => r.risk),
+            critical_questions: [
+              ...discovery.context_gaps.slice(0, 2).map((q: any) => q.question),
+              ...serviceClassification.service_type_analysis.client_validation_questions
+                .slice(0, 1)
+                .map((q: any) => q.question),
+            ],
+          };
+
+          if (recommendedService === "Dedicated VA") {
+            preview.role_title = architecture.dedicated_va_role.title;
+            preview.hours_per_week = architecture.dedicated_va_role.hours_per_week;
+          } else if (recommendedService === "Projects on Demand") {
+            preview.project_count = architecture.projects.length;
+            preview.total_hours = architecture.total_investment.hours;
+            preview.estimated_timeline = architecture.total_investment.timeline;
+          } else if (recommendedService === "Unicorn VA Service") {
+            preview.core_va_title = architecture.core_va_role.title;
+            preview.core_va_hours = architecture.core_va_role.hours_per_week;
+            preview.team_support_areas = architecture.team_support_areas.length;
+          }
+
+          const response = {
+            preview,
+            full_package: clientPackage,
+            metadata: {
+              stages_completed: [
+                "Discovery",
+                "Service Classification",
+                "Architecture",
+                "Specification Generation",
+                "Validation",
+              ],
+              service_type: recommendedService,
+              service_classification_scores:
+                serviceClassification.service_type_analysis.service_fit_scores,
+              sop_processed: Boolean(sopText),
+              discovery_insights_count: discovery.task_analysis.task_clusters.length,
+              risks_identified: validation.risk_analysis.length,
+              quality_scores: validation.quality_assessment,
+            },
+          };
+
+          // Clean team_support_areas for Dedicated VA before returning
+          const cleanedResponse = cleanTeamSupportAreas(response);
+
+          // Send final result
+          const final = JSON.stringify({ type: "result", data: cleanedResponse });
+          controller.enqueue(encoder.encode(final + "\n"));
+          controller.close();
+        } catch (error) {
+          const errorMsg = JSON.stringify({
+            type: "error",
+            error: "Failed to analyze job description",
+            details: error instanceof Error ? error.message : "Unknown error",
+          });
+          controller.enqueue(encoder.encode(errorMsg + "\n"));
+          controller.close();
+        }
       },
-    };
+    });
 
-    // Clean team_support_areas for Dedicated VA before returning
-    const cleanedResponse = cleanTeamSupportAreas(response);
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
 
-    return NextResponse.json(cleanedResponse);
   } catch (error) {
     console.error("JD Analysis error:", error);
     return NextResponse.json(

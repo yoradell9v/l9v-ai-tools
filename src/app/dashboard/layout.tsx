@@ -40,7 +40,7 @@ async function getDashboardData() {
 
         return userData;
 
-    } catch (error: any) {
+    } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
         redirect("/signin");
     }

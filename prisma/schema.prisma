@@ -113,9 +113,13 @@ model SavedAnalysis {
   title                 String
   intakeData            Json
   analysis              Json
+
   
-  isFinalized           Boolean @default(false)
-  finalizedAt           DateTime?
+  parentAnalysisId      String?
+  parentAnalysis        SavedAnalysis? @relation("AnalysisRefinements", fields: [parentAnalysisId], references: [id], onDelete: Cascade)
+  refinedVersions       SavedAnalysis[] @relation("AnalysisRefinements")
+  
+  versionNumber         Int @default(1)
   
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -124,7 +128,7 @@ model SavedAnalysis {
   
   @@index([userOrganizationId])
   @@index([createdAt])
-  @@index([isFinalized])
+  @@index([parentAnalysisId])
 }
 
 model RefinementMessage {
@@ -169,16 +173,43 @@ model SOP {
   @@index([userOrganizationId])
 }
 
+model BusinessCard {
+  id             String   @id @default(cuid())
+  brainId        String
+  brain          BusinessBrain @relation(fields: [brainId], references: [id], onDelete: Cascade)
+
+  type           String            // e.g. "marketing", "operations", "financial", "strategy"
+  title          String
+  description    String @db.Text   // long explanation
+  priority       Int?              // optional (1–5)
+  metadata       Json?             // flexible for future AI fields
+  orderIndex     Int               // for UI ordering
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@index([brainId])
+  @@index([type])
+}
+
+
 model BusinessBrain {
   id                 String   @id @default(cuid())
   userOrganizationId String
   userOrganization   UserOrganization @relation(fields: [userOrganizationId], references: [id], onDelete: Cascade)
-  
-  trainingData       Json
-  knowledgeBase      Json
+
+  // intake form
+  intakeData         Json              // raw submitted form values
+  fileUploads        Json?             // file URLs (images, pdfs, documents)
+
+  // AI-related
+  trainingData       Json?
+  knowledgeBase      Json?
+
+  cards              BusinessCard[]   
   
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
-  
+
   @@index([userOrganizationId])
 }

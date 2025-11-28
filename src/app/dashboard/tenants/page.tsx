@@ -71,7 +71,10 @@ export default function TenantsPage() {
     const [isActivating, setIsActivating] = useState(false);
     const [tenantToActivate, setTenantToActivate] = useState<Tenant | null>(null);
     const [showActivateModal, setShowActivateModal] = useState(false);
-    const [activeTab, setActiveTab] = useState<"active" | "inactive">("active");
+    const [activeTab, setActiveTab] = useState<"current" | "active" | "inactive">("current");
+    const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
+    const [currentTenantDetails, setCurrentTenantDetails] = useState<TenantDetails | null>(null);
+    const [isLoadingCurrentTenant, setIsLoadingCurrentTenant] = useState(false);
 
     const roleOptions = [
         { value: "ADMIN" as const, label: "Tenant Admin" },
@@ -82,6 +85,13 @@ export default function TenantsPage() {
     useEffect(() => {
         fetchTenants();
     }, []);
+
+    // Fetch current tenant details when we know the current tenant id
+    useEffect(() => {
+        if (currentTenantId) {
+            fetchCurrentTenantDetails(currentTenantId);
+        }
+    }, [currentTenantId]);
 
     // Close menu when clicking outside
     useEffect(() => {
@@ -106,6 +116,7 @@ export default function TenantsPage() {
 
             if (response.ok && data.success) {
                 setTenants(data.tenants || []);
+                setCurrentTenantId(data.currentTenantId ?? null);
             }
         } catch (error) {
             console.error("Error fetching tenants:", error);
@@ -132,6 +143,26 @@ export default function TenantsPage() {
             console.error("Error fetching tenant details:", error);
         } finally {
             setIsLoadingTenantDetails(false);
+        }
+    };
+
+    const fetchCurrentTenantDetails = async (tenantId: string) => {
+        try {
+            setIsLoadingCurrentTenant(true);
+            const response = await fetch(`/api/tenant/${tenantId}`, {
+                method: "GET",
+                credentials: "include",
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                setCurrentTenantDetails(data.tenant);
+            }
+        } catch (error) {
+            console.error("Error fetching current tenant details:", error);
+        } finally {
+            setIsLoadingCurrentTenant(false);
         }
     };
 
@@ -387,7 +418,6 @@ export default function TenantsPage() {
                 <label
                     htmlFor="name"
                     className="block text-sm font-medium mb-2"
-                    style={{ color: "var(--text-primary)" }}
                 >
                     Organization Name <span className="text-red-500">*</span>
                 </label>
@@ -398,14 +428,10 @@ export default function TenantsPage() {
                     value={formData.name}
                     onChange={handleInputChange}
                     placeholder="Enter organization name"
-                    className={`w-full px-4 py-2.5 rounded-lg border transition-all duration-200 focus:outline-none focus:ring-2 ${errors.name
-                        ? "border-red-500 focus:ring-red-500/20"
-                        : "border-[var(--border-color)] focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
-                        }`}
-                    style={{
-                        backgroundColor: "var(--card-bg)",
-                        color: "var(--text-primary)",
-                    }}
+                    className={`w-full px-4 py-2.5 rounded-lg border transition-all duration-200 focus:outline-none ${errors.name
+                        ? "border-red-500 focus:ring-2 focus:ring-red-500/20"
+                        : "border-gray-300 dark:border-gray-600 focus:border-[#18416B] dark:focus:border-[#FAC133] focus:ring-[3px] focus:ring-[#18416B]/10 dark:focus:ring-[#FAC133]/10"
+                        } bg-white dark:bg-[#1a1a1a] text-[#1a1a1a] dark:text-[#e0e0e0] placeholder:text-gray-400 dark:placeholder:text-gray-500`}
                 />
                 {errors.name && (
                     <p className="mt-1 text-sm text-red-500">{errors.name}</p>
@@ -424,33 +450,27 @@ export default function TenantsPage() {
         <>
             <Navbar />
             <div
-                className="transition-all duration-300 ease-in-out min-h-screen"
-                style={{ marginLeft: "var(--sidebar-width, 16rem)" }}
+                className="transition-all duration-300 ease-in-out min-h-screen ml-64"
             >
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1
-                                className="text-2xl font-semibold mb-1"
-                                style={{ color: "var(--text-primary)" }}
+                                className="text-2xl font-semibold mb-1 text-[#18416B] dark:text-[#FAC133]"
                             >
                                 Tenants
                             </h1>
                             <p
-                                className="text-sm"
-                                style={{ color: "var(--text-secondary)" }}
+                                className="text-sm text-[#1a1a1a] dark:text-[#e0e0e0]"
                             >
                                 Manage your organizations
                             </p>
                         </div>
                         <button
                             onClick={() => setIsModalOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 active:scale-95"
-                            style={{
-                                backgroundColor: "var(--accent)",
-                                color: "#000",
-                            }}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 active:scale-95 bg-[#18416B] dark:bg-[var(--accent)] text-white"
+
                         >
                             <Plus size={18} />
                             <span>Add Tenant</span>
@@ -458,39 +478,45 @@ export default function TenantsPage() {
                     </div>
 
                     {/* Tabs */}
-                    <div className="mb-4 flex gap-1 border-b" style={{ borderColor: "var(--border-color)" }}>
+                    <div className="mb-4 flex gap-1 border-b border-gray-300 dark:border-gray-600">
+                        <button
+                            onClick={() => setActiveTab("current")}
+                            className={`px-4 py-2 text-sm font-medium transition-all duration-200 relative ${activeTab === "current" ? "text-[#18416B] dark:text-[var(--accent)]" : "text-gray-600 dark:text-gray-400 opacity-60 hover:opacity-100"
+                                }`}
+                        >
+                            Current Organization
+                            {activeTab === "current" && (
+                                <motion.div
+                                    layoutId="activeTab"
+                                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent)]"
+                                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                />
+                            )}
+                        </button>
                         <button
                             onClick={() => setActiveTab("active")}
-                            className={`px-4 py-2 text-sm font-medium transition-all duration-200 relative ${activeTab === "active" ? "" : "opacity-60 hover:opacity-100"
+                            className={`px-4 py-2 text-sm font-medium transition-all duration-200 relative ${activeTab === "active" ? "text-[#18416B] dark:text-[#FAC133]" : "text-gray-600 dark:text-gray-400 opacity-60 hover:opacity-100"
                                 }`}
-                            style={{
-                                color: activeTab === "active" ? "var(--text-primary)" : "var(--text-secondary)",
-                            }}
                         >
                             Active
                             {activeTab === "active" && (
                                 <motion.div
                                     layoutId="activeTab"
-                                    className="absolute bottom-0 left-0 right-0 h-0.5"
-                                    style={{ backgroundColor: "var(--accent)" }}
+                                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent)]"
                                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                                 />
                             )}
                         </button>
                         <button
                             onClick={() => setActiveTab("inactive")}
-                            className={`px-4 py-2 text-sm font-medium transition-all duration-200 relative ${activeTab === "inactive" ? "" : "opacity-60 hover:opacity-100"
+                            className={`px-4 py-2 text-sm font-medium transition-all duration-200 relative ${activeTab === "inactive" ? "text-[#18416B] dark:text-[#FAC133]" : "text-gray-600 dark:text-gray-400 opacity-60 hover:opacity-100"
                                 }`}
-                            style={{
-                                color: activeTab === "inactive" ? "var(--text-primary)" : "var(--text-secondary)",
-                            }}
                         >
                             Inactive
                             {activeTab === "inactive" && (
                                 <motion.div
                                     layoutId="activeTab"
-                                    className="absolute bottom-0 left-0 right-0 h-0.5"
-                                    style={{ backgroundColor: "var(--accent)" }}
+                                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FAC133]"
                                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                                 />
                             )}
@@ -499,17 +525,13 @@ export default function TenantsPage() {
 
                     {/* Tenants List */}
                     <div
-                        className="rounded-lg border"
-                        style={{
-                            borderColor: "var(--border-color)",
-                            backgroundColor: "var(--card-bg)",
-                        }}
+                        className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a]"
                     >
                         {(() => {
                             if (isLoading) {
                                 return (
                                     <div className="flex flex-col items-center justify-center py-16">
-                                        <svg className="animate-spin h-8 w-8 mb-3" viewBox="0 0 24 24" style={{ color: "var(--accent)" }}>
+                                        <svg className="animate-spin h-8 w-8 mb-3 text-[#FAC133]" viewBox="0 0 24 24">
                                             <circle
                                                 className="opacity-25"
                                                 cx="12"
@@ -525,40 +547,176 @@ export default function TenantsPage() {
                                                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                                             />
                                         </svg>
-                                        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Loading...</p>
+                                        <p className="text-sm text-[#1a1a1a] dark:text-[#e0e0e0]">Loading...</p>
+                                    </div>
+                                );
+                            }
+
+                            // Current Organization tab
+                            if (activeTab === "current") {
+                                if (!currentTenantId) {
+                                    return (
+                                        <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+                                            <div className="p-4 rounded-xl mb-4 bg-[var(--accent)]/20">
+                                                <Building2
+                                                    size={40}
+                                                    className="text-[var(--accent)] dark:text-[var(--primary-light)]"
+                                                />
+                                            </div>
+                                            <h3 className="text-base font-medium mb-1 text-[var(--primary)] dark:text-[var(--accent)]">
+                                                No current organization detected
+                                            </h3>
+                                            <p className="text-sm mb-4 max-w-sm text-[var(--text-primary)] dark:text-[var(--text-muted)]">
+                                                You are not currently associated with an organization.
+                                            </p>
+                                        </div>
+                                    );
+                                }
+
+                                if (isLoadingCurrentTenant || !currentTenantDetails) {
+                                    return (
+                                        <div className="flex flex-col items-center justify-center py-16">
+                                            <svg className="animate-spin h-8 w-8 mb-3 text-[#FAC133]" viewBox="0 0 24 24">
+                                                <circle
+                                                    className="opacity-25"
+                                                    cx="12"
+                                                    cy="12"
+                                                    r="10"
+                                                    stroke="currentColor"
+                                                    strokeWidth="4"
+                                                    fill="none"
+                                                />
+                                                <path
+                                                    className="opacity-75"
+                                                    fill="currentColor"
+                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                                />
+                                            </svg>
+                                            <p className="text-sm text-[#1a1a1a] dark:text-[#e0e0e0]">Loading current organization...</p>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div className="p-4 space-y-6">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <h2 className="text-lg font-semibold text-[var(--primary)] dark:text-zinc-100">
+                                                    {currentTenantDetails.name}
+                                                </h2>
+                                                <p className="text-xs text-[var(--text-secondary)] font-mono mt-1">
+                                                    {currentTenantDetails.slug}
+                                                </p>
+                                            </div>
+                                            <span className="px-3 py-1 rounded-full text-xs  uppercase tracking-wide bg-[var(--accent)] text-white">
+                                                Your organization
+                                            </span>
+                                        </div>
+
+                                        <div>
+                                            <h3 className="text-sm font-medium mb-3 text-[var(--text-primary)]">
+                                                Members
+                                            </h3>
+                                            {currentTenantDetails.collaborators.length === 0 ? (
+                                                <div className="py-6 text-center rounded-lg border border-dashed" style={{ borderColor: "var(--border-color)" }}>
+                                                    <p
+                                                        className="text-xs"
+                                                        style={{ color: "var(--text-secondary)" }}
+                                                    >
+                                                        No members found in this organization.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="overflow-x-auto rounded-lg border border-gray-300 dark:border-gray-600">
+                                                    <table className="w-full text-sm">
+                                                        <thead className="bg-gray-50 dark:bg-gray-900/30">
+                                                            <tr>
+                                                                <th className="text-left py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                                                                    Name
+                                                                </th>
+                                                                <th className="text-left py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                                                                    Email
+                                                                </th>
+                                                                <th className="text-left py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                                                                    Role
+                                                                </th>
+                                                                <th className="text-left py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                                                                    Joined
+                                                                </th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {currentTenantDetails.collaborators.map((collaborator) => (
+                                                                <tr
+                                                                    key={collaborator.id}
+                                                                    className="border-t border-gray-200 dark:border-gray-700"
+                                                                >
+                                                                    <td className="py-2.5 px-4">
+                                                                        <p className="text-sm font-medium text-[var(--text-primary)]">
+                                                                            {collaborator.firstname} {collaborator.lastname}
+                                                                        </p>
+                                                                    </td>
+                                                                    <td className="py-2.5 px-4">
+                                                                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                                            {collaborator.email}
+                                                                        </p>
+                                                                    </td>
+                                                                    <td className="py-2.5 px-4">
+                                                                        <span
+                                                                            className={`px-2 py-0.5 text-xs font-medium rounded-full ${collaborator.role === "ADMIN"
+                                                                                ? "bg-[var(--primary)]/10 text-[var(--primary)] dark:text-[var(--accent)]"
+                                                                                : "bg-[var(--accent)]/10 text-[var(--accent)]"
+                                                                                }`}
+                                                                        >
+                                                                            {collaborator.role}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="py-2.5 px-4">
+                                                                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                                            {new Date(collaborator.joinedAt).toLocaleDateString("en-US", {
+                                                                                month: "short",
+                                                                                day: "numeric",
+                                                                                year: "numeric",
+                                                                            })}
+                                                                        </p>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 );
                             }
 
                             const filteredTenants = tenants.filter((tenant: Tenant) =>
-                                activeTab === "active"
+                                tenant.id !== currentTenantId && (activeTab === "active"
                                     ? !tenant.deactivatedAt
-                                    : tenant.deactivatedAt !== null
+                                    : tenant.deactivatedAt !== null)
                             );
+
 
                             if (filteredTenants.length === 0) {
                                 return (
                                     <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
                                         <div
-                                            className="p-4 rounded-xl mb-4"
-                                            style={{
-                                                backgroundColor: "var(--hover-bg)",
-                                            }}
+                                            className="p-4 rounded-xl mb-4 bg-[var(--accent)]/20 dark:bg-[var(--primary-light)]/20"
                                         >
                                             <Building2
                                                 size={40}
-                                                style={{ color: "var(--text-secondary)" }}
+                                                className="text-[var(--accent)] dark:text-[var(--primary-light)]"
+
                                             />
                                         </div>
                                         <h3
-                                            className="text-base font-medium mb-1"
-                                            style={{ color: "var(--text-primary)" }}
+                                            className="text-base font-medium mb-1 text-[var(--primary)] dark:text-zinc-500"
                                         >
                                             {activeTab === "active" ? "No active tenants" : "No inactive tenants"}
                                         </h3>
                                         <p
-                                            className="text-sm mb-4 max-w-sm"
-                                            style={{ color: "var(--text-secondary)" }}
+                                            className="text-sm mb-4 max-w-sm text-[var(--text-primary)] dark:text-[var(--text-muted)]"
                                         >
                                             {activeTab === "active"
                                                 ? "Create your first organization tenant to get started."
@@ -567,11 +725,7 @@ export default function TenantsPage() {
                                         {activeTab === "active" && (
                                             <button
                                                 onClick={() => setIsModalOpen(true)}
-                                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 active:scale-95"
-                                                style={{
-                                                    backgroundColor: "var(--accent)",
-                                                    color: "#000",
-                                                }}
+                                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 active:scale-95 bg-[#FAC133] text-[#18416B] dark:text-[#1a1a1a]"
                                             >
                                                 <Plus size={16} />
                                                 <span>Add Tenant</span>
@@ -584,134 +738,128 @@ export default function TenantsPage() {
                             return (
                                 <div className="p-4">
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                        {filteredTenants.map((tenant: Tenant) => (
-                                            <div
-                                                key={tenant.id}
-                                                onClick={() => !tenant.deactivatedAt && handleTenantClick(tenant)}
-                                                className={`p-4 rounded-lg border transition-all duration-150 group ${tenant.deactivatedAt
-                                                    ? 'opacity-60'
-                                                    : 'hover:shadow-md cursor-pointer hover:border-[var(--accent)]/30'
-                                                    }`}
-                                                style={{
-                                                    borderColor: "var(--border-color)",
-                                                    backgroundColor: "var(--card-bg)",
-                                                }}
-                                            >
-                                                <div className="flex items-start justify-between mb-3">
-                                                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                                                        <div
-                                                            className="p-2 rounded-lg flex-shrink-0"
-                                                            style={{
-                                                                backgroundColor: "var(--hover-bg)",
-                                                            }}
-                                                        >
-                                                            <Building2
-                                                                size={18}
-                                                                style={{ color: "var(--accent)" }}
-                                                            />
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <h3
-                                                                className="font-medium text-sm truncate"
-                                                                style={{ color: "var(--text-primary)" }}
-                                                                title={tenant.name}
-                                                            >
-                                                                {tenant.name}
-                                                            </h3>
-                                                            <p
-                                                                className="text-xs font-mono truncate mt-0.5"
-                                                                style={{ color: "var(--text-secondary)" }}
-                                                                title={tenant.slug}
-                                                            >
-                                                                {tenant.slug}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="relative flex-shrink-0">
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setOpenMenuId(openMenuId === tenant.id ? null : tenant.id);
-                                                            }}
-                                                            className="p-1 rounded hover:bg-[var(--hover-bg)] transition-colors"
-                                                            style={{ color: "var(--text-secondary)" }}
-                                                        >
-                                                            <MoreVertical size={16} />
-                                                        </button>
-                                                        {openMenuId === tenant.id && (
-                                                            <>
-                                                                <div
-                                                                    className="fixed inset-0 z-10"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setOpenMenuId(null);
-                                                                    }}
+                                        {filteredTenants.map((tenant: Tenant) => {
+                                            const isCurrentTenant = tenant.id === currentTenantId;
+
+                                            return (
+                                                <div
+                                                    key={tenant.id}
+                                                    onClick={() => !tenant.deactivatedAt && handleTenantClick(tenant)}
+                                                    className={`p-4 rounded-lg border transition-all duration-150 group ${isCurrentTenant
+                                                        ? "border-[#FAC133] ring-1 ring-[#FAC133] bg-[#FFFAE6] dark:bg-[#1f2937]"
+                                                        : "border-gray-300 dark:border-gray-600"
+                                                        } ${tenant.deactivatedAt
+                                                            ? "opacity-60"
+                                                            : "hover:shadow-md cursor-pointer"
+                                                        }`}
+                                                >
+                                                    <div className="flex items-start justify-between mb-3">
+                                                        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                                            <div className="p-2 rounded-lg flex-shrink-0 bg-[var(--accent)]/10 dark:bg-[var(--primary-light)]/10">
+                                                                <Building2
+                                                                    size={18}
+                                                                    className="text-[var(--accent)] dark:text-[var(--primary-light)]"
                                                                 />
-                                                                <div
-                                                                    className="absolute right-0 mt-1 z-20 rounded-lg border shadow-lg overflow-hidden"
-                                                                    style={{
-                                                                        borderColor: "var(--border-color)",
-                                                                        backgroundColor: "var(--card-bg)",
-                                                                        minWidth: "140px",
-                                                                    }}
-                                                                    onClick={(e) => e.stopPropagation()}
-                                                                >
-                                                                    {!tenant.deactivatedAt ? (
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                setTenantToDeactivate(tenant);
-                                                                                setShowDeactivateModal(true);
-                                                                                setOpenMenuId(null);
-                                                                            }}
-                                                                            className="w-full text-left px-3 py-2 text-xs transition-colors hover:bg-red-500/10 flex items-center gap-2"
-                                                                            style={{ color: "rgb(239, 68, 68)" }}
-                                                                        >
-                                                                            <PowerOff size={14} />
-                                                                            <span>Deactivate</span>
-                                                                        </button>
-                                                                    ) : (
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                setTenantToActivate(tenant);
-                                                                                setShowActivateModal(true);
-                                                                                setOpenMenuId(null);
-                                                                            }}
-                                                                            className="w-full text-left px-3 py-2 text-xs transition-colors hover:bg-green-500/10 flex items-center gap-2"
-                                                                            style={{ color: "rgb(34, 197, 94)" }}
-                                                                        >
-                                                                            <CheckCircle2 size={14} />
-                                                                            <span>Activate</span>
-                                                                        </button>
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2">
+                                                                    <h3
+                                                                        className="font-semibold text-md truncate text-semibold text-[var(--primary)] dark:text-zinc-100"
+                                                                        title={tenant.name}
+                                                                    >
+                                                                        {tenant.name}
+                                                                    </h3>
+                                                                    {isCurrentTenant && (
+                                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-[#FAC133] text-[#18416B]">
+                                                                            Your organization
+                                                                        </span>
                                                                     )}
                                                                 </div>
-                                                            </>
+                                                                <p
+                                                                    className="text-xs font-mono truncate mt-0.5 text-[#18416B] dark:text-[var(--accent)]"
+                                                                    title={tenant.slug}
+                                                                >
+                                                                    {tenant.slug}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        {/* Actions menu (hidden for the current user's organization) */}
+                                                        {!isCurrentTenant && (
+                                                            <div className="relative flex-shrink-0">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setOpenMenuId(openMenuId === tenant.id ? null : tenant.id);
+                                                                    }}
+                                                                    className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
+                                                                >
+                                                                    <MoreVertical size={16} />
+                                                                </button>
+                                                                {openMenuId === tenant.id && (
+                                                                    <>
+                                                                        <div
+                                                                            className="fixed inset-0 z-10"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setOpenMenuId(null);
+                                                                            }}
+                                                                        />
+                                                                        <div
+                                                                            className="absolute right-0 mt-1 z-20 rounded-lg border shadow-lg overflow-hidden border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a] min-w-[140px]"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                        >
+                                                                            {!tenant.deactivatedAt ? (
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setTenantToDeactivate(tenant);
+                                                                                        setShowDeactivateModal(true);
+                                                                                        setOpenMenuId(null);
+                                                                                    }}
+                                                                                    className="w-full text-left px-3 py-2 text-xs transition-colors hover:bg-red-500/10 flex items-center gap-2"
+                                                                                    style={{ color: "rgb(239, 68, 68)" }}
+                                                                                >
+                                                                                    <PowerOff size={14} />
+                                                                                    <span>Deactivate</span>
+                                                                                </button>
+                                                                            ) : (
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setTenantToActivate(tenant);
+                                                                                        setShowActivateModal(true);
+                                                                                        setOpenMenuId(null);
+                                                                                    }}
+                                                                                    className="w-full text-left px-3 py-2 text-xs transition-colors hover:bg-green-500/10 flex items-center gap-2"
+                                                                                    style={{ color: "rgb(34, 197, 94)" }}
+                                                                                >
+                                                                                    <CheckCircle2 size={14} />
+                                                                                    <span>Activate</span>
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                                                        <span>
+                                                            {new Date(tenant.createdAt).toLocaleDateString("en-US", {
+                                                                month: "short",
+                                                                day: "numeric",
+                                                                year: "numeric",
+                                                            })}
+                                                        </span>
+                                                        {tenant.deactivatedAt && (
+                                                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+                                                                Inactive
+                                                            </span>
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center justify-between text-xs" style={{ color: "var(--text-secondary)" }}>
-                                                    <span>
-                                                        {new Date(tenant.createdAt).toLocaleDateString('en-US', {
-                                                            month: 'short',
-                                                            day: 'numeric',
-                                                            year: 'numeric'
-                                                        })}
-                                                    </span>
-                                                    {tenant.deactivatedAt && (
-                                                        <span
-                                                            className="px-2 py-0.5 rounded-full text-xs font-medium"
-                                                            style={{
-                                                                backgroundColor: "rgba(239, 68, 68, 0.15)",
-                                                                color: "rgb(239, 68, 68)",
-                                                            }}
-                                                        >
-                                                            Inactive
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             );
@@ -903,14 +1051,13 @@ export default function TenantsPage() {
                                 >
                                     <div className="flex items-center gap-2">
                                         <div
-                                            className="p-1.5 rounded-lg"
-                                            style={{ backgroundColor: "var(--hover-bg)" }}
+                                            className="p-1.5 rounded-lg bg-[var(--accent)]/10 dark:bg-[var(--primary-light)]/10"
+
                                         >
-                                            <Building2 size={16} style={{ color: "var(--accent)" }} />
+                                            <Building2 size={20} className="text-amber-500 dark:text-[var(--primary-light)]" />
                                         </div>
                                         <h2
-                                            className="text-lg font-semibold"
-                                            style={{ color: "var(--text-primary)" }}
+                                            className="text-lg font-semibold text-[var(--primary)] dark:text-zinc-100"
                                         >
                                             Tenant Details
                                         </h2>
@@ -950,8 +1097,8 @@ export default function TenantsPage() {
                                             {/* Tenant Name and Created At */}
                                             <div className="pb-4 border-b" style={{ borderColor: "var(--border-color)" }}>
                                                 <h3
-                                                    className="text-lg font-semibold mb-1"
-                                                    style={{ color: "var(--text-primary)" }}
+                                                    className="text-lg font-semibold mb-1 text-[var(--primary)] dark:text-zinc-100"
+
                                                 >
                                                     {selectedTenant.name}
                                                 </h3>
@@ -988,18 +1135,7 @@ export default function TenantsPage() {
                                                             value={inviteEmail}
                                                             onChange={(e) => setInviteEmail(e.target.value)}
                                                             placeholder="Enter email address"
-                                                            className="w-full pl-9 pr-3 py-2 rounded-lg border text-sm transition-all duration-200 focus:outline-none"
-                                                            style={{
-                                                                borderColor: "var(--border-color)",
-                                                                backgroundColor: "var(--card-bg)",
-                                                                color: "var(--text-primary)",
-                                                            }}
-                                                            onFocus={(e) => {
-                                                                e.currentTarget.style.borderColor = "var(--accent)";
-                                                            }}
-                                                            onBlur={(e) => {
-                                                                e.currentTarget.style.borderColor = "var(--border-color)";
-                                                            }}
+                                                            className="w-full pl-9 pr-3 py-2 rounded-lg border text-sm transition-all duration-200 focus:outline-none border-gray-300 dark:border-gray-600 focus:border-[#18416B] dark:focus:border-[#FAC133] focus:ring-[3px] focus:ring-[#18416B]/10 dark:focus:ring-[#FAC133]/10 bg-white dark:bg-[#1a1a1a] text-[#1a1a1a] dark:text-[#e0e0e0] placeholder:text-gray-400 dark:placeholder:text-gray-500"
                                                         />
                                                     </div>
 
@@ -1008,18 +1144,7 @@ export default function TenantsPage() {
                                                         {({ open }) => (
                                                             <div className="relative">
                                                                 <Listbox.Button
-                                                                    className="relative w-full pl-3 pr-8 py-2 text-left rounded-lg border text-sm transition-all duration-200 focus:outline-none cursor-pointer"
-                                                                    style={{
-                                                                        borderColor: "var(--border-color)",
-                                                                        backgroundColor: "var(--card-bg)",
-                                                                        color: "var(--text-primary)",
-                                                                    }}
-                                                                    onFocus={(e) => {
-                                                                        e.currentTarget.style.borderColor = "var(--accent)";
-                                                                    }}
-                                                                    onBlur={(e) => {
-                                                                        e.currentTarget.style.borderColor = "var(--border-color)";
-                                                                    }}
+                                                                    className="relative w-full pl-3 pr-8 py-2 text-left rounded-lg border text-sm transition-all duration-200 focus:outline-none cursor-pointer border-gray-300 dark:border-gray-600 focus:border-[#18416B] dark:focus:border-[#FAC133] focus:ring-[3px] focus:ring-[#18416B]/10 dark:focus:ring-[#FAC133]/10 bg-white dark:bg-[#1a1a1a] text-[#1a1a1a] dark:text-[#e0e0e0]"
                                                                 >
                                                                     <span className="block truncate">
                                                                         {roleOptions.find((opt) => opt.value === inviteRole)?.label}
@@ -1060,7 +1185,7 @@ export default function TenantsPage() {
                                                                                         {option.label}
                                                                                     </span>
                                                                                     {selected && (
-                                                                                        <span className="text-xs" style={{ color: "var(--accent)" }}>
+                                                                                        <span className="text-xs text-[var(--primary)] dark:text-[var(--accent)]" >
                                                                                             ✓
                                                                                         </span>
                                                                                     )}
@@ -1082,11 +1207,8 @@ export default function TenantsPage() {
                                                     <button
                                                         onClick={handleSendInvitation}
                                                         disabled={!inviteEmail.trim() || isSendingInvitation}
-                                                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
-                                                        style={{
-                                                            backgroundColor: "var(--accent)",
-                                                            color: "var(--text-primary)",
-                                                        }}
+                                                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 bg-[var(--primary)] dark:bg-[var(--accent)]"
+
                                                     >
                                                         {isSendingInvitation ? (
                                                             <>
@@ -1109,7 +1231,7 @@ export default function TenantsPage() {
                                                                 <span>Sending...</span>
                                                             </>
                                                         ) : (
-                                                            <span>Send Invitation</span>
+                                                            <span className="text-white">Send Invitation</span>
                                                         )}
                                                     </button>
                                                 </div>
@@ -1121,20 +1243,16 @@ export default function TenantsPage() {
                                             {/* Pending Invites Section */}
                                             <div>
                                                 <div className="flex items-center gap-2 mb-3">
-                                                    <Mail size={16} style={{ color: "var(--accent)" }} />
+                                                    <Mail size={16} className="dark:text-[var(--accent)] text-[var(--primary)]" />
                                                     <h4
-                                                        className="text-sm font-medium"
-                                                        style={{ color: "var(--text-primary)" }}
+                                                        className="text-sm font-medium text-[var(--text-primary)]"
                                                     >
                                                         Pending Invites
                                                     </h4>
                                                     {selectedTenant.pendingInvites && selectedTenant.pendingInvites.length > 0 && (
                                                         <span
-                                                            className="px-1.5 py-0.5 text-xs font-medium rounded-full"
-                                                            style={{
-                                                                backgroundColor: "var(--accent-bg)",
-                                                                color: "var(--accent)",
-                                                            }}
+                                                            className="px-2.5 py-1 text-xs font-medium rounded-full bg-[var(--accent)] text-white "
+
                                                         >
                                                             {selectedTenant.pendingInvites.length}
                                                         </span>
@@ -1188,11 +1306,11 @@ export default function TenantsPage() {
                                                                     </div>
                                                                     <div className="flex items-center gap-1.5 flex-shrink-0">
                                                                         <span
-                                                                            className="px-2 py-0.5 text-xs font-medium rounded-full"
-                                                                            style={{
-                                                                                backgroundColor: invite.role === "ADMIN" ? "rgba(250, 193, 51, 0.2)" : "rgba(59, 130, 246, 0.2)",
-                                                                                color: invite.role === "ADMIN" ? "var(--accent)" : "rgb(59, 130, 246)",
-                                                                            }}
+                                                                            className={`px-2 py-0.5 text-xs font-medium rounded-full ${invite.role === "ADMIN"
+                                                                                ? "bg-[var(--primary)]/10 text-[var(--primary)] dark:text-[var(--accent)]"
+                                                                                : "bg-blue-200 text-blue-600"
+                                                                                }`}
+
                                                                         >
                                                                             {invite.role}
                                                                         </span>
@@ -1238,20 +1356,16 @@ export default function TenantsPage() {
                                             {/* Collaborators Section */}
                                             <div>
                                                 <div className="flex items-center gap-2 mb-3">
-                                                    <UserPlus size={16} style={{ color: "var(--accent)" }} />
+                                                    <UserPlus size={16} className="dark:text-[var(--accent)] text-[var(--primary)]" />
                                                     <h4
-                                                        className="text-sm font-medium"
-                                                        style={{ color: "var(--text-primary)" }}
+                                                        className="text-sm font-medium text-[var(--text-primary)]"
                                                     >
                                                         Collaborators
                                                     </h4>
                                                     {selectedTenant.collaborators && selectedTenant.collaborators.length > 0 && (
                                                         <span
-                                                            className="px-1.5 py-0.5 text-xs font-medium rounded-full"
-                                                            style={{
-                                                                backgroundColor: "var(--accent-bg)",
-                                                                color: "var(--accent)",
-                                                            }}
+                                                            className="px-2.5 py-1 text-xs font-medium rounded-full bg-[var(--accent)] text-white "
+
                                                         >
                                                             {selectedTenant.collaborators.length}
                                                         </span>
@@ -1301,11 +1415,14 @@ export default function TenantsPage() {
                                                                         </p>
                                                                     </div>
                                                                     <span
-                                                                        className="px-2 py-0.5 text-xs font-medium rounded-full flex-shrink-0"
-                                                                        style={{
-                                                                            backgroundColor: collaborator.role === "ADMIN" ? "rgba(250, 193, 51, 0.2)" : "rgba(59, 130, 246, 0.2)",
-                                                                            color: collaborator.role === "ADMIN" ? "var(--accent)" : "rgb(59, 130, 246)",
-                                                                        }}
+                                                                        className={`
+  px-2 py-0.5 text-xs font-medium rounded-full flex-shrink-0
+  ${collaborator.role === "ADMIN"
+                                                                                ? "bg-[var(--primary)]/10 text-[var(--primary)] dark:text-[var(--accent)]"
+                                                                                : "bg-[var(--accent)]/10 text-[var(--accent)] "
+                                                                            }
+`}
+
                                                                     >
                                                                         {collaborator.role}
                                                                     </span>

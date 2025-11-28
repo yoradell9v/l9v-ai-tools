@@ -57,15 +57,15 @@ export default function Home() {
   );
 
   return (
-    <div className="flex min-h-screen items-center justify-center font-sans transition-colors duration-150" style={{ backgroundColor: "var(--background)" }}>
-      <main className="flex min-h-screen w-full max-w-5xl flex-col items-center justify-between py-24 px-8 sm:items-start transition-colors duration-150" style={{ backgroundColor: "var(--background)" }}>
+    <div className="flex min-h-screen items-center justify-center font-sans transition-colors duration-150 bg-white dark:bg-[#121212]">
+      <main className="flex min-h-screen w-full max-w-5xl flex-col items-center justify-between py-24 px-8 sm:items-start transition-colors duration-150 bg-white dark:bg-[#121212]">
         {/* Header */}
         <div className="w-full">
           <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left mb-12">
-            <h1 className="text-3xl font-semibold leading-10 tracking-tight text-[var(--primary)] sm:text-5xl transition-colors duration-150 dark:text-white">
+            <h1 className="text-3xl font-semibold leading-10 tracking-tight text-[#18416B] dark:text-[#FAC133] sm:text-5xl transition-colors duration-150">
               {user ? `Welcome back, ${user.firstname}!` : "Level 9 Virtual AI Tools"}
             </h1>
-            <p className="max-w-md text-lg leading-8 transition-colors duration-150" style={{ color: "var(--text-secondary)" }}>
+            <p className="max-w-md text-lg leading-8 transition-colors duration-150 text-[#1a1a1a] dark:text-[#e0e0e0]">
               {user
                 ? "Choose a tool to get started with your business needs."
                 : "Powerful AI tools to help you build and scale your business."}
@@ -77,27 +77,22 @@ export default function Home() {
             {cards.map((card, index) => {
               const CardContent = (
                 <div
-                  className={`group relative rounded-2xl backdrop-blur p-6 shadow-lg transition-all duration-150 ${card.disabled
+                  className={`group relative rounded-2xl backdrop-blur p-6 shadow-lg transition-all duration-150 border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] ${card.disabled
                     ? "opacity-60 cursor-not-allowed"
                     : "hover:shadow-xl hover:-translate-y-0.5 cursor-pointer"
                     }`}
-                  style={{
-                    borderColor: "var(--card-border)",
-                    backgroundColor: "var(--card-bg)"
-                  }}
                 >
                   <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
                     <div
-                      className={`w-14 h-14 mb-4 rounded-lg flex items-center justify-center shadow-md transition-colors duration-150 ${card.disabled ? "opacity-70" : ""
+                      className={`w-14 h-14 mb-4 rounded-lg flex items-center justify-center shadow-md transition-colors duration-150 bg-[#FAC133] dark:bg-[#FAC133]/90 ${card.disabled ? "opacity-70" : ""
                         }`}
-                      style={{ backgroundColor: "var(--accent)" }}
                     >
                       {card.icon}
                     </div>
-                    <h3 className="text-base font-semibold mb-2 transition-colors duration-150" style={{ color: "var(--text-primary)" }}>
+                    <h3 className="text-base font-semibold mb-2 transition-colors duration-150 text-[#18416B] dark:text-[#FAC133]">
                       {card.title}
                     </h3>
-                    <p className="text-sm leading-relaxed transition-colors duration-150 mb-3" style={{ color: "var(--text-secondary)" }}>
+                    <p className="text-sm leading-relaxed transition-colors duration-150 mb-3 text-[#1a1a1a] dark:text-[#e0e0e0]">
                       {card.subtitle}
                     </p>
                     {card.disabled ? (
@@ -105,7 +100,7 @@ export default function Home() {
                         COMING SOON
                       </span>
                     ) : card.href ? (
-                      <span className="text-xs font-medium text-[var(--accent)]">
+                      <span className="text-xs font-medium text-[#18416B] dark:text-[#FAC133] hover:text-[#245884] dark:hover:text-[#FAC133]/80">
                         Get Started →
                       </span>
                     ) : null}
@@ -131,12 +126,7 @@ export default function Home() {
           <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
             <Link
               href="/signin"
-              className="w-full sm:w-auto font-semibold py-2.5 px-6 rounded-xl focus:outline-none focus:ring-2 transition-all duration-150 shadow-md"
-              style={{
-                backgroundColor: "var(--accent)",
-                color: "white",
-                boxShadow: `0 0 20px var(--accent)`,
-              }}
+              className="w-full sm:w-auto font-semibold py-2.5 px-6 rounded-xl focus:outline-none focus:ring-2 transition-all duration-150 shadow-md bg-[#FAC133] text-[#18416B] dark:bg-[#FAC133] dark:text-[#1a1a1a] hover:brightness-110"
             >
               Sign In
             </Link>

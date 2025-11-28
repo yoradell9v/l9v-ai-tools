@@ -115,9 +115,9 @@ export default function AcceptInvitePage() {
 
     if (isValidating) {
         return (
-            <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: "var(--background)", color: "var(--text-primary)" }}>
+            <div className="min-h-screen flex items-center justify-center px-4 bg-white dark:bg-[#121212]">
                 <div className="text-center">
-                    <svg className="animate-spin h-8 w-8 mx-auto mb-4" viewBox="0 0 24 24" style={{ color: "var(--text-secondary)" }}>
+                    <svg className="animate-spin h-8 w-8 mx-auto mb-4 text-[#FAC133]" viewBox="0 0 24 24">
                         <circle
                             className="opacity-25"
                             cx="12"
@@ -133,7 +133,7 @@ export default function AcceptInvitePage() {
                             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                         />
                     </svg>
-                    <p style={{ color: "var(--text-secondary)" }}>Validating invitation...</p>
+                    <p className="text-[#1a1a1a] dark:text-[#e0e0e0]">Validating invitation...</p>
                 </div>
             </div>
         );
@@ -141,14 +141,14 @@ export default function AcceptInvitePage() {
 
     if (validationError || !inviteDetails) {
         return (
-            <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: "var(--background)", color: "var(--text-primary)" }}>
-                <div className="w-full max-w-md rounded-2xl px-8 pt-8 pb-10 border shadow-lg" style={{ borderColor: "var(--border-color)", backgroundColor: "var(--card-bg)" }}>
+            <div className="min-h-screen flex items-center justify-center px-4 bg-white dark:bg-[#121212]">
+                <div className="w-full max-w-md rounded-2xl px-8 pt-8 pb-10 border shadow-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a]">
                     <div className="text-center">
-                        <h2 className="text-2xl font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Invalid Invitation</h2>
-                        <p className="mb-6" style={{ color: "var(--text-secondary)" }}>{validationError || "This invitation is invalid or has expired."}</p>
+                        <h2 className="text-2xl font-semibold mb-4 text-[#18416B] dark:text-[#FAC133]">Invalid Invitation</h2>
+                        <p className="mb-6 text-[#1a1a1a] dark:text-[#e0e0e0]">{validationError || "This invitation is invalid or has expired."}</p>
                         <button
                             onClick={() => router.push("/signin")}
-                            className="w-full bg-[var(--accent)] hover:brightness-110 text-white font-semibold py-2.5 px-4 rounded-xl transition"
+                            className="w-full bg-[#FAC133] hover:brightness-110 text-[#18416B] dark:text-[#1a1a1a] font-semibold py-2.5 px-4 rounded-xl transition"
                         >
                             Go to Sign In
                         </button>

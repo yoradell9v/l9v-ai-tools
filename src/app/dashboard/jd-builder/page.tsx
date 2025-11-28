@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import Navbar from "@/components/ui/Navbar";
 import Modal from "@/components/ui/Modal";
-import IntakeForm from "@/components/forms/IntakeForm";
+import BaseIntakeForm from "@/components/forms/BaseIntakeForm";
+import { jdFormConfig } from "@/components/forms/configs/jdFormConfig";
+import RefinementForm from "@/components/forms/RefinementForm";
 import { useUser } from "@/context/UserContext";
-import { Briefcase, Sparkles, CheckCircle2, Flame, ShieldAlert, Flag, Activity, AlertTriangle, TrendingUp, Target, AlertCircle, Network, FileText, Lightbulb, Plus, MoreVertical, Edit, Download, Save } from "lucide-react";
+import { Briefcase, Sparkles, CheckCircle2, Flame, ShieldAlert, Flag, Activity, AlertTriangle, TrendingUp, Target, AlertCircle, Network, FileText, Lightbulb, Plus, MoreVertical, Edit, Download, Save, History } from "lucide-react";
 import { getConfidenceValue, getConfidenceColor } from '@/utils/confidence';
 
 interface AnalysisResult {
@@ -467,6 +470,7 @@ interface IntakeFormData {
 
 export default function JdBuilderPage() {
     const { user } = useUser();
+    const router = useRouter();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
@@ -475,9 +479,13 @@ export default function JdBuilderPage() {
     const tabsRef = useRef<HTMLDivElement>(null);
     const [tabContentHeight, setTabContentHeight] = useState<string>('calc(100vh)');
     const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+    const [isRefinementModalOpen, setIsRefinementModalOpen] = useState(false);
+    const [savedAnalysisId, setSavedAnalysisId] = useState<string | null>(null);
+    const [currentStage, setCurrentStage] = useState<string>("");
 
-    const handleSuccess = ({ apiResult, input }: { apiResult: any; input: IntakeFormData }) => {
+    const handleSuccess = async ({ apiResult, input }: { apiResult: any; input: IntakeFormData }) => {
         setIsProcessing(true);
+        setCurrentStage(""); // Reset stage when analysis completes
         try {
             const result: AnalysisResult = {
                 preview: apiResult.preview ?? {
@@ -507,6 +515,42 @@ export default function JdBuilderPage() {
             };
             setAnalysisResult(result);
             setIntakeData(input);
+
+            // Automatically save the analysis
+            try {
+                // Generate a title from the analysis
+                const title = `${input.companyName} - ${apiResult.preview?.service_type || apiResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
+
+                const saveResponse = await fetch("/api/jd/save", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    credentials: "include",
+                    body: JSON.stringify({
+                        title,
+                        intakeData: input,
+                        analysis: result,
+                        isFinalized: false,
+                    }),
+                });
+
+                const saveData = await saveResponse.json();
+
+                if (!saveResponse.ok) {
+                    console.error("Failed to save analysis:", saveData.error);
+                    // Don't show error to user, just log it - analysis is still displayed
+                } else {
+                    console.log("Analysis saved successfully:", saveData.savedAnalysis);
+                    // Store the saved analysis ID for refinement
+                    if (saveData.savedAnalysis?.id) {
+                        setSavedAnalysisId(saveData.savedAnalysis.id);
+                    }
+                }
+            } catch (saveError) {
+                console.error("Error saving analysis:", saveError);
+                // Don't show error to user, just log it - analysis is still displayed
+            }
         } catch (e) {
             console.error("Failed to process API result:", e);
             setAnalysisResult({
@@ -595,68 +639,144 @@ export default function JdBuilderPage() {
         return () => document.removeEventListener("click", handleClickOutside);
     }, [actionsMenuOpen]);
 
-    const handleDownload = () => {
-        // TODO: Implement download functionality
-        console.log("Download analysis");
-        setActionsMenuOpen(false);
+    const handleDownload = async () => {
+        if (!analysisResult) {
+            console.error("No analysis to download");
+            setActionsMenuOpen(false);
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/jd/download', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(analysisResult),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to download PDF');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+
+            const contentDisposition = response.headers.get('Content-Disposition');
+            const filename = contentDisposition
+                ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') || 'job-description-analysis.pdf'
+                : 'job-description-analysis.pdf';
+
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            setActionsMenuOpen(false);
+        } catch (error) {
+            console.error('Download error:', error);
+            alert('Failed to download job description. Please try again.');
+            setActionsMenuOpen(false);
+        }
     };
 
-    const handleSave = () => {
-        // TODO: Implement save functionality
-        console.log("Save analysis");
-        setActionsMenuOpen(false);
+    const handleSave = async () => {
+        if (!analysisResult || !intakeData) {
+            console.error("No analysis to save");
+            setActionsMenuOpen(false);
+            return;
+        }
+
+        try {
+            // Generate a title from the analysis
+            const title = `${intakeData.companyName} - ${analysisResult.preview?.service_type || analysisResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
+
+            const saveResponse = await fetch("/api/jd/save", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                credentials: "include",
+                body: JSON.stringify({
+                    title,
+                    intakeData,
+                    analysis: analysisResult,
+                    isFinalized: false,
+                }),
+            });
+
+            const saveData = await saveResponse.json();
+
+            if (!saveResponse.ok) {
+                console.error("Failed to save analysis:", saveData.error);
+                // TODO: Show error message to user
+            } else {
+                console.log("Analysis saved successfully:", saveData.savedAnalysis);
+                // Store the saved analysis ID for refinement
+                if (saveData.savedAnalysis?.id) {
+                    setSavedAnalysisId(saveData.savedAnalysis.id);
+                }
+                // TODO: Show success message to user
+            }
+        } catch (error) {
+            console.error("Error saving analysis:", error);
+            // TODO: Show error message to user
+        } finally {
+            setActionsMenuOpen(false);
+        }
     };
 
     return (
         <>
             <Navbar />
             <div
-                className="transition-all duration-300 ease-in-out min-h-screen"
-                style={{ marginLeft: "var(--sidebar-width, 16rem)" }}
+                className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden ml-[var(--sidebar-width,16rem)] bg-[var(--bg-color)]"
             >
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 flex flex-col h-full">
                     {/* Header - Always Visible */}
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h1
-                                className="text-2xl font-semibold mb-1"
-                                style={{ color: "var(--text-primary)" }}
-                            >
-                                Job Description Builder AI
-                            </h1>
-                            <p
-                                className="text-sm"
-                                style={{ color: "var(--text-secondary)" }}
-                            >
-                                Create comprehensive job descriptions with AI-powered analysis
-                            </p>
+                    <div className="flex-shrink-0 pt-6 pb-4">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h1
+                                    className="text-2xl font-semibold mb-1 text-[var(--primary)] dark:text-[var(--accent)]"
+                                >
+                                    Job Description Builder AI
+                                </h1>
+                                <p
+                                    className="text-sm text-[var(--text-secondary)]"
+                                >
+                                    Create comprehensive job descriptions with AI-powered analysis
+                                </p>
+
+                            </div>
+                            <div className="flex items-center gap-4">
+
+                                {!isProcessing && (
+                                    <button
+                                        onClick={() => setIsModalOpen(true)}
+                                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 active:scale-95 bg-[var(--primary)] dark:bg-[var(--accent)] text-white "
+                                    >
+                                        <Plus size={18} />
+                                        <span>{analysisResult ? "New Analysis" : "Start Analysis"}</span>
+                                    </button>
+                                )}
+                                <button className="flex items-center gap-2 cursor-pointer border rounded-lg px-4 py-2 text-sm font-medium border-[var(--primary)] dark:border-[var(--accent)] text-[var(--primary)] dark:text-[var(--accent)]" onClick={() => router.push("/dashboard/jd-builder/history")} > <History size={18} /> History</button>
+                            </div>
                         </div>
-                        {!isProcessing && (
-                            <button
-                                onClick={() => setIsModalOpen(true)}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 active:scale-95"
-                                style={{
-                                    backgroundColor: "var(--accent)",
-                                    color: "#000",
-                                }}
-                            >
-                                <Plus size={18} />
-                                <span>{analysisResult ? "New Analysis" : "Start Analysis"}</span>
-                            </button>
-                        )}
+
+                        {/* Divider */}
+                        <div className="border-b border-[var(--border-color)]" />
                     </div>
 
-                    {/* Divider */}
-                    <div className="mb-6 border-b" style={{ borderColor: "var(--border-color)" }} />
-
-                    {/* Main Content Area - Consistent Structure */}
-                    <div
-
-                    >
+                    {/* Scrollable Content Area */}
+                    <div className="flex-1 overflow-y-auto ">
                         {/* Processing State */}
                         {isProcessing && (
                             <div className="flex flex-col items-center justify-center py-16">
-                                <svg className="animate-spin h-8 w-8 mb-3" viewBox="0 0 24 24" style={{ color: "var(--accent)" }}>
+                                <svg className="animate-spin h-8 w-8 mb-3 text-[var(--accent)]" viewBox="0 0 24 24" >
                                     <circle
                                         className="opacity-25"
                                         cx="12"
@@ -673,10 +793,10 @@ export default function JdBuilderPage() {
                                     />
                                 </svg>
                                 <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
-                                    Processing your analysis
+                                    {currentStage || "Processing your analysis"}
                                 </h3>
-                                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                                    This may take a moment...
+                                <p className="text-sm text-[var(--text-secondary)]">
+                                    {currentStage ? "Please wait..." : "This may take a moment..."}
                                 </p>
                             </div>
                         )}
@@ -685,35 +805,27 @@ export default function JdBuilderPage() {
                         {!analysisResult && !isProcessing && (
                             <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
                                 <div
-                                    className="p-4 rounded-xl mb-4"
-                                    style={{
-                                        backgroundColor: "var(--hover-bg)",
-                                    }}
+
+                                    className="p-4 rounded-xl mb-4 bg-[var(--accent)]/20 dark:bg-[var(--primary-light)]/20"
                                 >
                                     <FileText
                                         size={40}
-                                        style={{ color: "var(--text-secondary)" }}
+                                        className="text-[var(--accent)] dark:text-[var(--primary-light)]"
                                     />
                                 </div>
                                 <h3
-                                    className="text-base font-medium mb-1"
-                                    style={{ color: "var(--text-primary)" }}
+                                    className="text-base font-medium mb-1 text-[var(--text-primary)]"
                                 >
                                     {getCurrentGreeting()}
                                 </h3>
                                 <p
-                                    className="text-sm mb-6 max-w-sm"
-                                    style={{ color: "var(--text-secondary)" }}
+                                    className="text-sm mb-6 max-w-sm text-[var(--text-secondary)]"
                                 >
                                     Let's find your perfect virtual assistant. Start by creating a new analysis.
                                 </p>
                                 <button
                                     onClick={() => setIsModalOpen(true)}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 active:scale-95"
-                                    style={{
-                                        backgroundColor: "var(--accent)",
-                                        color: "#000",
-                                    }}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 active:scale-95 bg-[var(--primary)] dark:bg-[var(--accent)] text-white"
                                 >
                                     <Plus size={16} />
                                     <span>Start New Analysis</span>
@@ -723,9 +835,9 @@ export default function JdBuilderPage() {
 
                         {/* Results State */}
                         {analysisResult && !isProcessing && (
-                            <div className="rounded-lg border" style={{ borderColor: "var(--border-color)", backgroundColor: "var(--card-bg)" }}>
+                            <div className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] flex flex-col" style={{ maxHeight: 'calc(100vh - 200px)' }}>
                                 {/* Header with Actions Menu */}
-                                <div className="p-6 border-b" style={{ borderColor: "var(--border-color)" }}>
+                                <div className="flex-shrink-0 p-6 border-b border-[var(--border-color)]">
                                     <div className="flex items-start justify-between">
                                         <div>
                                             <h3 className="text-xl font-semibold text-[var(--text-primary)] mb-1">
@@ -742,12 +854,7 @@ export default function JdBuilderPage() {
                                                     e.stopPropagation();
                                                     setActionsMenuOpen(!actionsMenuOpen);
                                                 }}
-                                                className="w-9 h-9 flex items-center justify-center rounded-lg border transition-colors hover:bg-[var(--hover-bg)]"
-                                                style={{
-                                                    borderColor: "var(--border-color)",
-                                                    backgroundColor: "var(--card-bg)",
-                                                    color: "var(--text-secondary)",
-                                                }}
+                                                className="w-9 h-9 flex items-center justify-center rounded-lg border border-[var(--border-color)] transition-colors hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] bg-[var(--card-bg)]"
                                             >
                                                 <MoreVertical size={18} />
                                             </button>
@@ -761,32 +868,61 @@ export default function JdBuilderPage() {
                                                         }}
                                                     />
                                                     <div
-                                                        className="absolute right-0 top-full mt-2 w-48 rounded-lg border shadow-lg z-20 overflow-hidden"
-                                                        style={{
-                                                            borderColor: "var(--border-color)",
-                                                            backgroundColor: "var(--card-bg)",
-                                                        }}
+                                                        className="absolute right-0 top-full mt-2 w-48 rounded-lg border border-[var(--border-color)] shadow-lg z-20 overflow-hidden bg-[var(--card-bg)]"
                                                         onClick={(e) => e.stopPropagation()}
                                                     >
                                                         <button
-                                                            onClick={(e) => {
+                                                            onClick={async (e) => {
                                                                 e.stopPropagation();
-                                                                setIsModalOpen(true);
                                                                 setActionsMenuOpen(false);
+
+                                                                // Ensure analysis is saved before refining
+                                                                if (!savedAnalysisId && analysisResult && intakeData && user) {
+                                                                    try {
+                                                                        const title = `${intakeData.companyName} - ${analysisResult.preview?.service_type || analysisResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
+
+                                                                        const saveResponse = await fetch("/api/jd/save", {
+                                                                            method: "POST",
+                                                                            headers: {
+                                                                                "Content-Type": "application/json",
+                                                                            },
+                                                                            credentials: "include",
+                                                                            body: JSON.stringify({
+                                                                                title,
+                                                                                intakeData,
+                                                                                analysis: analysisResult,
+                                                                                isFinalized: false,
+                                                                            }),
+                                                                        });
+
+                                                                        const saveData = await saveResponse.json();
+                                                                        if (saveResponse.ok && saveData.savedAnalysis?.id) {
+                                                                            setSavedAnalysisId(saveData.savedAnalysis.id);
+                                                                            setIsRefinementModalOpen(true);
+                                                                        } else {
+                                                                            alert("Please save your analysis first before refining.");
+                                                                        }
+                                                                    } catch (error) {
+                                                                        console.error("Error saving analysis:", error);
+                                                                        alert("Failed to save analysis. Please try again.");
+                                                                    }
+                                                                } else if (savedAnalysisId) {
+                                                                    setIsRefinementModalOpen(true);
+                                                                } else {
+                                                                    alert("Please save your analysis first before refining.");
+                                                                }
                                                             }}
-                                                            className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[var(--hover-bg)] flex items-center gap-3"
-                                                            style={{ color: "var(--text-primary)" }}
+                                                            className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[var(--hover-bg)] flex items-center gap-3 text-[var(--text-primary)]"
                                                         >
                                                             <Edit size={16} />
-                                                            <span>Edit</span>
+                                                            <span>Refine Analysis</span>
                                                         </button>
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 handleDownload();
                                                             }}
-                                                            className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[var(--hover-bg)] flex items-center gap-3"
-                                                            style={{ color: "var(--text-primary)" }}
+                                                            className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[var(--hover-bg)] flex items-center gap-3 text-[var(--text-primary)]"
                                                         >
                                                             <Download size={16} />
                                                             <span>Download</span>
@@ -796,11 +932,7 @@ export default function JdBuilderPage() {
                                                                 e.stopPropagation();
                                                                 handleSave();
                                                             }}
-                                                            className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[var(--hover-bg)] flex items-center gap-3 border-t"
-                                                            style={{
-                                                                color: "var(--text-primary)",
-                                                                borderColor: "var(--border-color)",
-                                                            }}
+                                                            className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[var(--hover-bg)] flex items-center gap-3 border-t text-[var(--text-primary)] border-[var(--border-color)]"
                                                         >
                                                             <Save size={16} />
                                                             <span>Save</span>
@@ -813,23 +945,19 @@ export default function JdBuilderPage() {
                                 </div>
 
                                 {/* Tabs */}
-                                <div className="mb-4 flex gap-1 border-b px-6 pt-4" style={{ borderColor: "var(--border-color)" }}>
+                                <div className="flex-shrink-0 mb-4 flex gap-1 border-b px-6 pt-4 border border-[var(--border-color)]">
                                     {(['summary', 'overview', 'roles', 'implementation', 'risks'] as const).map((tab) => (
                                         <button
                                             key={tab}
                                             onClick={() => setActiveTab(tab)}
                                             className={`px-4 py-2 text-sm font-medium transition-all duration-200 relative capitalize ${activeTab === tab ? "" : "opacity-60 hover:opacity-100"
-                                                }`}
-                                            style={{
-                                                color: activeTab === tab ? "var(--text-primary)" : "var(--text-secondary)",
-                                            }}
+                                                } text-[var(--text-primary)]`}
                                         >
                                             {tab}
                                             {activeTab === tab && (
                                                 <motion.div
                                                     layoutId="activeTab"
-                                                    className="absolute bottom-0 left-0 right-0 h-0.5"
-                                                    style={{ backgroundColor: "var(--accent)" }}
+                                                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent)] rounded-t"
                                                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                                                 />
                                             )}
@@ -838,7 +966,7 @@ export default function JdBuilderPage() {
                                 </div>
 
                                 {/* Tab Content */}
-                                <div className="overflow-y-auto px-4 pb-4" style={{ maxHeight: tabContentHeight }}>
+                                <div className="flex-1 overflow-y-auto px-4 pb-4 min-h-0">
                                     <AnimatePresence mode="wait">
                                         {activeTab === 'summary' && (
                                             <motion.div
@@ -869,11 +997,11 @@ export default function JdBuilderPage() {
                                                         </button>
                                                     </div>
 
-                                                    <div className="space-y-3">
+                                                    <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
                                                         {/* Company Stage */}
                                                         <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--card-bg)] border border-[var(--border-color)] hover:border-[var(--accent)]/30 transition-colors">
-                                                            <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
-                                                                <TrendingUp className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
+                                                            <div className="w-9 h-9 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
+                                                                <TrendingUp className="w-4.5 h-4.5 text-[var(--primary)] dark:text-[var(--accent)]" />
                                                             </div>
                                                             <div className="flex-1 min-w-0">
                                                                 <span className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide">Company Stage</span>
@@ -883,8 +1011,8 @@ export default function JdBuilderPage() {
 
                                                         {/* 90-Day Outcome */}
                                                         <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--card-bg)] border border-[var(--border-color)] hover:border-[var(--accent)]/30 transition-colors">
-                                                            <div className="w-9 h-9 rounded-lg bg-green-50 dark:bg-green-900/20 flex items-center justify-center flex-shrink-0">
-                                                                <Target className="w-4.5 h-4.5 text-green-600 dark:text-green-400" />
+                                                            <div className="w-9 h-9 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
+                                                                <Target className="w-4.5 h-4.5 text-[var(--primary)] dark:text-[var(--accent)]" />
                                                             </div>
                                                             <div className="flex-1 min-w-0">
                                                                 <span className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide">90-Day Outcome</span>
@@ -894,13 +1022,13 @@ export default function JdBuilderPage() {
 
                                                         {/* Primary Bottleneck */}
                                                         <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--card-bg)] border border-[var(--border-color)] hover:border-[var(--accent)]/30 transition-colors">
-                                                            <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0 ring-2 ring-amber-200 dark:ring-amber-800">
-                                                                <AlertCircle className="w-5 h-5 text-amber-700 dark:text-amber-400" />
+                                                            <div className="w-9 h-9 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
+                                                                <AlertCircle className="w-4.5 h-4.5 text-[var(--primary)] dark:text-[var(--accent)]" />
                                                             </div>
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="flex items-center gap-2 mb-1">
                                                                     <span className="text-xs uppercase tracking-wide text-[var(--text-secondary)]">Primary Bottleneck</span>
-                                                                    <span className="px-2 py-0.5 text-xs font-medium bg-amber-200 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 rounded-full">
+                                                                    <span className="px-2 py-0.5 text-xs font-medium bg-[var(--accent)] text-white  rounded-full">
                                                                         High Priority
                                                                     </span>
                                                                 </div>
@@ -912,8 +1040,8 @@ export default function JdBuilderPage() {
 
                                                         {/* Workflow Analysis */}
                                                         <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--card-bg)] border border-[var(--border-color)] hover:border-[var(--accent)]/30 transition-colors">
-                                                            <div className="w-9 h-9 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center flex-shrink-0">
-                                                                <Network className="w-4.5 h-4.5 text-purple-600 dark:text-purple-400" />
+                                                            <div className="w-9 h-9 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
+                                                                <Network className="w-4.5 h-4.5 text-[var(--primary)] dark:text-[var(--accent)]" />
                                                             </div>
                                                             <div className="flex-1 min-w-0">
                                                                 <span className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide mb-1 block">Workflow Analysis</span>
@@ -923,8 +1051,8 @@ export default function JdBuilderPage() {
 
                                                         {/* SOP Status */}
                                                         <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--card-bg)] border border-[var(--border-color)] hover:border-[var(--accent)]/30 transition-colors">
-                                                            <div className="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center flex-shrink-0">
-                                                                <FileText className="w-4.5 h-4.5 text-indigo-600 dark:text-indigo-400" />
+                                                            <div className="w-9 h-9 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
+                                                                <FileText className="w-4.5 h-4.5 text-[var(--primary)] dark:text-[var(--accent)]" />
                                                             </div>
                                                             <div className="flex-1 min-w-0">
                                                                 <span className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide mb-1 block">
@@ -939,7 +1067,7 @@ export default function JdBuilderPage() {
                                                                     <div className="space-y-3 mt-2">
                                                                         {summary.sop_status.pain_points?.length > 0 && (
                                                                             <div>
-                                                                                <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1.5 flex items-center gap-1">
+                                                                                <p className="text-xs font-semibold text-[var(--primary)] dark:text-[var(--accent)] mb-1.5 flex items-center gap-1">
                                                                                     <AlertCircle className="w-3 h-3" />
                                                                                     Process Pain Points
                                                                                 </p>
@@ -955,7 +1083,7 @@ export default function JdBuilderPage() {
                                                                         )}
                                                                         {summary.sop_status.documentation_gaps?.length > 0 && (
                                                                             <div>
-                                                                                <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1.5 flex items-center gap-1">
+                                                                                <p className="text-xs font-semibold text-[var(--primary)] dark:text-[var(--accent)] mb-1.5 flex items-center gap-1">
                                                                                     <FileText className="w-3 h-3" />
                                                                                     Documentation Gaps
                                                                                 </p>
@@ -1002,8 +1130,8 @@ export default function JdBuilderPage() {
                                                             Recommended Service Type
                                                         </p>
                                                         <div className="flex items-center gap-3 mb-3">
-                                                            <div className="w-9 h-9 rounded-lg bg-[var(--accent)]/10 flex items-center justify-center flex-shrink-0">
-                                                                <Sparkles className="w-4.5 h-4.5 text-[var(--accent)]" />
+                                                            <div className="w-9 h-9 rounded-lg bg-[var(--primary)]/10 flex items-center justify-center flex-shrink-0">
+                                                                <Sparkles className="w-4.5 h-4.5 text-[var(--primary)]" />
                                                             </div>
                                                             <p className="text-xl font-bold text-[var(--primary)]">
                                                                 {analysisResult.preview.service_type}
@@ -1042,8 +1170,8 @@ export default function JdBuilderPage() {
                                                             Role
                                                         </p>
                                                         <div className="flex items-center gap-3 mb-4">
-                                                            <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
-                                                                <Briefcase className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
+                                                            <div className="w-9 h-9 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
+                                                                <Briefcase className="w-4.5 h-4.5 text-[var(--primary)] dark:text-[var(--accent)]" />
                                                             </div>
                                                             <p className="text-xl font-bold text-[var(--primary)]">
                                                                 {analysisResult.preview.role_title}
@@ -1081,8 +1209,8 @@ export default function JdBuilderPage() {
                                                             Core Role
                                                         </p>
                                                         <div className="flex items-center gap-3 mb-4">
-                                                            <div className="w-9 h-9 rounded-lg bg-green-50 dark:bg-green-900/20 flex items-center justify-center flex-shrink-0">
-                                                                <Briefcase className="w-4.5 h-4.5 text-green-600 dark:text-green-400" />
+                                                            <div className="w-9 h-9 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
+                                                                <Briefcase className="w-4.5 h-4.5 text-[var(--primary)] dark:text-[var(--accent)]" />
                                                             </div>
                                                             <p className="text-xl font-bold text-[var(--primary)]">
                                                                 {analysisResult.preview.core_va_title}
@@ -1120,8 +1248,8 @@ export default function JdBuilderPage() {
                                                             Project Overview
                                                         </p>
                                                         <div className="flex items-center gap-3 mb-4">
-                                                            <div className="w-9 h-9 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center flex-shrink-0">
-                                                                <Briefcase className="w-4.5 h-4.5 text-purple-600 dark:text-purple-400" />
+                                                            <div className="w-9 h-9 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
+                                                                <Briefcase className="w-4.5 h-4.5 text-[var(--primary)] dark:text-[var(--accent)]" />
                                                             </div>
                                                             <p className="text-xl font-bold text-[var(--primary)]">
                                                                 {analysisResult.preview.project_count || 0} Projects
@@ -1174,8 +1302,8 @@ export default function JdBuilderPage() {
                                                                                 Dedicated VA Role
                                                                             </p>
                                                                             <div className="flex items-center gap-3 mb-2">
-                                                                                <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
-                                                                                    <Briefcase className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
+                                                                                <div className="w-9 h-9 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
+                                                                                    <Briefcase className="w-4.5 h-4.5 text-[var(--primary)] dark:text-[var(--accent)]" />
                                                                                 </div>
                                                                                 <h4 className="text-lg font-bold text-[var(--primary)]">
                                                                                     {analysisResult.full_package.service_structure.dedicated_va_role.title}
@@ -1245,7 +1373,7 @@ export default function JdBuilderPage() {
                                                                                         </p>
                                                                                         <div className="flex flex-wrap gap-2">
                                                                                             {analysisResult.full_package.service_structure.dedicated_va_role.skill_requirements.nice_to_have.map((skill: string, i: number) => (
-                                                                                                <span key={i} className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-md">
+                                                                                                <span key={i} className="px-2 py-1 bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 text-[var(--primary)] dark:text-[var(--accent)] text-xs rounded-md">
                                                                                                     {skill}
                                                                                                 </span>
                                                                                             ))}
@@ -1452,8 +1580,8 @@ export default function JdBuilderPage() {
                                                                 <details className="group border border-[var(--border-color)] rounded-lg overflow-hidden">
                                                                     <summary className="cursor-pointer px-4 py-3 bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/80 flex items-center justify-between list-none [&::-webkit-details-marker]:hidden transition-colors">
                                                                         <div className="flex items-center gap-3">
-                                                                            <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0 ring-2 ring-amber-200 dark:ring-amber-800">
-                                                                                <AlertTriangle className="w-4.5 h-4.5 text-amber-700 dark:text-amber-400" />
+                                                                            <div className="w-9 h-9 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
+                                                                                <AlertTriangle className="w-4.5 h-4.5 text-[var(--primary)] dark:text-[var(--accent)]" />
                                                                             </div>
                                                                             <h4 className="text-base font-semibold text-[var(--primary)]">
                                                                                 Assumptions
@@ -1489,8 +1617,8 @@ export default function JdBuilderPage() {
                                                                 <details className="group border border-[var(--border-color)] rounded-lg overflow-hidden">
                                                                     <summary className="cursor-pointer px-4 py-3 bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/80 flex items-center justify-between list-none [&::-webkit-details-marker]:hidden transition-colors">
                                                                         <div className="flex items-center gap-3">
-                                                                            <div className="w-9 h-9 rounded-lg bg-red-50 dark:bg-red-900/20 flex items-center justify-center flex-shrink-0">
-                                                                                <ShieldAlert className="w-4.5 h-4.5 text-red-600 dark:text-red-400" />
+                                                                            <div className="w-9 h-9 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
+                                                                                <ShieldAlert className="w-4.5 h-4.5 text-[var(--primary)] dark:text-[var(--accent)]" />
                                                                             </div>
                                                                             <h4 className="text-base font-semibold text-[var(--primary)]">
                                                                                 Risks
@@ -1536,23 +1664,232 @@ export default function JdBuilderPage() {
             </div>
 
             {user && (
-                <Modal
-                    isOpen={isModalOpen}
-                    onClose={() => setIsModalOpen(false)}
-                    onConfirm={() => { }}
-                    title=""
-                    message=""
-                    body={
-                        <IntakeForm
-                            userId={user.id}
-                            onClose={() => setIsModalOpen(false)}
-                            onSuccess={handleSuccess}
-                        />
-                    }
-                    confirmText=""
-                    cancelText=""
-                    maxWidth="4xl"
-                />
+                <>
+                    <Modal
+                        isOpen={isModalOpen}
+                        onClose={() => {
+                            if (!isProcessing) {
+                                setIsModalOpen(false);
+                                setCurrentStage("");
+                            }
+                        }}
+                        onConfirm={() => { }}
+                        title=""
+                        message=""
+                        body={
+                            <BaseIntakeForm
+                                userId={user.id}
+                                config={jdFormConfig}
+                                onClose={() => {
+                                    if (!isProcessing) {
+                                        setIsModalOpen(false);
+                                        setCurrentStage("");
+                                    }
+                                }}
+                                onSuccess={async (data) => {
+                                    // Close modal first, then handle success
+                                    setIsModalOpen(false);
+                                    await handleSuccess(data);
+                                }}
+                                onProgress={(stage) => {
+                                    setCurrentStage(stage);
+                                    setIsProcessing(true);
+                                    // Close modal when analysis starts so user can see progress
+                                    setIsModalOpen(false);
+                                }}
+                                onSubmit={async (formData, files) => {
+                                    // Transform form data to match API expected format
+                                    const toolsArray = formData.tools
+                                        ? formData.tools
+                                            .split(",")
+                                            .map((tool: string) => tool.trim())
+                                            .filter(Boolean)
+                                        : [];
+
+                                    const tasksArray = Array.isArray(formData.tasks)
+                                        ? formData.tasks.filter((task: string) => task && task.trim()).slice(0, 5)
+                                        : [];
+
+                                    // Validate required fields
+                                    if (!formData.companyName || !formData.companyName.trim()) {
+                                        throw new Error("Company name is required");
+                                    }
+                                    if (tasksArray.length === 0) {
+                                        throw new Error("At least one task is required");
+                                    }
+
+                                    const intakePayload = {
+                                        brand: {
+                                            name: formData.companyName.trim(),
+                                        },
+                                        website: formData.website || "",
+                                        business_goal: formData.businessGoal || "",
+                                        outcome_90d: formData.outcome90Day || "",
+                                        tasks_top5: tasksArray,
+                                        requirements: Array.isArray(formData.requirements)
+                                            ? formData.requirements.filter((req: string) => req && req.trim())
+                                            : [],
+                                        weekly_hours: parseInt(formData.weeklyHours || "0", 10) || 0,
+                                        timezone: formData.timezone || "",
+                                        client_facing: formData.clientFacing === "Yes",
+                                        tools: toolsArray,
+                                        tools_raw: formData.tools || "",
+                                        english_level: formData.englishLevel || "",
+                                        management_style: formData.managementStyle || "",
+                                        reporting_expectations: formData.reportingExpectations || "",
+                                        security_needs: formData.securityNeeds || "",
+                                        deal_breakers: formData.dealBreakers || "",
+                                        nice_to_have_skills: formData.niceToHaveSkills || "",
+                                        existing_sops: formData.existingSOPs === "Yes",
+                                        sop_filename: files.sopFile?.name ?? null,
+                                    };
+
+                                    const payload = new FormData();
+                                    payload.append("intake_json", JSON.stringify(intakePayload));
+
+                                    // Handle SOP file upload (field id is 'sopFile')
+                                    if (files.sopFile) {
+                                        payload.append("sopFile", files.sopFile);
+                                    }
+
+                                    const response = await fetch('/api/jd/analyze', {
+                                        method: 'POST',
+                                        body: payload,
+                                    });
+
+                                    if (!response.ok) {
+                                        let message = 'Analysis failed';
+                                        try {
+                                            const errorPayload = await response.json();
+                                            if (errorPayload?.error) {
+                                                message = errorPayload.error;
+                                            }
+                                        } catch {
+                                            // Ignore JSON parse errors
+                                        }
+                                        throw new Error(message);
+                                    }
+
+                                    // Handle streaming response
+                                    const reader = response.body?.getReader();
+                                    const decoder = new TextDecoder();
+                                    let buffer = '';
+                                    let finalData: any = null;
+
+                                    if (!reader) {
+                                        throw new Error('No response body');
+                                    }
+
+                                    while (true) {
+                                        const { done, value } = await reader.read();
+                                        if (done) break;
+
+                                        buffer += decoder.decode(value, { stream: true });
+                                        const lines = buffer.split('\n');
+                                        buffer = lines.pop() || '';
+
+                                        for (const line of lines) {
+                                            if (!line.trim()) continue;
+                                            try {
+                                                const parsed = JSON.parse(line);
+                                                if (parsed.type === 'progress' && parsed.stage) {
+                                                    setCurrentStage(parsed.stage);
+                                                    setIsProcessing(true);
+                                                    setIsModalOpen(false);
+                                                } else if (parsed.type === 'result' && parsed.data) {
+                                                    finalData = parsed.data;
+                                                } else if (parsed.type === 'error') {
+                                                    throw new Error(parsed.error || parsed.details || 'Analysis failed');
+                                                }
+                                            } catch (parseError) {
+                                                console.error('Failed to parse stream chunk:', parseError);
+                                            }
+                                        }
+                                    }
+
+                                    // Process any remaining buffer
+                                    if (buffer.trim()) {
+                                        try {
+                                            const parsed = JSON.parse(buffer);
+                                            if (parsed.type === 'result' && parsed.data) {
+                                                finalData = parsed.data;
+                                            } else if (parsed.type === 'error') {
+                                                throw new Error(parsed.error || parsed.details || 'Analysis failed');
+                                            }
+                                        } catch (parseError) {
+                                            console.error('Failed to parse final buffer:', parseError);
+                                        }
+                                    }
+
+                                    if (!finalData) {
+                                        throw new Error('No data received from analysis');
+                                    }
+
+                                    return finalData;
+                                }}
+                            />
+                        }
+                        confirmText=""
+                        cancelText=""
+                        maxWidth="4xl"
+                    />
+                    <Modal
+                        isOpen={isRefinementModalOpen}
+                        onClose={() => setIsRefinementModalOpen(false)}
+                        onConfirm={() => { }}
+                        title="Refine Analysis"
+                        message="Provide feedback on what you'd like to change in your analysis."
+                        body={
+                            savedAnalysisId && user ? (
+                                <RefinementForm
+                                    analysisId={savedAnalysisId}
+                                    userId={user.id}
+                                    serviceType={analysisResult?.preview?.service_type || analysisResult?.full_package?.service_structure?.service_type}
+                                    onRefinementComplete={async (refinedPackage) => {
+                                        // Update the analysis result with refined package
+                                        if (analysisResult) {
+                                            setAnalysisResult({
+                                                ...analysisResult,
+                                                full_package: refinedPackage,
+                                            });
+                                        }
+
+                                        // Update the saved analysis in the database
+                                        try {
+                                            await fetch(`/api/jd/save`, {
+                                                method: "POST",
+                                                headers: {
+                                                    "Content-Type": "application/json",
+                                                },
+                                                credentials: "include",
+                                                body: JSON.stringify({
+                                                    title: `${intakeData?.companyName || 'Analysis'} - ${analysisResult?.preview?.service_type || 'Job Description Analysis'}`,
+                                                    intakeData,
+                                                    analysis: {
+                                                        ...analysisResult,
+                                                        full_package: refinedPackage,
+                                                    },
+                                                    isFinalized: false,
+                                                }),
+                                            });
+                                        } catch (error) {
+                                            console.error("Error updating saved analysis:", error);
+                                        }
+
+                                        setIsRefinementModalOpen(false);
+                                    }}
+                                />
+                            ) : (
+                                <div className="p-4 text-center" style={{ color: "var(--text-secondary)" }}>
+                                    <p className="text-sm">Please save your analysis first before refining.</p>
+                                </div>
+                            )
+                        }
+                        confirmText=""
+                        cancelText=""
+                        maxWidth="4xl"
+                    />
+                </>
             )}
         </>
     );

@@ -1,8 +1,35 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { verifyAccessToken } from "@/lib/auth";
 
 export async function GET() {
   try {
+    // Try to determine the current user's organization (if authenticated)
+    let currentTenantId: string | null = null;
+
+    try {
+      const cookieStore = await cookies();
+      const accessToken = cookieStore.get("accessToken")?.value;
+
+      if (accessToken) {
+        const decoded = await verifyAccessToken(accessToken);
+        if (decoded) {
+          const userOrg = await prisma.userOrganization.findFirst({
+            where: { userId: decoded.userId },
+            select: { organizationId: true },
+          });
+
+          if (userOrg) {
+            currentTenantId = userOrg.organizationId;
+          }
+        }
+      }
+    } catch (authError) {
+      // Auth-related issues should not break tenant listing; just log them
+      console.error("Error resolving current tenant for user:", authError);
+    }
+
     const tenants = await prisma.organization.findMany({
       select: {
         id: true,
@@ -20,6 +47,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       tenants,
+      currentTenantId,
     });
   } catch (error) {
     console.error("Error fetching tenants:", error);

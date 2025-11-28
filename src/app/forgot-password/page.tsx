@@ -39,21 +39,17 @@ export default function ForgotPasswordPage() {
     if (isSuccess) {
         return (
             <div
-                className="min-h-screen flex items-center justify-center px-4 transition-colors duration-150"
-                style={{ backgroundColor: "var(--background)", color: "var(--text-primary)" }}
+                className="min-h-screen flex items-center justify-center px-4 transition-colors duration-150 bg-white dark:bg-[#121212]"
             >
                 <div
-                    className="w-full max-w-md rounded-2xl px-8 pt-8 pb-10 border shadow-lg transition-colors duration-150"
-                    style={{ borderColor: "var(--border-color)", backgroundColor: "var(--card-bg)" }}
+                    className="w-full max-w-md rounded-2xl px-8 pt-8 pb-10 border shadow-lg transition-colors duration-150 border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a]"
                 >
                     <div className="text-center">
                         <div
-                            className="mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4"
-                            style={{ backgroundColor: "rgba(34,197,94,0.15)" }}
+                            className="mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4 bg-green-100 dark:bg-green-900/30"
                         >
                             <svg
-                                className="h-6 w-6"
-                                style={{ color: "rgb(34,197,94)" }}
+                                className="h-6 w-6 text-green-600 dark:text-green-400"
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
@@ -67,38 +63,29 @@ export default function ForgotPasswordPage() {
                             </svg>
                         </div>
                         <h2
-                            className="text-2xl font-semibold mb-2 transition-colors duration-150"
-                            style={{ color: "var(--text-primary)" }}
+                            className="text-2xl font-semibold mb-2 transition-colors duration-150 text-[#18416B] dark:text-[#FAC133]"
                         >
                             Check your email
                         </h2>
                         <p
-                            className="text-sm mb-6 transition-colors duration-150"
-                            style={{ color: "var(--text-secondary)" }}
+                            className="text-sm mb-6 transition-colors duration-150 text-[#1a1a1a] dark:text-[#e0e0e0]"
                         >
                             We've sent a password reset link to <strong>{email}</strong>
                         </p>
                         <p
-                            className="text-xs mb-6 transition-colors duration-150"
-                            style={{ color: "var(--text-muted)" }}
+                            className="text-xs mb-6 transition-colors duration-150 text-gray-600 dark:text-gray-400"
                         >
                             Didn't receive the email? Check your spam folder or{' '}
                             <button
                                 onClick={() => setIsSuccess(false)}
-                                className="font-medium transition-all duration-150"
-                                style={{ color: "var(--accent)" }}
-                                onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(1.1)")}
-                                onMouseLeave={(e) => (e.currentTarget.style.filter = "brightness(1)")}
+                                className="font-medium transition-all duration-150 text-[#18416B] dark:text-[#FAC133] hover:text-[#245884] dark:hover:text-[#FAC133]/80"
                             >
                                 try again
                             </button>
                         </p>
                         <Link
                             href="/signin"
-                            className="inline-block text-sm font-medium transition-all duration-150"
-                            style={{ color: "var(--accent)" }}
-                            onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(1.1)")}
-                            onMouseLeave={(e) => (e.currentTarget.style.filter = "brightness(1)")}
+                            className="inline-block text-sm font-medium transition-all duration-150 text-[#18416B] dark:text-[#FAC133] hover:text-[#245884] dark:hover:text-[#FAC133]/80"
                         >
                             ← Back to sign in
                         </Link>
@@ -110,33 +97,28 @@ export default function ForgotPasswordPage() {
 
     return (
         <div
-            className="min-h-screen flex items-center justify-center px-4 transition-colors duration-150"
-            style={{ backgroundColor: "var(--background)", color: "var(--text-primary)" }}
+            className="min-h-screen flex items-center justify-center px-4 transition-colors duration-150 bg-white dark:bg-[#121212]"
         >
             <form
                 onSubmit={handleSubmit}
-                className="w-full max-w-md rounded-2xl px-8 pt-8 pb-10 border shadow-lg transition-all duration-150"
-                style={{ borderColor: "var(--border-color)", backgroundColor: "var(--card-bg)" }}
+                className="w-full max-w-md rounded-2xl px-8 pt-8 pb-10 border shadow-lg transition-all duration-150 border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a]"
             >
                 <div className="mb-8">
                     <h2
-                        className="text-2xl font-semibold mb-2 transition-colors duration-150"
-                        style={{ color: "var(--text-primary)" }}
+                        className="text-2xl font-semibold mb-2 transition-colors duration-150 text-[#18416B] dark:text-[#FAC133]"
                     >
                         Forgot password?
                     </h2>
                     <p
-                        className="text-sm transition-colors duration-150"
-                        style={{ color: "var(--text-secondary)" }}
+                        className="text-sm transition-colors duration-150 text-[#1a1a1a] dark:text-[#e0e0e0]"
                     >
                         No worries, we'll send you reset instructions.
                     </p>
                     {errorMessage && (
                         <div
-                            className="mt-4 p-3 border rounded-md transition-colors duration-150"
-                            style={{ backgroundColor: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }}
+                            className="mt-4 p-3 border rounded-md transition-colors duration-150 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20"
                         >
-                            <p className="text-sm" style={{ color: "rgb(220, 38, 38)" }}>
+                            <p className="text-sm text-red-700 dark:text-red-300">
                                 {errorMessage}
                             </p>
                         </div>
@@ -146,8 +128,7 @@ export default function ForgotPasswordPage() {
                 <div className="mb-6">
                     <label
                         htmlFor="email"
-                        className="block text-sm font-medium mb-1 transition-colors duration-150"
-                        style={{ color: "var(--text-secondary)" }}
+                        className="block text-sm font-medium mb-1 transition-colors duration-150 text-gray-700 dark:text-gray-300"
                     >
                         Email
                     </label>
@@ -160,12 +141,7 @@ export default function ForgotPasswordPage() {
                         onChange={(e) => setEmail(e.target.value)}
                         autoComplete="email"
                         required
-                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all duration-150"
-                        style={{
-                            borderColor: "var(--border-color)",
-                            backgroundColor: "var(--background)",
-                            color: "var(--text-primary)"
-                        }}
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#FAC133] focus:border-[#FAC133] transition-all duration-150 border-gray-300 dark:border-gray-600 bg-white dark:bg-[#121212] text-[#1a1a1a] dark:text-[#e0e0e0]"
                     />
                 </div>
 
@@ -173,7 +149,7 @@ export default function ForgotPasswordPage() {
                     <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="w-full bg-[var(--accent)] hover:brightness-110 text-white font-semibold py-2.5 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md flex items-center justify-center gap-2"
+                        className="w-full bg-[#FAC133] hover:brightness-110 text-[#18416B] dark:text-[#1a1a1a] font-semibold py-2.5 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FAC133]/40 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md flex items-center justify-center gap-2"
                     >
                         {isSubmitting ? (
                             <div className="flex items-center gap-2">
@@ -204,14 +180,7 @@ export default function ForgotPasswordPage() {
                 <div className="flex justify-center">
                     <Link
                         href="/signin"
-                        className="w-full flex items-center justify-center gap-1 text-sm font-medium rounded-xl py-2.5 px-4 transition-all duration-150"
-                        style={{
-                            color: "var(--accent)",
-                            borderColor: "var(--accent)",
-                            borderWidth: "1px"
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(1.08)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.filter = "brightness(1)")}
+                        className="w-full flex items-center justify-center gap-1 text-sm font-medium rounded-xl py-2.5 px-4 transition-all duration-150 border border-[#18416B] dark:border-[#FAC133] text-[#18416B] dark:text-[#FAC133] hover:text-[#245884] dark:hover:text-[#FAC133]/80"
                     >
                         <ChevronLeft className="w-4 h-4" />
                         Back to sign in

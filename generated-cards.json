@@ -1,0 +1,179 @@
+{
+    "success": true,
+    "cards": [
+        {
+            "id": "cmij26hwt0004hkl7tpp6iblj",
+            "type": "BRAND_VOICE_CARD",
+            "title": "Brand Voice & Communication Style",
+            "description": "Guidelines for generating AI content that aligns with the brand's voice, focusing on motivational and professional tones with a balance of formality and directness.",
+            "metadata": {
+                "rules": [
+                    {
+                        "rule": "Use short, punchy sentences with an average length of 4-5 words.",
+                        "source": "hero",
+                        "example": "Get More Done",
+                        "justification": "The sentence structure is designed to be impactful and memorable, as seen in sample 0."
+                    },
+                    {
+                        "rule": "Incorporate power words such as 'Get', 'Increase', 'Free', and 'Profit' to drive action and focus on benefits.",
+                        "source": "hero",
+                        "example": "Increase Profit",
+                        "justification": "Power words are used to create a sense of urgency and importance, as demonstrated in sample 1."
+                    },
+                    {
+                        "rule": "Maintain a medium formality level to ensure content is professional yet approachable.",
+                        "source": "hero",
+                        "example": "Trained and Experienced Virtual Assistants For Your Business",
+                        "justification": "The language is formal enough to convey expertise while being accessible, as shown in sample 3."
+                    },
+                    {
+                        "rule": "Adopt a motivational to professional tone, ensuring high consistency and authenticity.",
+                        "source": "hero",
+                        "example": "Free Your Time",
+                        "justification": "The tone is empowering and relatable, aligning with the brand's motivational voice, as seen in sample 2."
+                    },
+                    {
+                        "rule": "Use imperatives to encourage immediate action from the audience.",
+                        "source": "hero",
+                        "example": "Get Started",
+                        "justification": "Imperatives are used to prompt direct engagement, as illustrated in sample 4."
+                    },
+                    {
+                        "rule": "Avoid complex sentence structures to maintain a low reading level and ensure clarity.",
+                        "source": "hero",
+                        "example": "Get More Done",
+                        "justification": "Simple sentence structures facilitate quick understanding, as seen in sample 0."
+                    }
+                ]
+            },
+            "orderIndex": 0,
+            "priority": 1
+        },
+        {
+            "id": "cmij26hwv0005hkl71zhx42p3",
+            "type": "POSITIONING_CARD",
+            "title": "Market Position & Competitive Strategy",
+            "description": "This positioning framework outlines a comprehensive strategy for a virtual assistant service provider, focusing on delivering high-quality, personalized support to business owners and entrepreneurs. It emphasizes differentiation through managed workflows, vetted and trained VAs, and a proven track record, setting it apart from competitors in the freelance marketplace.",
+            "metadata": {
+                "framework_details": {
+                    "differentiation": "The service differentiates itself by offering a broad spectrum of specialized services, including project management and custom website builds, with a unique approach to personalized matching based on personality and skills. This ensures a better fit and more effective collaboration between clients and virtual assistants.",
+                    "market_position": "The company is positioned as a trusted and reliable provider of virtual assistant services, with a strong emphasis on quality and efficiency. With over 3,000 VAs hired and 163,000 projects completed, it has established a solid reputation for delivering results.",
+                    "target_audience": "The primary target audience includes business owners, entrepreneurs, and busy executives who are seeking to optimize their operations by outsourcing administrative tasks and gaining back valuable time.",
+                    "value_proposition": "The core value proposition is centered around enhancing productivity and profitability for business owners by providing dedicated virtual assistants who help manage workloads efficiently, allowing clients to focus on core business activities."
+                }
+            },
+            "orderIndex": 1,
+            "priority": 1
+        },
+        {
+            "id": "cmij26hwx0006hkl7dha8da8w",
+            "type": "STYLE_RULES",
+            "title": "Style Rules & Guidelines",
+            "description": "# Style Guide for Level 9 Virtual\n\nThis style guide outlines the preferred writing and formatting conventions for Level 9 Virtual's content. Adhering to these guidelines ensures consistency and clarity across all communications.\n\n## 1. Formatting Conventions\n\n### Headings\n- Use **Title Case** for all headings.\n- Headings should be concise and descriptive.\n\n### Lists\n- Use **bullet points** for unordered lists to present information clearly.\n- Use **numbered lists** for step-by-step instructions or processes.\n\n### Emphasis\n- Use **bold** for emphasis on key points or calls to action.\n- Avoid using italics for emphasis; reserve italics for titles of works or foreign terms.\n\n## 2. Paragraph Structure\n\n- **Paragraph Length**: Aim for paragraphs of 2-4 sentences to maintain reader engagement.\n- **Rhythm**: Vary sentence length to create a natural flow.\n- **White Space**: Use white space effectively to break up text and make content more digestible.\n\n## 3. Visual Presentation\n\n- Ensure content is visually appealing with adequate spacing between sections.\n- Use images or graphics sparingly and only when they add value or clarity to the content.\n- Maintain a clean and professional layout with consistent font sizes and styles.\n\n## 4. Forbidden Phrases and Preferred Alternatives\n\n- **Forbidden Phrases**: Avoid using \"guaranteed\", \"100% success\", \"never\".\n- **Preferred Alternatives**: Use \"aim to\", \"strive for success\", \"rarely\".\n\n## 5. Examples of Good vs. Bad Style\n\n### Good Style\n- \"Our team helps entrepreneurs reclaim their time by managing the tasks that bog them down, so they can focus on growth and impact.\"\n- \"At Level 9 Virtual, we pair highly skilled VAs with proven workflows, ensuring your operations run seamlessly.\"\n\n### Bad Style\n- \"We are perfect and guarantee your business will explode in profits.\"\n- \"No failures ever happen when using our services.\"\n\n## Sources\n- Analysis of Level 9 Virtual's website content and marketing materials.\n- Feedback from brand stakeholders and content creators.\n",
+            "metadata": {
+                "rules": [
+                    "Use Title Case for headings.",
+                    "Use bullet points for unordered lists.",
+                    "Use numbered lists for step-by-step instructions.",
+                    "Use bold for emphasis; avoid italics for emphasis.",
+                    "Aim for paragraphs of 2-4 sentences.",
+                    "Vary sentence length for natural flow.",
+                    "Use white space effectively.",
+                    "Avoid 'guaranteed', '100% success', 'never'.",
+                    "Use 'aim to', 'strive for success', 'rarely'."
+                ],
+                "examples": [
+                    "Good: 'Our team helps entrepreneurs reclaim their time by managing the tasks that bog them down, so they can focus on growth and impact.'",
+                    "Bad: 'We are perfect and guarantee your business will explode in profits.'"
+                ],
+                "forbidden": [
+                    "guaranteed",
+                    "100% success",
+                    "never"
+                ],
+                "preferred": [
+                    "aim to",
+                    "strive for success",
+                    "rarely"
+                ]
+            },
+            "orderIndex": 2,
+            "priority": 2
+        },
+        {
+            "id": "cmij26hx00007hkl70ahrl77z",
+            "type": "COMPLIANCE_RULES",
+            "title": "Compliance & Legal Guidelines",
+            "description": "Comprehensive compliance guide for content creation, focusing on disclaimers, forbidden claims, legal terminology, risk mitigation, and industry-specific requirements.",
+            "metadata": {
+                "risk_areas": [
+                    "Misleading advertising",
+                    "Data privacy violations",
+                    "Non-compliance with industry regulations",
+                    "Inadequate risk disclosures"
+                ],
+                "legal_terms": {
+                    "terms": "Refers to the conditions and agreements under which services or products are provided.",
+                    "privacy": "Refers to the handling, processing, and protection of personal data.",
+                    "compliance": "Refers to adherence to laws, regulations, guidelines, and specifications relevant to business operations."
+                },
+                "forbidden_claims": [
+                    "Guaranteed results",
+                    "100% success",
+                    "Never fails",
+                    "Risk-free"
+                ],
+                "required_disclaimers": [
+                    "Results may vary. Individual results not guaranteed.",
+                    "Past performance is not indicative of future results.",
+                    "This is not financial advice. Please consult with a financial advisor."
+                ]
+            },
+            "orderIndex": 3,
+            "priority": 2
+        },
+        {
+            "id": "cmij26hx30008hkl71hdlmjso",
+            "type": "GHL_IMPLEMENTATION_NOTES",
+            "title": "GoHighLevel Implementation Notes",
+            "description": "Implementation strategy guide for Level9Virtual using GoHighLevel (GHL) CRM platform.",
+            "metadata": {
+                "pipelines": [
+                    "Map the customer journey stages to the pipeline stages: 'lead' to 'Engaged Inquiry', 'prospect' to 'Call Requested' and 'Scheduled', 'onboarding' to 'Showed' and 'Deciding', 'nurture' to 'Won'.",
+                    "Implement a feedback loop for the 'Lost' stage to capture reasons and inform future strategies."
+                ],
+                "templates": [
+                    {
+                        "body": "Hi [First Name],\n\nThank you for reaching out to us. We are excited to assist you in your journey. Please let us know if you have any questions.\n\n—The Level 9 Virtual Team",
+                        "name": "Welcome Email",
+                        "subject": "Welcome to Level 9 Virtual!"
+                    },
+                    {
+                        "body": "Hi [First Name],\n\nThank you for requesting a call. Please choose a convenient time from the options below.\n\n—The Level 9 Virtual Team",
+                        "name": "Call Confirmation Email",
+                        "subject": "Your Call Request with Level 9 Virtual"
+                    },
+                    {
+                        "body": "Hi [First Name],\n\nWe appreciate you taking the time to speak with us. Here are the next steps...\n\n—The Level 9 Virtual Team",
+                        "name": "Follow-Up Email",
+                        "subject": "Thank You for Your Time"
+                    }
+                ],
+                "workflows": [
+                    "Automate lead capture from web forms directly into the 'Engaged Inquiry' stage of the pipeline.",
+                    "Trigger an automated email sequence when a lead moves to the 'Call Requested' stage, confirming the request and providing available times.",
+                    "Set up a task reminder for sales reps when a lead is moved to the 'Scheduled' stage to prepare for the call.",
+                    "Automatically send a follow-up email and SMS to leads in the 'Showed' stage to thank them for attending and provide next steps.",
+                    "Create a decision-making support sequence for leads in the 'Deciding' stage, including testimonials and case studies."
+                ],
+                "automations": [
+                    "Use GHL's automation to send a personalized welcome email from support@level9virtual.com when a lead enters the 'Engaged Inquiry' stage.",
+                    "Set up automated SMS reminders for scheduled calls to reduce no-shows.",
+                    "Leverage GHL's automation to update contact records and trigger internal notifications when a lead progresses to the 'Deciding' stage."
+                ]
+            },
+            "orderIndex": 4,
+            "priority": 3
+        }
+    ]
+}

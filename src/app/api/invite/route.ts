@@ -48,6 +48,76 @@ export async function POST(request: Request) {
       );
     }
 
+    // Normalize email
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Validation: Check if user with this email exists and belongs to another organization
+    const existingUser = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      include: {
+        organizations: {
+          select: {
+            organizationId: true,
+          },
+        },
+      },
+    });
+
+    if (existingUser) {
+      // Check if user belongs to a different organization
+      const belongsToOtherOrg = existingUser.organizations.some(
+        (uo) => uo.organizationId !== organizationId
+      );
+
+      if (belongsToOtherOrg) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "This email already belongs to another organization. Users cannot be invited to multiple organizations.",
+          },
+          { status: 400 }
+        );
+      }
+
+      // Check if user already belongs to this organization
+      const belongsToCurrentOrg = existingUser.organizations.some(
+        (uo) => uo.organizationId === organizationId
+      );
+
+      if (belongsToCurrentOrg) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "This user is already a member of this organization.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validation: Check if there's a pending invite for this email in the current organization
+    const existingPendingInvite = await prisma.invitationToken.findFirst({
+      where: {
+        organizationId: organizationId,
+        email: normalizedEmail,
+        acceptedAt: null,
+        cancelledAt: null,
+        expiresAt: {
+          gt: new Date(), // Not expired
+        },
+      },
+    });
+
+    if (existingPendingInvite) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "This user has a pending invitation. Please remove the existing invitation to add another.",
+        },
+        { status: 400 }
+      );
+    }
+
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours from now
     const token = crypto.randomBytes(32).toString("hex");
 
@@ -55,7 +125,7 @@ export async function POST(request: Request) {
       const tenantInvite = await prisma.invitationToken.create({
         data: {
           organizationId: organizationId,
-          email: email,
+          email: normalizedEmail,
           role: role as any, // Type assertion needed until Prisma types are fully synced
           token: token,
           expiresAt: expiresAt,

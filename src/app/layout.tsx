@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Poppins } from "next/font/google";
 import "@/styles/globals.css";
 import { UserProvider } from "@/context/UserContext";
 import { ClientProviders } from "@/components/forms/ClientProviders";
+import NavigationLoader from "@/components/ui/NavigationLoader";
 
 const poppins = Poppins({
   weight: ["400", "700"],
@@ -24,6 +25,7 @@ export default function RootLayout({
       <body className={`${poppins.className} antialiased`}>
         <UserProvider>
           <ClientProviders>
+            <NavigationLoader />
             {children}
           </ClientProviders>
         </UserProvider>

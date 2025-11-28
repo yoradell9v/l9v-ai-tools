@@ -106,7 +106,7 @@ export async function sendInviteEmail(email: string, inviteToken: string) {
         <body>
           <div class="container">
             <h2>Accept invitation to join our platform</h2>
-            <p>You have been invited to join our platform. Click the button below to accept the invitation:</p>
+            <p>You have been invited to join L9V AI Business Tools. Click the button below to accept the invitation:</p>
             <a href="${inviteTokenUrl}" class="button">Accept Invitation</a>
             <p>Or copy and paste this link into your browser:</p>
             <p style="word-break: break-all; color: #666;">${inviteTokenUrl}</p>

@@ -30,6 +30,7 @@ interface IntakeFormProps {
     onFormChange?: (data: IntakeFormData) => void;
     onClose: () => void;
     onSuccess?: (data: any) => void;
+    onProgress?: (stage: string) => void;
 }
 
 const STORAGE_KEY = 'jd-form-data';
@@ -42,7 +43,7 @@ const ALLOWED_SOP_MIME_TYPES = new Set([
     "text/plain",
 ]);
 
-export default function IntakeForm({ userId, onFormChange, onClose, onSuccess }: IntakeFormProps) {
+export default function IntakeForm({ userId, onFormChange, onClose, onSuccess, onProgress }: IntakeFormProps) {
     const [formData, setFormData] = useState<IntakeFormData>({
         companyName: "",
         website: "",
@@ -327,18 +328,72 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess }:
                 throw new Error(message);
             }
 
-            const data = await response.json();
+            // Handle streaming response
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let finalData: any = null;
+
+            if (!reader) {
+                throw new Error('No response body');
+            }
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                        const parsed = JSON.parse(line);
+                        if (parsed.type === 'progress' && parsed.stage) {
+                            // Pass progress to parent
+                            if (onProgress) {
+                                onProgress(parsed.stage);
+                            }
+                        } else if (parsed.type === 'result' && parsed.data) {
+                            finalData = parsed.data;
+                        } else if (parsed.type === 'error') {
+                            throw new Error(parsed.error || parsed.details || 'Analysis failed');
+                        }
+                    } catch (parseError) {
+                        console.error('Failed to parse stream chunk:', parseError);
+                    }
+                }
+            }
+
+            // Process any remaining buffer
+            if (buffer.trim()) {
+                try {
+                    const parsed = JSON.parse(buffer);
+                    if (parsed.type === 'result' && parsed.data) {
+                        finalData = parsed.data;
+                    } else if (parsed.type === 'error') {
+                        throw new Error(parsed.error || parsed.details || 'Analysis failed');
+                    }
+                } catch (parseError) {
+                    console.error('Failed to parse final buffer:', parseError);
+                }
+            }
+
+            if (!finalData) {
+                throw new Error('No data received from analysis');
+            }
+
             setAnalysisSuccess(true);
-            console.log('Analysis successful:', data);
+            console.log('Analysis successful:', finalData);
 
             // Pass data to parent and close form
             if (onSuccess) {
                 onSuccess({
-                    apiResult: data,
+                    apiResult: finalData,
                     input: formData,
                 });
             }
-
 
             // Close form after a brief delay to show success message
             setTimeout(() => {
@@ -353,7 +408,8 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess }:
         }
     };
 
-    const inputClasses = "w-full px-3 py-2 rounded-lg border text-sm transition-all duration-200 focus:outline-none border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)]";
+    const inputClasses =
+        "w-full px-3 py-2 rounded-lg border text-sm transition-all duration-200 focus:outline-none border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10";
     const labelClasses = "block text-xs font-medium mb-2 text-[var(--text-primary)]";
     const sectionClasses = "space-y-3";
     const classNames = (...classes: (string | boolean | undefined)[]) => classes.filter(Boolean).join(" ");
@@ -370,40 +426,15 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess }:
         placeholder?: string;
     }) {
         const selected = options.find(o => o.value === value) ?? null;
-        const buttonRef = useRef<HTMLButtonElement>(null);
-        const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
-
         return (
             <Listbox value={selected} onChange={(opt) => opt ? onChange(opt.value) : undefined}>
                 {({ open }) => {
-                    // Update position when dropdown opens using useEffect
-                    useEffect(() => {
-                        if (open && buttonRef.current) {
-                            const rect = buttonRef.current.getBoundingClientRect();
-                            setPosition({
-                                top: rect.bottom + window.scrollY,
-                                left: rect.left + window.scrollX,
-                                width: rect.width,
-                            });
-                        }
-                    }, [open]);
-
                     return (
                         <div className="relative">
                             <Listbox.Button
-                                ref={buttonRef}
                                 className={classNames(
-                                    "w-full px-3 py-2 rounded-lg text-left text-sm transition-all duration-200 focus:outline-none cursor-pointer border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)]"
+                                    "w-full px-3 py-2 rounded-lg text-left text-sm transition-all duration-200 focus:outline-none cursor-pointer border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10"
                                 )}
-                                onFocus={(e) => {
-                                    e.currentTarget.style.borderColor = "var(--primary)";
-                                    e.currentTarget.style.outline = "none";
-                                    e.currentTarget.style.boxShadow = "0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent)";
-                                }}
-                                onBlur={(e) => {
-                                    e.currentTarget.style.borderColor = "var(--border-color)";
-                                    e.currentTarget.style.boxShadow = "none";
-                                }}
                             >
                                 <span className="block truncate text-sm">
                                     {selected ? selected.label : (placeholder || "Select")}
@@ -424,16 +455,7 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess }:
                                     leaveFrom="opacity-100 scale-100"
                                     leaveTo="opacity-0 scale-95"
                                 >
-                                    <Listbox.Options
-                                        className="fixed z-[99999] mt-1 max-h-60 overflow-auto rounded-lg border shadow-md focus:outline-none"
-                                        style={{
-                                            top: `${position.top}px`,
-                                            left: `${position.left}px`,
-                                            width: `${position.width}px`,
-                                            borderColor: "var(--border-color)",
-                                            backgroundColor: "var(--card-bg)",
-                                        }}
-                                    >
+                                    <Listbox.Options className="absolute z-[99999] mt-1 max-h-60 w-full overflow-auto rounded-lg border shadow-md focus:outline-none border-[var(--border-color)] bg-[var(--card-bg)]">
                                         {options.map((opt) => (
                                             <Listbox.Option
                                                 key={String(opt.value)}
@@ -443,14 +465,7 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess }:
                                                 value={opt}
                                             >
                                                 {({ active, selected: isSelected }) => (
-                                                    <div
-                                                        className="flex items-center justify-between"
-                                                        style={{
-                                                            backgroundColor: active ? "var(--hover-bg)" : "transparent",
-                                                            color: "var(--text-primary)",
-                                                            padding: active ? "0.75rem 0.75rem" : "0.5rem 0.75rem",
-                                                        }}
-                                                    >
+                                                    <div className={`flex items-center justify-between ${active ? "bg-[var(--hover-bg)] py-3 px-3" : "py-2 px-3"} text-[var(--text-primary)]`}>
                                                         <span className={`block truncate ${isSelected ? "font-medium" : "font-normal"}`}>
                                                             {opt.label}
                                                         </span>
@@ -596,15 +611,6 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess }:
                                         value={formData.outcome90Day}
                                         onChange={(e) => handleInputChange("outcome90Day", e.target.value)}
                                         className={inputClasses}
-                                        onFocus={(e) => {
-                                            e.currentTarget.style.borderColor = "var(--primary)";
-                                            e.currentTarget.style.outline = "none";
-                                            e.currentTarget.style.boxShadow = "0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent)";
-                                        }}
-                                        onBlur={(e) => {
-                                            e.currentTarget.style.borderColor = "var(--border-color)";
-                                            e.currentTarget.style.boxShadow = "none";
-                                        }}
                                         rows={3}
                                         required
                                     />
@@ -652,15 +658,6 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess }:
                                             value={task}
                                             onChange={(e) => handleTaskChange(index, e.target.value)}
                                             className={inputClasses}
-                                            onFocus={(e) => {
-                                                e.currentTarget.style.borderColor = "var(--primary)";
-                                                e.currentTarget.style.outline = "none";
-                                                e.currentTarget.style.boxShadow = "0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent)";
-                                            }}
-                                            onBlur={(e) => {
-                                                e.currentTarget.style.borderColor = "var(--border-color)";
-                                                e.currentTarget.style.boxShadow = "none";
-                                            }}
                                             required={index < 3}
                                         />
                                     </div>
@@ -819,15 +816,6 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess }:
                                         value={formData.tools}
                                         onChange={(e) => handleInputChange("tools", e.target.value)}
                                         className={inputClasses}
-                                        onFocus={(e) => {
-                                            e.currentTarget.style.borderColor = "var(--primary)";
-                                            e.currentTarget.style.outline = "none";
-                                            e.currentTarget.style.boxShadow = "0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent)";
-                                        }}
-                                        onBlur={(e) => {
-                                            e.currentTarget.style.borderColor = "var(--border-color)";
-                                            e.currentTarget.style.boxShadow = "none";
-                                        }}
                                         rows={3}
                                     />
                                     <p className="text-xs mt-1.5 text-[var(--text-secondary)]">List the tools and technologies your team uses</p>
@@ -897,8 +885,8 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess }:
                                                 </button>
                                             </div>
                                         )}
-                                        {sopFileError && (
-                                            <p className="mt-2 text-xs" style={{ color: "rgb(220, 38, 38)" }}>{sopFileError}</p>
+                        {sopFileError && (
+                                        <p className="mt-2 text-xs text-red-600 dark:text-red-400">{sopFileError}</p>
                                         )}
                                         {formData.existingSOPs === "Yes" && !sopFile && !sopFileError && (
                                             <p className="mt-2 text-xs text-[var(--text-secondary)]">
@@ -916,15 +904,6 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess }:
                                         value={formData.reportingExpectations}
                                         onChange={(e) => handleInputChange("reportingExpectations", e.target.value)}
                                         className={inputClasses}
-                                        onFocus={(e) => {
-                                            e.currentTarget.style.borderColor = "var(--primary)";
-                                            e.currentTarget.style.outline = "none";
-                                            e.currentTarget.style.boxShadow = "0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent)";
-                                        }}
-                                        onBlur={(e) => {
-                                            e.currentTarget.style.borderColor = "var(--border-color)";
-                                            e.currentTarget.style.boxShadow = "none";
-                                        }}
                                         rows={3}
                                     />
                                 </div>
@@ -958,15 +937,6 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess }:
                                         value={formData.securityNeeds}
                                         onChange={(e) => handleInputChange("securityNeeds", e.target.value)}
                                         className={inputClasses}
-                                        onFocus={(e) => {
-                                            e.currentTarget.style.borderColor = "var(--primary)";
-                                            e.currentTarget.style.outline = "none";
-                                            e.currentTarget.style.boxShadow = "0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent)";
-                                        }}
-                                        onBlur={(e) => {
-                                            e.currentTarget.style.borderColor = "var(--border-color)";
-                                            e.currentTarget.style.boxShadow = "none";
-                                        }}
                                     />
                                 </div>
                                 <div>
@@ -976,15 +946,6 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess }:
                                         value={formData.dealBreakers}
                                         onChange={(e) => handleInputChange("dealBreakers", e.target.value)}
                                         className={inputClasses}
-                                        onFocus={(e) => {
-                                            e.currentTarget.style.borderColor = "var(--primary)";
-                                            e.currentTarget.style.outline = "none";
-                                            e.currentTarget.style.boxShadow = "0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent)";
-                                        }}
-                                        onBlur={(e) => {
-                                            e.currentTarget.style.borderColor = "var(--border-color)";
-                                            e.currentTarget.style.boxShadow = "none";
-                                        }}
                                         rows={2}
                                     />
                                 </div>
@@ -995,15 +956,6 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess }:
                                         value={formData.niceToHaveSkills}
                                         onChange={(e) => handleInputChange("niceToHaveSkills", e.target.value)}
                                         className={inputClasses}
-                                        onFocus={(e) => {
-                                            e.currentTarget.style.borderColor = "var(--primary)";
-                                            e.currentTarget.style.outline = "none";
-                                            e.currentTarget.style.boxShadow = "0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent)";
-                                        }}
-                                        onBlur={(e) => {
-                                            e.currentTarget.style.borderColor = "var(--border-color)";
-                                            e.currentTarget.style.boxShadow = "none";
-                                        }}
                                         rows={2}
                                     />
                                 </div>

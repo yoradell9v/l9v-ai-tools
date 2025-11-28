@@ -4,9 +4,21 @@
   --background: #ffffff;
   --foreground: #171717;
   --font-sans: var(--font-poppins);
+
+  /* Brand palette */
   --primary: #18416B;
+  --primary-dark: #102b46;
+  --primary-light: #245884;
+  --primary-soft: #e3edf7;
+
   --accent: #fac133;
+  --accent-strong: #f0b214;
+  --accent-soft: #fff4cf;
+  --accent-soft-dark: rgba(250, 193, 51, 0.18);
+
   --accent-bg: #fff9e990;
+
+  /* Surface + text */
   --card-bg: #ffffff;
   --card-border: #e4e4e7;
   --text-primary: #171717;
@@ -20,13 +32,20 @@
   :root:not(.light) {
     --background: #09090b;
     --foreground: #fafafa;
+
     --card-bg: #18181b;
     --card-border: #27272a;
+
     --text-primary: #fafafa;
     --text-secondary: #a1a1aa;
     --text-muted: #71717a;
     --border-color: #27272a;
     --hover-bg: #27272a;
+
+    /* Dark variants for brand colors */
+    --primary-light: #3b82f6;
+    --primary-soft: rgba(59, 130, 246, 0.14);
+    --accent-soft: rgba(250, 193, 51, 0.16);
   }
 }
 
@@ -41,6 +60,10 @@ html.dark :root {
   --text-muted: #71717a;
   --border-color: #27272a;
   --hover-bg: #27272a;
+
+  --primary-light: #3b82f6;
+  --primary-soft: rgba(59, 130, 246, 0.14);
+  --accent-soft: rgba(250, 193, 51, 0.16);
 }
 
 html.light,

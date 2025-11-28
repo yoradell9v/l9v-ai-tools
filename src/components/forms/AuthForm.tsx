@@ -40,13 +40,11 @@ export default function AuthForm({
         confirmPassword: '',
     })
 
-    // Update values when initialValues change
     useEffect(() => {
         if (initialValues) {
             setValues((prev) => ({
                 ...prev,
                 ...initialValues,
-                // Don't override password fields from initialValues
                 password: prev.password || '',
                 confirmPassword: prev.confirmPassword || '',
             }))
@@ -56,12 +54,7 @@ export default function AuthForm({
     const [showPassword, setShowPassword] = useState(false)
     const [showConfirmPassword, setShowConfirmPassword] = useState(false)
     const [passwordMismatchError, setPasswordMismatchError] = useState(false)
-    const [passwordStrength, setPasswordStrength] = useState<{
-        valid: boolean
-        message: string
-    }>({
-        valid: false, message: ''
-    })
+    const [passwordStrength, setPasswordStrength] = useState<{ valid: boolean; message: string }>({ valid: false, message: '' })
 
     const isSignup = mode === 'signup'
 
@@ -71,17 +64,11 @@ export default function AuthForm({
 
         if (name === 'password' && isSignup) {
             checkPasswordStrength(value)
-            // Clear password mismatch error when password changes
-            if (passwordMismatchError) {
-                setPasswordMismatchError(false)
-            }
+            if (passwordMismatchError) setPasswordMismatchError(false)
         }
 
-        if (name === 'confirmPassword' && isSignup) {
-            // Clear password mismatch error when confirm password changes
-            if (passwordMismatchError) {
-                setPasswordMismatchError(false)
-            }
+        if (name === 'confirmPassword' && isSignup && passwordMismatchError) {
+            setPasswordMismatchError(false)
         }
     }
 
@@ -92,15 +79,9 @@ export default function AuthForm({
         if (password.length === 0) {
             setPasswordStrength({ valid: false, message: '' })
         } else if (password.length < minLength) {
-            setPasswordStrength({
-                valid: false,
-                message: 'Password must be at least 8 characters.',
-            })
+            setPasswordStrength({ valid: false, message: 'Password must be at least 8 characters.' })
         } else if (!specialCharRegex.test(password)) {
-            setPasswordStrength({
-                valid: false,
-                message: 'Password must contain at least one special character.',
-            })
+            setPasswordStrength({ valid: false, message: 'Password must contain at least one special character.' })
         } else {
             setPasswordStrength({ valid: true, message: 'Strong password!' })
         }
@@ -127,22 +108,20 @@ export default function AuthForm({
     const heading = isSignup ? 'Create your account' : 'Welcome back'
     const buttonLabel = submitLabel || (isSignup ? 'Sign up' : 'Sign in')
 
+    const sharedInputClasses = "w-full px-3 py-2 border rounded-md transition-all duration-200 focus:outline-none border-gray-300 dark:border-gray-600 focus:border-[#18416B] dark:focus:border-[#FAC133] focus:ring-[3px] focus:ring-[#18416B]/10 dark:focus:ring-[#FAC133]/10 bg-[var(--background)] text-[var(--text-primary)] placeholder:text-gray-400 dark:placeholder:text-gray-500"
+
     return (
-        <div className="min-h-screen flex items-center justify-center px-4 transition-colors duration-150" style={{ backgroundColor: "var(--background)", color: "var(--text-primary)" }}>
+        <div className="min-h-screen flex items-center justify-center px-4 transition-colors duration-150 bg-[var(--background)] text-[var(--text-primary)]">
             <form
                 onSubmit={handleSubmit}
-                className="w-full max-w-md rounded-2xl px-8 pt-8 pb-10 border shadow-lg transition-all duration-150"
-                style={{
-                    borderColor: "var(--border-color)",
-                    backgroundColor: "var(--card-bg)"
-                }}
+                className="w-full max-w-md rounded-2xl p-8 border shadow-lg transition-all duration-150 bg-[var(--card-bg)] border-[var(--border-color)]"
             >
                 <div className="mb-8">
-                    <p className="text-sm mb-1 transition-colors duration-150" style={{ color: "var(--text-muted)" }}>Please enter details</p>
-                    <h2 className="text-2xl font-semibold mb-2 transition-colors duration-150" style={{ color: "var(--text-primary)" }}>{heading}</h2>
+                    <p className="text-md mb-1 transition-colors duration-150 text-[var(--accent)] dark:text-[var(--text-muted)]">Please enter details</p>
+                    <h2 className="text-3xl font-semibold mb-2 transition-colors duration-150 text-[var(--primary)] dark:text-[var(--accent)]">{heading}</h2>
                     {errorMessage && (
-                        <div className="mt-4 p-3 border rounded-md transition-colors duration-150" style={{ backgroundColor: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)" }}>
-                            <p className="text-sm transition-colors duration-150" style={{ color: "rgb(220, 38, 38)" }}>{errorMessage}</p>
+                        <div className="mt-4 p-3 border rounded-md transition-colors duration-150 bg-[rgba(239,68,68,0.1)] border-[rgba(239,68,68,0.3)]">
+                            <p className="text-sm transition-colors duration-150 text-[rgb(220,38,38)]">{errorMessage}</p>
                         </div>
                     )}
                 </div>
@@ -150,83 +129,23 @@ export default function AuthForm({
                 {isSignup && (
                     <div className="grid grid-cols-2 gap-4 mb-4">
                         <div>
-                            <label
-                                htmlFor="firstname"
-                                className="block text-sm font-medium mb-1 transition-colors duration-150"
-                                style={{ color: "var(--text-secondary)" }}
-                            >
-                                First name
-                            </label>
-                            <input
-                                id="firstname"
-                                name="firstname"
-                                type="text"
-                                placeholder="John"
-                                value={values.firstname || ''}
-                                onChange={handleChange}
-                                autoComplete="firstname"
-                                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all duration-150"
-                                style={{
-                                    borderColor: "var(--border-color)",
-                                    backgroundColor: "var(--background)",
-                                    color: "var(--text-primary)"
-                                }}
-                            />
+                            <label htmlFor="firstname" className="block text-sm font-medium mb-1 transition-colors duration-150 text-[var(--text-secondary)]">First name</label>
+                            <input id="firstname" name="firstname" type="text" placeholder="John" value={values.firstname || ''} onChange={handleChange} autoComplete="firstname" className={sharedInputClasses} />
                         </div>
                         <div>
-                            <label
-                                htmlFor="lastname"
-                                className="block text-sm font-medium mb-1 transition-colors duration-150"
-                                style={{ color: "var(--text-secondary)" }}
-                            >
-                                Last name
-                            </label>
-                            <input
-                                id="lastname"
-                                name="lastname"
-                                type="text"
-                                placeholder="Doe"
-                                value={values.lastname || ''}
-                                onChange={handleChange}
-                                autoComplete="lastname"
-                                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all duration-150"
-                                style={{
-                                    borderColor: "var(--border-color)",
-                                    backgroundColor: "var(--background)",
-                                    color: "var(--text-primary)"
-                                }}
-                            />
+                            <label htmlFor="lastname" className="block text-sm font-medium mb-1 transition-colors duration-150 text-[var(--text-secondary)]">Last name</label>
+                            <input id="lastname" name="lastname" type="text" placeholder="Doe" value={values.lastname || ''} onChange={handleChange} autoComplete="lastname" className={sharedInputClasses} />
                         </div>
                     </div>
                 )}
 
                 <div className="mb-4">
-                    <label htmlFor="email" className="block text-sm font-medium mb-1 transition-colors duration-150" style={{ color: "var(--text-secondary)" }}>
-                        Email
-                    </label>
-                    <input
-                        id="email"
-                        name="email"
-                        type="email"
-                        placeholder="you@example.com"
-                        value={values.email}
-                        onChange={handleChange}
-                        autoComplete="email"
-                        required
-                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all duration-150"
-                        style={{
-                            borderColor: "var(--border-color)",
-                            backgroundColor: "var(--background)",
-                            color: "var(--text-primary)"
-                        }}
-                    />
+                    <label htmlFor="email" className="block text-sm font-medium mb-1 transition-colors duration-150 text-[var(--text-secondary)]">Email</label>
+                    <input id="email" name="email" type="email" placeholder="you@example.com" value={values.email} onChange={handleChange} autoComplete="email" required className={sharedInputClasses} />
                 </div>
 
-                {/* Password Field with Strength Checker */}
                 <div className={`relative ${isSignup ? 'mb-4' : 'mb-2'}`}>
-                    <label htmlFor="password" className="block text-sm font-medium mb-1 transition-colors duration-150" style={{ color: "var(--text-secondary)" }}>
-                        Password
-                    </label>
+                    <label htmlFor="password" className="block text-sm font-medium mb-1 transition-colors duration-150 text-[var(--text-secondary)]">Password</label>
                     <input
                         id="password"
                         name="password"
@@ -236,60 +155,32 @@ export default function AuthForm({
                         onChange={handleChange}
                         autoComplete={isSignup ? 'new-password' : 'current-password'}
                         required
-                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all duration-150"
-                        style={{
-                            borderColor: "var(--border-color)",
-                            backgroundColor: "var(--background)",
-                            color: "var(--text-primary)"
-                        }}
+                        className={sharedInputClasses}
                     />
                     <button
                         type="button"
                         onClick={() => setShowPassword((prev) => !prev)}
-                        className="absolute right-3 top-[35px] transition-colors duration-150"
-                        style={{ color: "var(--text-muted)" }}
-                        onMouseEnter={(e) => e.currentTarget.style.color = "var(--accent)"}
-                        onMouseLeave={(e) => e.currentTarget.style.color = "var(--text-muted)"}
+                        className="absolute right-3 top-[35px] transition-colors duration-150 text-[var(--text-muted)] hover:text-[var(--accent)]"
                     >
                         {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
                     </button>
 
                     {isSignup && values.password.length > 0 && (
-                        <p
-                            className="mt-2 text-sm transition-colors duration-150"
-                            style={{
-                                color: passwordStrength.valid ? "rgb(22, 163, 74)" : "rgb(220, 38, 38)"
-                            }}
-                        >
+                        <p className={`mt-2 text-sm transition-colors duration-150 ${passwordStrength.valid ? 'text-green-600' : 'text-red-600'}`}>
                             {passwordStrength.message}
                         </p>
                     )}
                 </div>
 
-                {/* Forgot Password Link - Only for Sign In */}
                 {!isSignup && (
                     <div className="flex justify-end mb-4">
-                        <Link
-                            href="/forgot-password"
-                            className="text-xs transition-colors duration-150"
-                            style={{ color: "var(--text-muted)" }}
-                            onMouseEnter={(e) => e.currentTarget.style.color = "var(--accent)"}
-                            onMouseLeave={(e) => e.currentTarget.style.color = "var(--text-muted)"}
-                        >
-                            Forgot password?
-                        </Link>
+                        <Link href="/forgot-password" className="text-xs transition-colors duration-150 text-[var(--text-muted)] hover:text-[var(--primary)] dark:hover:text-[var(--accent)]">Forgot password?</Link>
                     </div>
                 )}
 
                 {isSignup && (
                     <div className="mb-6 relative">
-                        <label
-                            htmlFor="confirmPassword"
-                            className="block text-sm font-medium mb-1 transition-colors duration-150"
-                            style={{ color: "var(--text-secondary)" }}
-                        >
-                            Confirm password
-                        </label>
+                        <label htmlFor="confirmPassword" className="block text-sm font-medium mb-1 transition-colors duration-150 text-[var(--text-secondary)]">Confirm password</label>
                         <input
                             id="confirmPassword"
                             name="confirmPassword"
@@ -299,28 +190,16 @@ export default function AuthForm({
                             onChange={handleChange}
                             autoComplete="new-password"
                             required
-                            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all duration-150"
-                            style={{
-                                borderColor: passwordMismatchError ? "rgb(220, 38, 38)" : "var(--border-color)",
-                                backgroundColor: "var(--background)",
-                                color: "var(--text-primary)"
-                            }}
+                            className={`${sharedInputClasses} ${passwordMismatchError ? '!border-red-500 focus:!border-red-500 focus:!ring-red-500/20' : ''}`}
                         />
                         <button
                             type="button"
                             onClick={() => setShowConfirmPassword((prev) => !prev)}
-                            className="absolute right-3 top-[35px] transition-colors duration-150"
-                            style={{ color: "var(--text-muted)" }}
-                            onMouseEnter={(e) => e.currentTarget.style.color = "var(--accent)"}
-                            onMouseLeave={(e) => e.currentTarget.style.color = "var(--text-muted)"}
+                            className="absolute right-3 top-[35px] transition-colors duration-150 text-[var(--text-muted)] hover:text-[var(--primary)] dark:hover:text-[var(--accent)]"
                         >
                             {showConfirmPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
                         </button>
-                        {passwordMismatchError && (
-                            <p className="mt-2 text-sm transition-colors duration-150" style={{ color: "rgb(220, 38, 38)" }}>
-                                Passwords do not match
-                            </p>
-                        )}
+                        {passwordMismatchError && <p className="mt-2 text-sm text-red-600 transition-colors duration-150">Passwords do not match</p>}
                     </div>
                 )}
 
@@ -328,25 +207,13 @@ export default function AuthForm({
                     <button
                         type="submit"
                         disabled={isSubmitting || (isSignup && !passwordStrength.valid)}
-                        className="w-full bg-[var(--accent)] hover:brightness-110 text-white font-semibold py-2.5 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md flex items-center justify-center gap-2"
+                        className="w-full bg-[var(--primary)] dark:bg-[var(--accent)] hover:brightness-110 text-white font-semibold py-2.5 px-4 rounded-xl focus:outline-none focus:ring-1 focus:ring-[var(--primary)] dark:focus:ring-[var(--accent)]/40 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md flex items-center justify-center gap-2"
                     >
                         {isSubmitting ? (
                             <div className="flex items-center gap-2">
                                 <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                    <circle
-                                        className="opacity-25"
-                                        cx="12"
-                                        cy="12"
-                                        r="10"
-                                        stroke="currentColor"
-                                        strokeWidth="4"
-                                        fill="none"
-                                    />
-                                    <path
-                                        className="opacity-75"
-                                        fill="currentColor"
-                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                    />
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                 </svg>
                                 <span>Submitting...</span>
                             </div>
@@ -354,14 +221,6 @@ export default function AuthForm({
                             buttonLabel
                         )}
                     </button>
-
-                </div>
-
-                <div className="text-center">
-                    <p className="text-sm transition-colors duration-150" style={{ color: "var(--text-secondary)" }}>
-                        You have to be invited to access this platform.
-
-                    </p>
                 </div>
             </form>
         </div>
