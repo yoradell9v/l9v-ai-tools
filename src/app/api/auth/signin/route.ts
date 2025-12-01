@@ -52,13 +52,7 @@ export async function POST(request: Request) {
     const userOrganizations: any = await prisma.userOrganization.findMany({
       where: { userId: user.id },
       include: {
-        organization: {
-          select: {
-            id: true,
-            name: true,
-            deactivatedAt: true,
-          } as any,
-        },
+        organization: true,
       },
     });
 
@@ -115,6 +109,10 @@ export async function POST(request: Request) {
     try {
       const { generateAccessToken, generateRefreshToken } = await import("@/lib/auth");
 
+      if (!generateAccessToken || !generateRefreshToken) {
+        throw new Error("Failed to import JWT functions");
+      }
+
       accessToken = await generateAccessToken({
         userId: user.id,
         email: user.email,
@@ -124,11 +122,16 @@ export async function POST(request: Request) {
         userId: user.id,
         email: user.email,
       });
+
+      if (!accessToken || !refreshToken) {
+        throw new Error("Failed to generate tokens");
+      }
     } catch (jwtError: any) {
       console.error("JWT error:", jwtError);
+      console.error("JWT error stack:", jwtError.stack);
       return NextResponse.json(
         { 
-          error: jwtError.message || "JWT secrets not configured. Please set JWT_SECRET and REFRESH_SECRET in your environment variables." 
+          error: jwtError?.message || "JWT secrets not configured. Please set JWT_SECRET and REFRESH_SECRET in your environment variables." 
         },
         { status: 500 }
       );
@@ -150,6 +153,15 @@ export async function POST(request: Request) {
         lastLoginAt: new Date(),
       },
     });
+
+    // Safety check - ensure user is still defined
+    if (!user || !user.id || !user.email) {
+      console.error("User object is invalid:", user);
+      return NextResponse.json(
+        { error: "User data is invalid" },
+        { status: 500 }
+      );
+    }
 
     const response = NextResponse.json({
       message: "Login successful",
@@ -175,10 +187,12 @@ export async function POST(request: Request) {
       path: "/",
     });
     return response;
-  } catch (error) {
-    console.error(error);
+  } catch (error: any) {
+    console.error("Signin error:", error);
+    console.error("Signin error stack:", error?.stack);
+    console.error("Signin error message:", error?.message);
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      { error: error?.message || "Internal Server Error" },
       { status: 500 }
     );
   }

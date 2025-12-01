@@ -1,27 +1,14 @@
 // prisma/seed.ts
 import { config } from "dotenv";
 import { hash } from "bcrypt";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
-import { Pool } from "pg";
 
-// Only load .env if DATABASE_URL is not already set (i.e., running locally)
+// Load .env if DATABASE_URL is not already set
 if (!process.env.DATABASE_URL) {
   config();
 }
 
-// Create a fresh Prisma client for seeding
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-});
-
-const adapter = new PrismaPg(pool);
-
 const prisma = new PrismaClient({
-  adapter,
   log: ["error", "warn"],
 });
 
@@ -41,70 +28,44 @@ async function main() {
       slug: "system-superadmin",
     },
   });
-
   console.log("✅ System organization created/verified:", systemOrg.id);
 
-  // 2. Define superadmin emails (accounts that should have superadmin access)
+  // 2. Define superadmin emails
   const superadminEmails = ["yoradelambrad@gmail.com"];
 
   for (const email of superadminEmails) {
-    // Check if user already exists
-    let user = await prisma.user.findUnique({
+    const defaultPassword = await hash("ChangeMe123!", 10);
+
+    // Upsert user: create if missing, otherwise ensure SUPERADMIN role
+    const user = await prisma.user.upsert({
       where: { email },
+      update: { globalRole: "SUPERADMIN" },
+      create: {
+        email,
+        firstname: "New",
+        lastname: "Admin",
+        password: defaultPassword,
+        globalRole: "SUPERADMIN",
+      },
     });
+    console.log(`✅ User created/verified: ${email}`);
 
-    if (user) {
-      // User exists - just ensure they have SUPERADMIN role
-      console.log(`👤 User exists: ${email}`);
-
-      if (user.globalRole !== "SUPERADMIN") {
-        user = await prisma.user.update({
-          where: { email },
-          data: { globalRole: "SUPERADMIN" },
-        });
-        console.log(`⬆️  Upgraded to SUPERADMIN`);
-      } else {
-        console.log(`✅ Already SUPERADMIN`);
-      }
-    } else {
-      // User doesn't exist - create with default password
-      console.log(`➕ Creating new user: ${email}`);
-      const defaultPassword = await hash("ChangeMe123!", 10);
-
-      user = await prisma.user.create({
-        data: {
-          email,
-          firstname: "New",
-          lastname: "Admin",
-          password: defaultPassword,
-          globalRole: "SUPERADMIN",
-        },
-      });
-      console.log(`✅ Created with default password`);
-    }
-
-    // Link to system organization (idempotent)
-    const existingLink = await prisma.userOrganization.findUnique({
+    // Upsert userOrganization link (idempotent)
+    await prisma.userOrganization.upsert({
       where: {
         userId_organizationId: {
           userId: user.id,
           organizationId: systemOrg.id,
         },
       },
+      update: { role: "ADMIN" },
+      create: {
+        userId: user.id,
+        organizationId: systemOrg.id,
+        role: "ADMIN",
+      },
     });
-
-    if (!existingLink) {
-      await prisma.userOrganization.create({
-        data: {
-          userId: user.id,
-          organizationId: systemOrg.id,
-          role: "ADMIN",
-        },
-      });
-      console.log(`🔗 Linked to system organization`);
-    } else {
-      console.log(`✅ Already linked to system organization`);
-    }
+    console.log(`🔗 Linked to system organization: ${systemOrg.slug}`);
   }
 
   console.log("\n🎉 Seeding complete!");
@@ -117,5 +78,4 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
-    await pool.end();
   });
