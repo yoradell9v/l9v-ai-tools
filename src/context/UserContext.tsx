@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useContext, ReactNode, useState } from "react";
+import { GlobalRole } from "@prisma/client";
 
 export interface User {
     id: string;
@@ -7,7 +8,7 @@ export interface User {
     lastname: string;
     email: string;
     createdAt: string;
-    globalRole?: "SUPERADMIN" | null;
+    globalRole?: GlobalRole | null;
 }
 
 interface UserContextType {

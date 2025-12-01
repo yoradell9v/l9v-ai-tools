@@ -20,6 +20,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import Modal from "./Modal";
+import { GlobalRole } from "@prisma/client";
 
 export interface User {
     id: string;
@@ -27,7 +28,7 @@ export interface User {
     lastname: string;
     email: string;
     createdAt: string;
-    globalRole: "SUPERADMIN" | "ADMIN" | "MEMBER";
+    globalRole: GlobalRole | null;
 }
 
 export default function Navbar() {
