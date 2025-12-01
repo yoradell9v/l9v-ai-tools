@@ -1,8 +1,8 @@
 // prisma/seed.ts
 import { config } from "dotenv";
 import { hash } from "bcrypt";
-import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@prisma/client";
 import { Pool } from "pg";
 
 // Load environment variables
