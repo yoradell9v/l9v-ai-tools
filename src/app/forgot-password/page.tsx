@@ -141,7 +141,7 @@ export default function ForgotPasswordPage() {
                         onChange={(e) => setEmail(e.target.value)}
                         autoComplete="email"
                         required
-                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#FAC133] focus:border-[#FAC133] transition-all duration-150 border-gray-300 dark:border-gray-600 bg-white dark:bg-[#121212] text-[#1a1a1a] dark:text-[#e0e0e0]"
+                        className="w-full px-3 py-2 border rounded-md transition-all duration-200 focus:outline-none border-gray-300 dark:border-gray-600 focus:border-[#18416B] dark:focus:border-[#FAC133] focus:ring-[3px] focus:ring-[#18416B]/10 dark:focus:ring-[#FAC133]/10 bg-white dark:bg-[#121212] text-[#1a1a1a] dark:text-[#e0e0e0] placeholder:text-gray-400 dark:placeholder:text-gray-500"
                     />
                 </div>
 
