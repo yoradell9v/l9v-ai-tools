@@ -404,10 +404,28 @@ export default function BusinessBrain() {
                             <div>
                                 <h4 className="text-xs font-semibold text-[var(--text-primary)] mb-2">Pipeline Configuration</h4>
                                 <ul className="space-y-2">
-                                    {metadata.pipelines.map((pipeline: string, index: number) => (
+                                    {metadata.pipelines.map((pipeline: any, index: number) => (
                                         <li key={index} className="text-xs text-[var(--text-secondary)] flex items-start gap-2">
                                             <span className="text-[var(--primary)] mt-0.5">→</span>
-                                            <span>{pipeline}</span>
+                                            <div className="flex-1">
+                                                {typeof pipeline === 'string' ? (
+                                                    <span>{pipeline}</span>
+                                                ) : (
+                                                    <div className="space-y-1">
+                                                        {pipeline.name && (
+                                                            <p className="font-medium text-[var(--text-primary)]">{pipeline.name}</p>
+                                                        )}
+                                                        {pipeline.description && (
+                                                            <p>{pipeline.description}</p>
+                                                        )}
+                                                        {pipeline.stages && (
+                                                            <p className="text-[var(--text-secondary)] italic">
+                                                                Stages: {Array.isArray(pipeline.stages) ? pipeline.stages.join(', ') : pipeline.stages}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </li>
                                     ))}
                                 </ul>
@@ -439,10 +457,28 @@ export default function BusinessBrain() {
                             <div>
                                 <h4 className="text-xs font-semibold text-[var(--text-primary)] mb-2">Workflows</h4>
                                 <ul className="space-y-2">
-                                    {metadata.workflows.map((workflow: string, index: number) => (
+                                    {metadata.workflows.map((workflow: any, index: number) => (
                                         <li key={index} className="text-xs text-[var(--text-secondary)] flex items-start gap-2">
                                             <span className="text-[var(--primary)] mt-0.5">⚙</span>
-                                            <span>{workflow}</span>
+                                            <div className="flex-1">
+                                                {typeof workflow === 'string' ? (
+                                                    <span>{workflow}</span>
+                                                ) : (
+                                                    <div className="space-y-1">
+                                                        {workflow.name && (
+                                                            <p className="font-medium text-[var(--text-primary)]">{workflow.name}</p>
+                                                        )}
+                                                        {workflow.description && (
+                                                            <p>{workflow.description}</p>
+                                                        )}
+                                                        {workflow.stages && (
+                                                            <p className="text-[var(--text-secondary)] italic">
+                                                                Stages: {Array.isArray(workflow.stages) ? workflow.stages.join(', ') : workflow.stages}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </li>
                                     ))}
                                 </ul>
@@ -452,12 +488,30 @@ export default function BusinessBrain() {
                             <div>
                                 <h4 className="text-xs font-semibold text-[var(--text-primary)] mb-2">Automations</h4>
                                 <ul className="space-y-2">
-                                    {metadata.automations.map((automation: string, index: number) => (
+                                    {metadata.automations.map((automation: any, index: number) => (
                                         <li key={index} className="text-xs text-[var(--text-secondary)] flex items-start gap-2">
                                             <div className="w-5 h-5 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                                                 <Bot className="w-4 h-4 text-[var(--primary)] dark:text-[var(--accent)]" />
                                             </div>
-                                            <span>{automation}</span>
+                                            <div className="flex-1">
+                                                {typeof automation === 'string' ? (
+                                                    <span>{automation}</span>
+                                                ) : (
+                                                    <div className="space-y-1">
+                                                        {automation.name && (
+                                                            <p className="font-medium text-[var(--text-primary)]">{automation.name}</p>
+                                                        )}
+                                                        {automation.description && (
+                                                            <p>{automation.description}</p>
+                                                        )}
+                                                        {automation.stages && (
+                                                            <p className="text-[var(--text-secondary)] italic">
+                                                                Stages: {Array.isArray(automation.stages) ? automation.stages.join(', ') : automation.stages}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </li>
                                     ))}
                                 </ul>
