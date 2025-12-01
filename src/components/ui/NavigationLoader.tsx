@@ -14,12 +14,31 @@ export default function NavigationLoader() {
         const handleLinkClick = (e: MouseEvent) => {
             const target = e.target as HTMLElement;
             const link = target.closest('a');
-            
+
             if (link && link.href) {
                 const href = link.getAttribute('href');
-                // Only intercept internal links (not external links or anchors)
-                if (href && !href.startsWith('http') && !href.startsWith('mailto:') && !href.startsWith('tel:') && !href.startsWith('#')) {
+
+                // Ignore download links, blob URLs, data URLs, and programmatically created download links
+                const isDownload = link.hasAttribute('download') ||
+                    link.href.startsWith('blob:') ||
+                    link.href.startsWith('data:') ||
+                    link.getAttribute('data-download') === 'true' ||
+                    link.style.display === 'none' || // Programmatically created links are often hidden
+                    target.closest('[data-download]'); // Check if parent has download attribute
+
+                // Only intercept internal links (not external links, anchors, or downloads)
+                if (href &&
+                    !isDownload &&
+                    !href.startsWith('http') &&
+                    !href.startsWith('mailto:') &&
+                    !href.startsWith('tel:') &&
+                    !href.startsWith('#') &&
+                    !href.startsWith('blob:') &&
+                    !href.startsWith('data:')) {
                     setIsLoading(true);
+                } else if (isDownload) {
+                    // Explicitly ensure loader is not shown for downloads
+                    setIsLoading(false);
                 }
             }
         };
@@ -43,7 +62,14 @@ export default function NavigationLoader() {
             };
         }
 
+        // Safety: Clear loader if it's been showing for too long (5 seconds)
+        // This prevents the loader from getting stuck
+        const safetyTimer = setTimeout(() => {
+            setIsLoading(false);
+        }, 5000);
+
         return () => {
+            clearTimeout(safetyTimer);
             document.removeEventListener('click', handleLinkClick, true);
         };
     }, [pathname]);

@@ -473,6 +473,7 @@ export default function JdBuilderPage() {
     const router = useRouter();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [intakeData, setIntakeData] = useState<IntakeFormData | null>(null);
     const [activeTab, setActiveTab] = useState<'summary' | 'overview' | 'roles' | 'implementation' | 'risks'>('summary');
@@ -485,9 +486,10 @@ export default function JdBuilderPage() {
     const [analysisError, setAnalysisError] = useState<string | null>(null);
 
     const handleSuccess = async ({ apiResult, input }: { apiResult: any; input: IntakeFormData }) => {
-        setIsProcessing(true);
         setCurrentStage(""); // Reset stage when analysis completes
         setAnalysisError(null); // Clear any previous errors
+        // Analysis is complete, so processing should be false
+        setIsProcessing(false);
         try {
             const result: AnalysisResult = {
                 preview: apiResult.preview ?? {
@@ -584,10 +586,9 @@ export default function JdBuilderPage() {
             } as AnalysisResult);
             setIntakeData(input);
         } finally {
-            setTimeout(() => {
-                setIsProcessing(false);
-                setCurrentStage(""); // Clear stage when done
-            }, 1200);
+            // Ensure processing is false after handling results
+            setIsProcessing(false);
+            setCurrentStage(""); // Clear stage when done
         }
     };
 
@@ -651,6 +652,9 @@ export default function JdBuilderPage() {
             return;
         }
 
+        setIsDownloading(true);
+        setActionsMenuOpen(false);
+
         try {
             const response = await fetch('/api/jd/download', {
                 method: 'POST',
@@ -675,16 +679,22 @@ export default function JdBuilderPage() {
                 : 'job-description-analysis.pdf';
 
             a.download = filename;
+            // Mark as download to prevent NavigationLoader from intercepting
+            a.setAttribute('data-download', 'true');
+            a.style.display = 'none';
             document.body.appendChild(a);
             a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
 
-            setActionsMenuOpen(false);
+            // Small delay to ensure download starts before cleanup
+            setTimeout(() => {
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                setIsDownloading(false);
+            }, 100);
         } catch (error) {
             console.error('Download error:', error);
             alert('Failed to download job description. Please try again.');
-            setActionsMenuOpen(false);
+            setIsDownloading(false);
         }
     };
 
@@ -819,7 +829,7 @@ export default function JdBuilderPage() {
                         )}
 
                         {/* Processing State */}
-                        {isProcessing && !analysisError && (
+                        {isProcessing && !analysisError && !isDownloading && (
                             <div className="flex flex-col items-center justify-center py-16">
                                 <svg className="animate-spin h-8 w-8 mb-3 text-[var(--accent)]" viewBox="0 0 24 24" >
                                     <circle
@@ -846,8 +856,36 @@ export default function JdBuilderPage() {
                             </div>
                         )}
 
+                        {/* Downloading State */}
+                        {isDownloading && (
+                            <div className="flex flex-col items-center justify-center py-16">
+                                <svg className="animate-spin h-8 w-8 mb-3 text-[var(--accent)]" viewBox="0 0 24 24" >
+                                    <circle
+                                        className="opacity-25"
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                        fill="none"
+                                    />
+                                    <path
+                                        className="opacity-75"
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    />
+                                </svg>
+                                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
+                                    Preparing download...
+                                </h3>
+                                <p className="text-sm text-[var(--text-secondary)]">
+                                    Generating PDF file
+                                </p>
+                            </div>
+                        )}
+
                         {/* Empty State */}
-                        {!analysisResult && !isProcessing && (
+                        {!analysisResult && !isProcessing && !isDownloading && (
                             <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
                                 <div
 
@@ -879,7 +917,7 @@ export default function JdBuilderPage() {
                         )}
 
                         {/* Results State */}
-                        {analysisResult && !isProcessing && (
+                        {analysisResult && !isProcessing && !isDownloading && (
                             <div className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] flex flex-col" style={{ maxHeight: 'calc(100vh - 200px)' }}>
                                 {/* Header with Actions Menu */}
                                 <div className="flex-shrink-0 p-6 border-b border-[var(--border-color)]">

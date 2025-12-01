@@ -31,7 +31,7 @@ async function main() {
   console.log("✅ System organization created/verified:", systemOrg.id);
 
   // 2. Define superadmin emails
-  const superadminEmails = ["yoradelambrad@gmail.com"];
+  const superadminEmails = ["yoradelambrad@gmail.com", "joerare@gmail.com"];
 
   for (const email of superadminEmails) {
     const defaultPassword = await hash("ChangeMe123!", 10);
