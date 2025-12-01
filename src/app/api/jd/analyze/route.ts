@@ -143,6 +143,67 @@ function normalizeStringArray(input: unknown): string[] {
   return [];
 }
 
+// Helper function to format user-friendly error messages
+function formatErrorMessage(error: any): { error: string; details: string; userMessage: string } {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  
+  // OpenAI API errors
+  if (errorMessage.includes("429") || errorMessage.includes("quota") || errorMessage.includes("billing")) {
+    return {
+      error: "OpenAI API quota exceeded",
+      details: errorMessage,
+      userMessage: "OpenAI API quota has been exceeded. Please check your OpenAI billing and plan details, or contact support."
+    };
+  }
+  
+  if (errorMessage.includes("401") || errorMessage.includes("Invalid API key")) {
+    return {
+      error: "OpenAI API authentication failed",
+      details: errorMessage,
+      userMessage: "OpenAI API key is invalid or missing. Please check your API configuration."
+    };
+  }
+  
+  if (errorMessage.includes("500") || errorMessage.includes("Internal server error")) {
+    return {
+      error: "OpenAI API server error",
+      details: errorMessage,
+      userMessage: "OpenAI service is experiencing issues. Please try again in a few moments."
+    };
+  }
+  
+  if (errorMessage.includes("timeout") || errorMessage.includes("ETIMEDOUT") || errorMessage.includes("ECONNREFUSED")) {
+    return {
+      error: "Connection error",
+      details: errorMessage,
+      userMessage: "Unable to connect to the AI service. Please check your internet connection and try again."
+    };
+  }
+  
+  if (errorMessage.includes("rate limit") || errorMessage.includes("rate_limit")) {
+    return {
+      error: "Rate limit exceeded",
+      details: errorMessage,
+      userMessage: "Too many requests. Please wait a moment and try again."
+    };
+  }
+  
+  if (errorMessage.includes("insufficient_quota") || errorMessage.includes("insufficient tokens")) {
+    return {
+      error: "Insufficient tokens",
+      details: errorMessage,
+      userMessage: "Insufficient API credits. Please add credits to your OpenAI account and try again."
+    };
+  }
+  
+  // Generic error
+  return {
+    error: "Analysis failed",
+    details: errorMessage,
+    userMessage: "An error occurred while analyzing your job description. Please try again or contact support if the issue persists."
+  };
+}
+
 // Helper function to remove team_support_areas for Dedicated VA service type
 function cleanTeamSupportAreas(analysisResult: any): any {
   if (!analysisResult) return analysisResult;
@@ -1697,10 +1758,13 @@ export async function POST(request: Request) {
           controller.enqueue(encoder.encode(final + "\n"));
           controller.close();
         } catch (error) {
+          console.error("Analysis pipeline error:", error);
+          const formattedError = formatErrorMessage(error);
           const errorMsg = JSON.stringify({
             type: "error",
-            error: "Failed to analyze job description",
-            details: error instanceof Error ? error.message : "Unknown error",
+            error: formattedError.error,
+            details: formattedError.details,
+            userMessage: formattedError.userMessage,
           });
           controller.enqueue(encoder.encode(errorMsg + "\n"));
           controller.close();
@@ -1718,10 +1782,12 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error("JD Analysis error:", error);
+    const formattedError = formatErrorMessage(error);
     return NextResponse.json(
       {
-        error: "Failed to analyze job description",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error: formattedError.error,
+        details: formattedError.details,
+        userMessage: formattedError.userMessage,
       },
       { status: 500 }
     );

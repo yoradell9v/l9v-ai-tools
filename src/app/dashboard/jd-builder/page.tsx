@@ -482,10 +482,12 @@ export default function JdBuilderPage() {
     const [isRefinementModalOpen, setIsRefinementModalOpen] = useState(false);
     const [savedAnalysisId, setSavedAnalysisId] = useState<string | null>(null);
     const [currentStage, setCurrentStage] = useState<string>("");
+    const [analysisError, setAnalysisError] = useState<string | null>(null);
 
     const handleSuccess = async ({ apiResult, input }: { apiResult: any; input: IntakeFormData }) => {
         setIsProcessing(true);
         setCurrentStage(""); // Reset stage when analysis completes
+        setAnalysisError(null); // Clear any previous errors
         try {
             const result: AnalysisResult = {
                 preview: apiResult.preview ?? {
@@ -553,6 +555,7 @@ export default function JdBuilderPage() {
             }
         } catch (e) {
             console.error("Failed to process API result:", e);
+            setAnalysisError(e instanceof Error ? e.message : "Failed to process analysis results");
             setAnalysisResult({
                 preview: apiResult.preview ?? {
                     summary: {
@@ -583,6 +586,7 @@ export default function JdBuilderPage() {
         } finally {
             setTimeout(() => {
                 setIsProcessing(false);
+                setCurrentStage(""); // Clear stage when done
             }, 1200);
         }
     };
@@ -590,6 +594,7 @@ export default function JdBuilderPage() {
     const handleNewAnalysis = () => {
         setAnalysisResult(null);
         setIntakeData(null);
+        setAnalysisError(null);
         setIsModalOpen(true);
     };
 
@@ -773,8 +778,48 @@ export default function JdBuilderPage() {
 
                     {/* Scrollable Content Area */}
                     <div className="flex-1 overflow-y-auto ">
+                        {/* Error State */}
+                        {analysisError && !isProcessing && (
+                            <div className="flex flex-col items-center justify-center py-16 px-6">
+                                <div className="max-w-md w-full">
+                                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 mb-4">
+                                        <div className="flex items-start gap-3">
+                                            <div className="flex-shrink-0">
+                                                <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                                            </div>
+                                            <div className="flex-1">
+                                                <h3 className="text-lg font-semibold text-red-900 dark:text-red-200 mb-2">
+                                                    Analysis Failed
+                                                </h3>
+                                                <p className="text-sm text-red-800 dark:text-red-300 mb-4">
+                                                    {analysisError}
+                                                </p>
+                                                <div className="flex gap-3">
+                                                    <button
+                                                        onClick={() => {
+                                                            setAnalysisError(null);
+                                                            setIsModalOpen(true);
+                                                        }}
+                                                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
+                                                    >
+                                                        Try Again
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setAnalysisError(null)}
+                                                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg text-sm font-medium transition-colors"
+                                                    >
+                                                        Dismiss
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Processing State */}
-                        {isProcessing && (
+                        {isProcessing && !analysisError && (
                             <div className="flex flex-col items-center justify-center py-16">
                                 <svg className="animate-spin h-8 w-8 mb-3 text-[var(--accent)]" viewBox="0 0 24 24" >
                                     <circle
@@ -1694,138 +1739,202 @@ export default function JdBuilderPage() {
                                 onProgress={(stage) => {
                                     setCurrentStage(stage);
                                     setIsProcessing(true);
+                                    setAnalysisError(null); // Clear errors when starting new analysis
                                     // Close modal when analysis starts so user can see progress
                                     setIsModalOpen(false);
                                 }}
+                                onError={(errorMessage) => {
+                                    setAnalysisError(errorMessage);
+                                    setIsProcessing(false);
+                                    setCurrentStage("");
+                                }}
                                 onSubmit={async (formData, files) => {
-                                    // Transform form data to match API expected format
-                                    const toolsArray = formData.tools
-                                        ? formData.tools
-                                            .split(",")
-                                            .map((tool: string) => tool.trim())
-                                            .filter(Boolean)
-                                        : [];
+                                    // Clear any previous errors
+                                    setAnalysisError(null);
 
-                                    const tasksArray = Array.isArray(formData.tasks)
-                                        ? formData.tasks.filter((task: string) => task && task.trim()).slice(0, 5)
-                                        : [];
+                                    try {
+                                        // Transform form data to match API expected format
+                                        const toolsArray = formData.tools
+                                            ? formData.tools
+                                                .split(",")
+                                                .map((tool: string) => tool.trim())
+                                                .filter(Boolean)
+                                            : [];
 
-                                    // Validate required fields
-                                    if (!formData.companyName || !formData.companyName.trim()) {
-                                        throw new Error("Company name is required");
-                                    }
-                                    if (tasksArray.length === 0) {
-                                        throw new Error("At least one task is required");
-                                    }
+                                        const tasksArray = Array.isArray(formData.tasks)
+                                            ? formData.tasks.filter((task: string) => task && task.trim()).slice(0, 5)
+                                            : [];
 
-                                    const intakePayload = {
-                                        brand: {
-                                            name: formData.companyName.trim(),
-                                        },
-                                        website: formData.website || "",
-                                        business_goal: formData.businessGoal || "",
-                                        outcome_90d: formData.outcome90Day || "",
-                                        tasks_top5: tasksArray,
-                                        requirements: Array.isArray(formData.requirements)
-                                            ? formData.requirements.filter((req: string) => req && req.trim())
-                                            : [],
-                                        weekly_hours: parseInt(formData.weeklyHours || "0", 10) || 0,
-                                        timezone: formData.timezone || "",
-                                        client_facing: formData.clientFacing === "Yes",
-                                        tools: toolsArray,
-                                        tools_raw: formData.tools || "",
-                                        english_level: formData.englishLevel || "",
-                                        management_style: formData.managementStyle || "",
-                                        reporting_expectations: formData.reportingExpectations || "",
-                                        security_needs: formData.securityNeeds || "",
-                                        deal_breakers: formData.dealBreakers || "",
-                                        nice_to_have_skills: formData.niceToHaveSkills || "",
-                                        existing_sops: formData.existingSOPs === "Yes",
-                                        sop_filename: files.sopFile?.name ?? null,
-                                    };
-
-                                    const payload = new FormData();
-                                    payload.append("intake_json", JSON.stringify(intakePayload));
-
-                                    // Handle SOP file upload (field id is 'sopFile')
-                                    if (files.sopFile) {
-                                        payload.append("sopFile", files.sopFile);
-                                    }
-
-                                    const response = await fetch('/api/jd/analyze', {
-                                        method: 'POST',
-                                        body: payload,
-                                    });
-
-                                    if (!response.ok) {
-                                        let message = 'Analysis failed';
-                                        try {
-                                            const errorPayload = await response.json();
-                                            if (errorPayload?.error) {
-                                                message = errorPayload.error;
-                                            }
-                                        } catch {
-                                            // Ignore JSON parse errors
+                                        // Validate required fields
+                                        if (!formData.companyName || !formData.companyName.trim()) {
+                                            throw new Error("Company name is required");
                                         }
-                                        throw new Error(message);
-                                    }
+                                        if (tasksArray.length === 0) {
+                                            throw new Error("At least one task is required");
+                                        }
 
-                                    // Handle streaming response
-                                    const reader = response.body?.getReader();
-                                    const decoder = new TextDecoder();
-                                    let buffer = '';
-                                    let finalData: any = null;
+                                        const intakePayload = {
+                                            brand: {
+                                                name: formData.companyName.trim(),
+                                            },
+                                            website: formData.website || "",
+                                            business_goal: formData.businessGoal || "",
+                                            outcome_90d: formData.outcome90Day || "",
+                                            tasks_top5: tasksArray,
+                                            requirements: Array.isArray(formData.requirements)
+                                                ? formData.requirements.filter((req: string) => req && req.trim())
+                                                : [],
+                                            weekly_hours: parseInt(formData.weeklyHours || "0", 10) || 0,
+                                            timezone: formData.timezone || "",
+                                            client_facing: formData.clientFacing === "Yes",
+                                            tools: toolsArray,
+                                            tools_raw: formData.tools || "",
+                                            english_level: formData.englishLevel || "",
+                                            management_style: formData.managementStyle || "",
+                                            reporting_expectations: formData.reportingExpectations || "",
+                                            security_needs: formData.securityNeeds || "",
+                                            deal_breakers: formData.dealBreakers || "",
+                                            nice_to_have_skills: formData.niceToHaveSkills || "",
+                                            existing_sops: formData.existingSOPs === "Yes",
+                                            sop_filename: files.sopFile?.name ?? null,
+                                        };
 
-                                    if (!reader) {
-                                        throw new Error('No response body');
-                                    }
+                                        const payload = new FormData();
+                                        payload.append("intake_json", JSON.stringify(intakePayload));
 
-                                    while (true) {
-                                        const { done, value } = await reader.read();
-                                        if (done) break;
+                                        // Handle SOP file upload (field id is 'sopFile')
+                                        if (files.sopFile) {
+                                            payload.append("sopFile", files.sopFile);
+                                        }
 
-                                        buffer += decoder.decode(value, { stream: true });
-                                        const lines = buffer.split('\n');
-                                        buffer = lines.pop() || '';
+                                        const response = await fetch('/api/jd/analyze', {
+                                            method: 'POST',
+                                            body: payload,
+                                        });
 
-                                        for (const line of lines) {
-                                            if (!line.trim()) continue;
+                                        if (!response.ok) {
+                                            let message = 'Analysis failed';
+                                            let userMessage = 'An error occurred during analysis';
                                             try {
-                                                const parsed = JSON.parse(line);
-                                                if (parsed.type === 'progress' && parsed.stage) {
-                                                    setCurrentStage(parsed.stage);
-                                                    setIsProcessing(true);
-                                                    setIsModalOpen(false);
-                                                } else if (parsed.type === 'result' && parsed.data) {
+                                                const errorPayload = await response.json();
+                                                if (errorPayload?.userMessage) {
+                                                    userMessage = errorPayload.userMessage;
+                                                    message = errorPayload.error || errorPayload.details || message;
+                                                } else if (errorPayload?.error) {
+                                                    message = errorPayload.error;
+                                                }
+                                            } catch {
+                                                // Ignore JSON parse errors
+                                            }
+                                            const error = new Error(message);
+                                            (error as any).userMessage = userMessage;
+                                            throw error;
+                                        }
+
+                                        // Handle streaming response
+                                        const reader = response.body?.getReader();
+                                        const decoder = new TextDecoder();
+                                        let buffer = '';
+                                        let finalData: any = null;
+                                        let streamError: Error | null = null;
+
+                                        if (!reader) {
+                                            throw new Error('No response body');
+                                        }
+
+                                        try {
+                                            while (true) {
+                                                const { done, value } = await reader.read();
+                                                if (done) break;
+
+                                                buffer += decoder.decode(value, { stream: true });
+                                                const lines = buffer.split('\n');
+                                                buffer = lines.pop() || '';
+
+                                                for (const line of lines) {
+                                                    if (!line.trim()) continue;
+                                                    try {
+                                                        const parsed = JSON.parse(line);
+                                                        if (parsed.type === 'progress' && parsed.stage) {
+                                                            setCurrentStage(parsed.stage);
+                                                            setIsProcessing(true);
+                                                            setIsModalOpen(false);
+                                                        } else if (parsed.type === 'result' && parsed.data) {
+                                                            finalData = parsed.data;
+                                                        } else if (parsed.type === 'error') {
+                                                            // Store the error and break out of loops
+                                                            const error = new Error(parsed.error || parsed.details || 'Analysis failed');
+                                                            (error as any).userMessage = parsed.userMessage || parsed.error || parsed.details || 'Analysis failed';
+                                                            streamError = error;
+                                                            break; // Break out of for loop
+                                                        }
+                                                    } catch (parseError) {
+                                                        // Only catch JSON parsing errors (SyntaxError), not API errors
+                                                        if (parseError instanceof SyntaxError) {
+                                                            // This is a JSON parse error, log and continue
+                                                            console.error('Failed to parse stream chunk (JSON syntax error):', parseError);
+                                                            continue;
+                                                        } else {
+                                                            // This is an API error, store it and break
+                                                            streamError = parseError as Error;
+                                                            break; // Break out of for loop
+                                                        }
+                                                    }
+                                                }
+
+                                                // If we got an error, break out of while loop
+                                                if (streamError) break;
+                                            }
+                                        } finally {
+                                            reader.releaseLock();
+                                        }
+
+                                        // If we got an error from the stream, throw it
+                                        if (streamError) {
+                                            throw streamError;
+                                        }
+
+                                        // Process any remaining buffer (only if we didn't get an error)
+                                        if (!streamError && buffer.trim()) {
+                                            try {
+                                                const parsed = JSON.parse(buffer);
+                                                if (parsed.type === 'result' && parsed.data) {
                                                     finalData = parsed.data;
                                                 } else if (parsed.type === 'error') {
-                                                    throw new Error(parsed.error || parsed.details || 'Analysis failed');
+                                                    const error = new Error(parsed.error || parsed.details || 'Analysis failed');
+                                                    (error as any).userMessage = parsed.userMessage || parsed.error || parsed.details || 'Analysis failed';
+                                                    throw error; // This will be caught by outer catch
                                                 }
                                             } catch (parseError) {
-                                                console.error('Failed to parse stream chunk:', parseError);
+                                                // Only catch JSON parsing errors, not API errors
+                                                if (parseError instanceof SyntaxError) {
+                                                    // This is a JSON parse error, log and continue
+                                                    console.error('Failed to parse final buffer (JSON syntax error):', parseError);
+                                                } else {
+                                                    // This is an API error (thrown from parsed.type === 'error'), re-throw it
+                                                    throw parseError;
+                                                }
                                             }
                                         }
-                                    }
 
-                                    // Process any remaining buffer
-                                    if (buffer.trim()) {
-                                        try {
-                                            const parsed = JSON.parse(buffer);
-                                            if (parsed.type === 'result' && parsed.data) {
-                                                finalData = parsed.data;
-                                            } else if (parsed.type === 'error') {
-                                                throw new Error(parsed.error || parsed.details || 'Analysis failed');
-                                            }
-                                        } catch (parseError) {
-                                            console.error('Failed to parse final buffer:', parseError);
+                                        // Only throw "No data received" if we didn't get an error from the API and no data
+                                        if (!streamError && !finalData) {
+                                            throw new Error('No data received from analysis');
                                         }
-                                    }
 
-                                    if (!finalData) {
-                                        throw new Error('No data received from analysis');
-                                    }
+                                        return finalData;
+                                    } catch (error) {
+                                        // Set error state and stop processing
+                                        const errorMessage = error instanceof Error
+                                            ? ((error as any).userMessage || error.message)
+                                            : 'An unexpected error occurred';
+                                        setAnalysisError(errorMessage);
+                                        setIsProcessing(false);
+                                        setCurrentStage("");
 
-                                    return finalData;
+                                        // Re-throw to prevent success handler from running
+                                        throw error;
+                                    }
                                 }}
                             />
                         }

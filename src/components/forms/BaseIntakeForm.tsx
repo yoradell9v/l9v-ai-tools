@@ -13,6 +13,7 @@ interface BaseIntakeFormProps {
     onClose: () => void;
     onSuccess?: (data: any) => void;
     onProgress?: (stage: string) => void;
+    onError?: (error: string) => void;
     onSubmit?: (formData: Record<string, any>, files: Record<string, File | null>) => Promise<any>;
     initialData?: Record<string, any>;
 }
@@ -25,6 +26,7 @@ export default function BaseIntakeForm({
     onSuccess,
     onProgress,
     onSubmit,
+    onError,
     initialData,
 }: BaseIntakeFormProps) {
     const [formData, setFormData] = useState<Record<string, any>>(config.defaultValues);
@@ -338,7 +340,8 @@ export default function BaseIntakeForm({
                                 } else if (parsed.type === 'result' && parsed.data) {
                                     finalData = parsed.data;
                                 } else if (parsed.type === 'error') {
-                                    throw new Error(parsed.error || parsed.details || 'Submission failed');
+                                    const errorMessage = parsed.userMessage || parsed.error || parsed.details || 'Submission failed';
+                                    throw new Error(errorMessage);
                                 }
                             } catch (parseError) {
                                 console.error('Failed to parse stream chunk:', parseError);
@@ -353,7 +356,8 @@ export default function BaseIntakeForm({
                             if (parsed.type === 'result' && parsed.data) {
                                 finalData = parsed.data;
                             } else if (parsed.type === 'error') {
-                                throw new Error(parsed.error || parsed.details || 'Submission failed');
+                                const errorMessage = parsed.userMessage || parsed.error || parsed.details || 'Submission failed';
+                                throw new Error(errorMessage);
                             }
                         } catch (parseError) {
                             console.error('Failed to parse final buffer:', parseError);
@@ -383,7 +387,13 @@ export default function BaseIntakeForm({
             }, 500);
         } catch (error) {
             console.error('Submission error:', error);
-            setSubmitError(error instanceof Error ? error.message : 'Failed to submit form');
+            const errorMessage = error instanceof Error ? error.message : 'Failed to submit form';
+            setSubmitError(errorMessage);
+            
+            // Notify parent component of error
+            if (onError) {
+                onError(errorMessage);
+            }
         } finally {
             setIsSubmitting(false);
         }
