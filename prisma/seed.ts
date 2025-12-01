@@ -3,9 +3,13 @@ import { config } from "dotenv";
 import { hash } from "bcrypt";
 import { PrismaClient } from "@prisma/client";
 
-// Load .env if DATABASE_URL is not already set
-if (!process.env.DATABASE_URL) {
-  config();
+// Load .env file
+config();
+
+// Prioritize DATABASE_PUBLIC_URL over DATABASE_URL for local seeding
+// This allows using public URL when running from local machine
+if (process.env.DATABASE_PUBLIC_URL) {
+  process.env.DATABASE_URL = process.env.DATABASE_PUBLIC_URL;
 }
 
 const prisma = new PrismaClient({
