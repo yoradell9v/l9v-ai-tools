@@ -121,7 +121,7 @@ Generate the compliance card JSON now.`,
         ? context.intakeData.disclaimers.split('\n').filter(Boolean)
         : [];
       const forbiddenWords = context.intakeData?.forbiddenWords
-        ? context.intakeData.forbiddenWords.split(',').map(w => w.trim()).filter(Boolean)
+        ? context.intakeData.forbiddenWords.split(',').map((w: string) => w.trim()).filter(Boolean)
         : [];
       parsed.metadata.required_disclaimers = disclaimers.length > 0 ? disclaimers : ["Results may vary. Individual results not guaranteed."];
       parsed.metadata.forbidden_claims = forbiddenWords;
