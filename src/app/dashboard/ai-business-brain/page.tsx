@@ -182,6 +182,31 @@ export default function BusinessBrain() {
 
             if (cardsResult.success && cardsResult.cards) {
                 setCards(cardsResult.cards);
+
+                // Synthesize knowledge base after regenerating cards
+                if (businessBrainId) {
+                    setStatusMessage("Synthesizing knowledge base...");
+
+                    try {
+                        const synthesizeResponse = await fetch(
+                            `/api/business-brain/${businessBrainId}/synthesize-knowledge`,
+                            {
+                                method: 'POST',
+                            }
+                        );
+
+                        if (!synthesizeResponse.ok) {
+                            const errorData = await synthesizeResponse.json();
+                            console.warn('Failed to synthesize knowledge base:', errorData.error);
+                        } else {
+                            const synthesizeResult = await synthesizeResponse.json();
+                            console.log('Knowledge base synthesized:', synthesizeResult.success);
+                        }
+                    } catch (synthesizeError) {
+                        console.warn('Error synthesizing knowledge base:', synthesizeError);
+                    }
+                }
+
                 setStatus("cards_ready");
                 setStatusMessage("");
             } else {
@@ -1030,6 +1055,31 @@ export default function BusinessBrain() {
 
                                             if (cardsResult.success && cardsResult.cards) {
                                                 setCards(cardsResult.cards);
+
+                                                // Step 3: Synthesize knowledge base
+                                                setStatusMessage("Synthesizing knowledge base...");
+
+                                                try {
+                                                    const synthesizeResponse = await fetch(
+                                                        `/api/business-brain/${data.apiResult.businessBrainId}/synthesize-knowledge`,
+                                                        {
+                                                            method: 'POST',
+                                                        }
+                                                    );
+
+                                                    if (!synthesizeResponse.ok) {
+                                                        const errorData = await synthesizeResponse.json();
+                                                        console.warn('Failed to synthesize knowledge base:', errorData.error);
+                                                        // Don't fail the whole process if synthesis fails
+                                                    } else {
+                                                        const synthesizeResult = await synthesizeResponse.json();
+                                                        console.log('Knowledge base synthesized:', synthesizeResult.success);
+                                                    }
+                                                } catch (synthesizeError) {
+                                                    console.warn('Error synthesizing knowledge base:', synthesizeError);
+                                                    // Don't fail the whole process if synthesis fails
+                                                }
+
                                                 setStatus("cards_ready");
                                                 setStatusMessage("");
                                             } else {
@@ -1051,7 +1101,7 @@ export default function BusinessBrain() {
                                     setIsModalOpen(false);
                                 }}
                                 onSubmit={async (formData, files) => {
-                                    
+
                                     setStatus("uploading");
                                     setStatusMessage("Uploading files and setting up your business brain...");
 
@@ -1157,6 +1207,31 @@ export default function BusinessBrain() {
 
                                             if (cardsResult.success && cardsResult.cards) {
                                                 setCards(cardsResult.cards);
+
+                                                // Step 3: Synthesize knowledge base
+                                                setStatusMessage("Synthesizing knowledge base...");
+
+                                                try {
+                                                    const synthesizeResponse = await fetch(
+                                                        `/api/business-brain/${data.apiResult.businessBrainId}/synthesize-knowledge`,
+                                                        {
+                                                            method: 'POST',
+                                                        }
+                                                    );
+
+                                                    if (!synthesizeResponse.ok) {
+                                                        const errorData = await synthesizeResponse.json();
+                                                        console.warn('Failed to synthesize knowledge base:', errorData.error);
+                                                        // Don't fail the whole process if synthesis fails
+                                                    } else {
+                                                        const synthesizeResult = await synthesizeResponse.json();
+                                                        console.log('Knowledge base synthesized:', synthesizeResult.success);
+                                                    }
+                                                } catch (synthesizeError) {
+                                                    console.warn('Error synthesizing knowledge base:', synthesizeError);
+                                                    // Don't fail the whole process if synthesis fails
+                                                }
+
                                                 setStatus("cards_ready");
                                                 setStatusMessage("");
 

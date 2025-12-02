@@ -1,0 +1,56 @@
+{
+    "legalName": "Elite Virtual Assistants LLC",
+    "publicName": "EliteVA",
+    "website": "https://eliteva.com",
+    "offers": "• Executive Virtual Assistant Services - Dedicated administrative support for busy executives and entrepreneurs, handling email management, calendar coordination, and task prioritization\n• Social Media Management - Complete content creation, scheduling, and engagement management across all major platforms\n• Customer Support Operations - 24/7 customer service handling with multilingual support capabilities",
+    "outcomePromise": "Get 20+ hours back every week to focus on what matters most - growing your business",
+    "pricing": "$1,200-$2,500/month for dedicated VA packages, custom pricing for enterprise",
+    "primaryCTA": "book_call",
+    "customCTA": "",
+    "geography": "Remote services worldwide, with primary focus on US, Canada, UK, and Australia",
+    "icps": [
+        {
+            "segment": "Tech Founders and Startup CEOs (Series A-B)",
+            "pain": "Overwhelmed with administrative tasks, email overload, and operational details preventing focus on fundraising and product development",
+            "outcome": "Delegate 80% of administrative work to focus on strategic growth, investor relations, and product innovation"
+        },
+        {
+            "segment": "Solo Consultants and Coaches (6-figure+ revenue)",
+            "pain": "Wearing too many hats - handling client work, marketing, admin, and operations alone, leading to burnout and missed opportunities",
+            "outcome": "Scale operations without hiring full-time staff, maintain work-life balance, and increase client capacity by 40%"
+        },
+        {
+            "segment": "E-commerce Business Owners (7-figure+ revenue)",
+            "pain": "Customer support tickets overwhelming daily operations, social media management falling behind, and inventory coordination consuming too much time",
+            "outcome": "Streamlined customer support with 24/7 coverage, consistent social media presence driving sales, and efficient inventory management"
+        }
+    ],
+    "objections": "1. Cost concerns - 'I can't afford $1,500/month for a VA'\n2. Quality and reliability - 'How do I know they'll do good work remotely?'\n3. Training time - 'I don't have time to train someone new'\n4. Security and confidentiality - 'Can I trust them with sensitive business information?'\n5. Communication barriers - 'What if there are timezone or language issues?'",
+    "topCompetitor": "Freelance marketplaces (Upwork, Fiverr) and in-house hiring",
+    "competitors": "We differentiate by offering:\n• Dedicated, vetted assistants (not project-based freelancers)\n• US-based management team with 24/7 oversight\n• No training required - assistants come pre-trained on common tools\n• Enterprise-grade security and NDAs\n• Fixed monthly pricing (no hourly surprises)\n• Guaranteed response times and SLA commitments",
+    "formalCasual": 35,
+    "playfulSerious": 65,
+    "directStoryDriven": 40,
+    "punchyDetailed": 45,
+    "inspirationalAnalytical": 55,
+    "soundsLike": "Mailchimp's friendly professionalism, Apple Support's clarity and helpfulness, Basecamp's direct but warm tone",
+    "hasProofAssets": "yes",
+    "proofAssetsList": "• Case Study: Tech startup CEO saved 25 hours/week, closed Series B funding after delegating admin tasks\n• Testimonial: 'EliteVA transformed my business. I went from working 70-hour weeks to 40 hours while increasing revenue 30%.' - Sarah Chen, CEO\n• Metric: 98% client retention rate, average client saves 22 hours/week\n• Case Study: E-commerce brand scaled from $2M to $5M revenue with our customer support team handling 500+ tickets/day\n• Testimonial: 'Best investment I've made. My VA knows my business better than I do sometimes.' - Michael Rodriguez, Consultant",
+    "forbiddenWords": "guaranteed, 100% success, never fail, always, perfect, best in the world, #1, unbeatable, impossible to beat",
+    "disclaimers": "Results may vary based on individual business needs and implementation. Individual results not guaranteed. Time savings estimates are based on average client experiences. Service availability subject to capacity and geographic restrictions.",
+    "isRegulated": "no",
+    "regulatedIndustryType": "",
+    "crmPlatform": "GoHighLevel",
+    "crmSubaccount": "EliteVA Operations",
+    "pipelineStages": "Initial Inquiry → Discovery Call Scheduled → Call Completed → Proposal Sent → Proposal Accepted → Onboarding Started → Active Client → Upsell Opportunity → Referral Partner",
+    "supportEmail": "support@eliteva.com",
+    "emailSignoff": "—The EliteVA Team\nYour dedicated support, always",
+    "meetingLink": "https://calendly.com/eliteva/discovery-call",
+    "brandEmails": "hello@eliteva.com, support@eliteva.com, sales@eliteva.com, team@eliteva.com",
+    "favoriteParagraphs": "We believe that your time is your most valuable asset. When you're spending hours on tasks that could be handled by a skilled professional, you're not just losing time—you're missing opportunities to grow, innovate, and lead. That's why we've built EliteVA: to give you back those hours so you can focus on what only you can do.\n\nOur virtual assistants aren't just task-doers. They're strategic partners who learn your business, understand your priorities, and anticipate your needs. Think of them as your right-hand person, available 24/7, without the overhead of a full-time employee.\n\nEvery client relationship starts with understanding. We don't just assign you a VA and hope it works. We match you with someone who fits your communication style, understands your industry, and genuinely cares about your success.",
+    "avoidParagraphs": "We are the BEST virtual assistant company in the WORLD! Our services are GUARANTEED to work 100% of the time! You will NEVER find a better option! We are #1 and UNBEATABLE!\n\nHey there! OMG, we're SO excited to work with you!!! This is going to be AMAZING!!! You're going to LOVE us!!! We're like, totally the best ever!!!\n\nOur comprehensive suite of enterprise-grade solutions leverages cutting-edge methodologies to optimize operational efficiencies and maximize ROI through strategic resource allocation and process optimization.",
+    "contentLinks": "https://eliteva.com/blog/how-to-delegate-effectively\nhttps://eliteva.com/case-studies\nhttps://linkedin.com/company/eliteva\nhttps://twitter.com/eliteva",
+    "avoidTopics": "Politics, religion, controversial social issues, competitor bashing, negative industry commentary",
+    "avoidCompetitors": "Upwork, Fiverr, Belay, Time Etc, Prialto",
+    "escalationContact": "founder@eliteva.com"
+}

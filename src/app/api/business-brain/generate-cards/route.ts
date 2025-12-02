@@ -6,7 +6,7 @@ import { verifyAccessToken } from "@/lib/auth";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import * as cheerio from "cheerio";
-// New deep insights architecture
+
 import { mineDeepInsights } from "@/lib/analysis/mineInsights";
 import { AnalysisContext } from "@/lib/analysis/types";
 import { generateBrandVoiceCard } from "@/lib/cards/brandVoice";
