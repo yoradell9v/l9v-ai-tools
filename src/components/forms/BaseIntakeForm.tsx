@@ -387,7 +387,11 @@ export default function BaseIntakeForm({
             }, 500);
         } catch (error) {
             console.error('Submission error:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Failed to submit form';
+            // Prefer user-friendly message if available, otherwise use the error message
+            let errorMessage = 'Failed to submit form';
+            if (error instanceof Error) {
+                errorMessage = (error as any).userFriendlyMessage || error.message;
+            }
             setSubmitError(errorMessage);
             
             // Notify parent component of error

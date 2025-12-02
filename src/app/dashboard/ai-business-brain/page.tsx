@@ -22,6 +22,7 @@ type BusinessCard = {
     metadata: any;
     orderIndex: number;
     priority?: number;
+    confidence_score?: number;
 };
 
 type Status =
@@ -609,9 +610,27 @@ export default function BusinessBrain() {
                                                                 {getCardIcon(card.type)}
                                                             </div>
                                                             <div className="flex-1 min-w-0 text-left">
-                                                                <h3 className="text-sm font-semibold text-[var(--text-primary)] truncate">
-                                                                    {card.title}
-                                                                </h3>
+                                                                <div className="flex items-center gap-2">
+                                                                    <h3 className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                                                                        {card.title}
+                                                                    </h3>
+                                                                    {(() => {
+                                                                        const confidenceScore = card.confidence_score ?? (card.metadata as any)?.confidence_score;
+                                                                        return confidenceScore !== undefined && (
+                                                                            <span
+                                                                                className={`text-xs px-2 py-0.5 rounded-full font-medium ${confidenceScore >= 80
+                                                                                    ? "bg-green-500/20 text-green-400"
+                                                                                    : confidenceScore >= 60
+                                                                                        ? "bg-yellow-500/20 text-yellow-400"
+                                                                                        : "bg-red-500/20 text-red-400"
+                                                                                    }`}
+                                                                                title={`Confidence: ${confidenceScore}%`}
+                                                                            >
+                                                                                {confidenceScore}%
+                                                                            </span>
+                                                                        );
+                                                                    })()}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                         <div className="flex-shrink-0 ml-2">
@@ -839,7 +858,7 @@ export default function BusinessBrain() {
                                                     handleSendMessage();
                                                 }
                                             }}
-                                            placeholder="Type your message..."
+                                            placeholder="/calibrate-voice"
                                             rows={1}
                                             className="w-full px-4 py-3 pr-12 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)] placeholder-[var(--text-secondary)] resize-none focus:border-[var(--primary)] dark:focus:border-[var(--accent)] focus:ring-[3px] focus:ring-[var(--primary)]/10 dark:focus:ring-[var(--accent)]/10 leading-tight overflow-hidden"
                                             style={{ maxHeight: "120px", lineHeight: "1.5" }}
@@ -1032,11 +1051,10 @@ export default function BusinessBrain() {
                                     setIsModalOpen(false);
                                 }}
                                 onSubmit={async (formData, files) => {
-                                    // Step 1: Upload files and setup business brain
+                                    
                                     setStatus("uploading");
                                     setStatusMessage("Uploading files and setting up your business brain...");
 
-                                    // Prepare form data for API
                                     const payload = new FormData();
                                     payload.append("intake_json", JSON.stringify(formData));
 
@@ -1053,16 +1071,25 @@ export default function BusinessBrain() {
                                     });
 
                                     if (!response.ok) {
-                                        let message = 'Setup failed';
+                                        let message = 'Unable to save your business profile. Please try again.';
+                                        let userFriendlyMessage = message;
                                         try {
                                             const errorPayload = await response.json();
                                             if (errorPayload?.error) {
                                                 message = errorPayload.error;
+                                                // Provide user-friendly messages for technical errors
+                                                if (message.includes("must not be null") || message.includes("undefined")) {
+                                                    userFriendlyMessage = "There was an issue saving your profile. Please try again. If the problem persists, contact support.";
+                                                } else {
+                                                    userFriendlyMessage = message;
+                                                }
                                             }
                                         } catch {
                                             // Ignore JSON parse errors
                                         }
-                                        throw new Error(message);
+                                        const error = new Error(message);
+                                        (error as any).userFriendlyMessage = userFriendlyMessage;
+                                        throw error;
                                     }
 
                                     const result = await response.json();
@@ -1182,16 +1209,25 @@ export default function BusinessBrain() {
                                     });
 
                                     if (!response.ok) {
-                                        let message = 'Update failed';
+                                        let message = 'Unable to update your business profile. Please try again.';
+                                        let userFriendlyMessage = message;
                                         try {
                                             const errorPayload = await response.json();
                                             if (errorPayload?.error) {
                                                 message = errorPayload.error;
+                                                // Provide user-friendly messages for technical errors
+                                                if (message.includes("must not be null") || message.includes("undefined")) {
+                                                    userFriendlyMessage = "There was an issue updating your profile. Please try again. If the problem persists, contact support.";
+                                                } else {
+                                                    userFriendlyMessage = message;
+                                                }
                                             }
                                         } catch {
                                             // Ignore JSON parse errors
                                         }
-                                        throw new Error(message);
+                                        const error = new Error(message);
+                                        (error as any).userFriendlyMessage = userFriendlyMessage;
+                                        throw error;
                                     }
 
                                     const result = await response.json();

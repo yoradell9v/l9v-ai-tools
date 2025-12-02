@@ -6,8 +6,38 @@ import { verifyAccessToken } from "@/lib/auth";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import * as cheerio from "cheerio";
+// New deep insights architecture
+import { mineDeepInsights } from "@/lib/analysis/mineInsights";
+import { AnalysisContext } from "@/lib/analysis/types";
+import { generateBrandVoiceCard } from "@/lib/cards/brandVoice";
+import { generatePositioningCard } from "@/lib/cards/positioning";
+import { generateStyleRulesCard } from "@/lib/cards/styleRules";
+import { generateComplianceCard } from "@/lib/cards/compliance";
+import { generateGHLCard } from "@/lib/cards/ghl";
 
 export const runtime = "nodejs";
+
+/**
+ * ENHANCED BUSINESS PROFILE ANALYSIS SYSTEM
+ * 
+ * This route implements a multi-stage deep analysis architecture:
+ * 
+ * PHASE 1: Deep Content Mining
+ * - Extracts 30-50 specific, evidence-backed insights from all content sources
+ * - Each insight must have specificity_score >= 7 (rejects generic observations)
+ * - Includes exact quotes as evidence (not paraphrased)
+ * - Cross-references insights to validate and identify contradictions
+ * 
+ * PHASE 2: Context-Rich Card Generation
+ * - Uses deep insights + full content samples (not truncated)
+ * - Generates comprehensive, actionable guides (3000+ words for brand voice)
+ * - Every rule backed by exact quotes from source material
+ * - Confidence scores based on evidence quality
+ * 
+ * Token Usage: 3-5x higher than previous version, justified by output quality
+ * - Uses gpt-4o for complex analysis (deep insights, card generation)
+ * - Uses gpt-4o-mini for simpler tasks (validation, pattern extraction)
+ */
 
 interface ExtractedContent {
   website: {
@@ -207,6 +237,9 @@ async function extractTextFromBuffer(
           pdfParse = typeof pdfModule.default === "function" ? pdfModule.default : pdfModule.default.default;
         } else if (pdfModule.pdfParse) {
           pdfParse = pdfModule.pdfParse;
+        } else if (pdfModule.PDFParse) {
+          // Try capitalized version (newer pdf-parse versions)
+          pdfParse = pdfModule.PDFParse;
         } else {
           // Last resort: try accessing the module directly
           pdfParse = pdfModule;
@@ -214,6 +247,16 @@ async function extractTextFromBuffer(
         
         if (typeof pdfParse !== "function") {
           console.error(`pdf-parse is not a function for ${filename}. Module keys:`, Object.keys(pdfModule || {}));
+          // Try using PDFParse class if available
+          if (pdfModule.PDFParse && typeof pdfModule.PDFParse === "function") {
+            const pdfParser = new pdfModule.PDFParse(buffer);
+            const result = await pdfParser.parse();
+            if (!result || !result.text) {
+              console.warn(`PDF ${filename} parsed but returned no text content`);
+              return "";
+            }
+            return normalizeWhitespace(result.text);
+          }
           return "";
         }
         
@@ -1082,6 +1125,15 @@ async function generateAndSaveCards(
   intakeData: any,
   fileUploads: any
 ): Promise<any[]> {
+  console.log("[generateAndSaveCards] Received intakeData:", {
+    hasIntakeData: !!intakeData,
+    keys: intakeData ? Object.keys(intakeData) : [],
+    website: intakeData?.website,
+    legalName: intakeData?.legalName,
+    formalCasual: intakeData?.formalCasual,
+    soundsLike: intakeData?.soundsLike,
+  });
+  
   const websiteUrl = intakeData?.website || "";
   const files: Array<{ url: string; name: string; type?: string }> = [];
 
@@ -1101,7 +1153,35 @@ async function generateAndSaveCards(
     files
   );
 
-  // Generate ALL cards in parallel (not just 2)
+  // Build analysis context for deep insights
+  const analysisContext: AnalysisContext = {
+    websiteUrl,
+    websiteContent: extractedContent.website,
+    files: extractedContent.files,
+    intakeData,
+  };
+  
+  console.log("[generateAndSaveCards] AnalysisContext intakeData:", {
+    hasIntakeData: !!analysisContext.intakeData,
+    keys: analysisContext.intakeData ? Object.keys(analysisContext.intakeData) : [],
+    formalCasual: analysisContext.intakeData?.formalCasual,
+    soundsLike: analysisContext.intakeData?.soundsLike,
+  });
+
+  // PHASE 1: Mine deep insights from all content sources
+  console.log("Mining deep insights...");
+  console.log(`Content available - Website: ${analysisContext.websiteContent.fullText.length > 0}, Files: ${analysisContext.files.length}`);
+  
+  const miningResult = await mineDeepInsights(openai, analysisContext);
+  console.log(`Mined ${miningResult.total_insights} insights (${miningResult.high_confidence_count} high confidence, avg specificity: ${miningResult.specificity_avg})`);
+  console.log(`Categories covered: ${miningResult.categories_covered.join(", ")}`);
+  
+  if (miningResult.total_insights === 0) {
+    console.warn("WARNING: No insights mined. Cards will be generated from content directly.");
+  }
+
+  // PHASE 2: Generate enhanced cards using deep insights
+  console.log("Generating enhanced cards with deep insights...");
   const [
     brandVoiceCard,
     positioningCard,
@@ -1109,41 +1189,72 @@ async function generateAndSaveCards(
     complianceCard,
     ghlCard,
   ] = await Promise.all([
-    analyzeBrandVoice(openai, extractedContent, intakeData),
-    analyzePositioning(openai, extractedContent, intakeData),
-    analyzeStyleRules(openai, extractedContent, intakeData),
-    analyzeComplianceRules(openai, extractedContent, intakeData),
-    analyzeGHLImplementation(openai, extractedContent, intakeData),
+    generateBrandVoiceCard(openai, miningResult.insights, analysisContext),
+    generatePositioningCard(openai, miningResult.insights, analysisContext),
+    generateStyleRulesCard(openai, miningResult.insights, analysisContext),
+    generateComplianceCard(openai, miningResult.insights, analysisContext),
+    generateGHLCard(openai, miningResult.insights, analysisContext),
   ]);
 
+  // Transform new card structures to match expected format
   const cardDefinitions = [
     {
       type: "BRAND_VOICE_CARD",
-      data: brandVoiceCard,
+      data: {
+        title: brandVoiceCard.title,
+        description: brandVoiceCard.description,
+        metadata: brandVoiceCard.metadata,
+        confidence_score: brandVoiceCard.confidence_score,
+        source_attribution: brandVoiceCard.source_attribution,
+      },
       orderIndex: 0,
       priority: 1,
     },
     {
       type: "POSITIONING_CARD",
-      data: positioningCard,
+      data: {
+        title: positioningCard.title,
+        description: positioningCard.description,
+        metadata: positioningCard.metadata,
+        confidence_score: positioningCard.confidence_score,
+        source_attribution: positioningCard.source_attribution,
+      },
       orderIndex: 1,
       priority: 1,
     },
     {
       type: "STYLE_RULES",
-      data: styleRulesCard,
+      data: {
+        title: styleRulesCard.title,
+        description: styleRulesCard.description,
+        metadata: styleRulesCard.metadata,
+        confidence_score: styleRulesCard.confidence_score,
+        source_attribution: styleRulesCard.source_attribution,
+      },
       orderIndex: 2,
       priority: 2,
     },
     {
       type: "COMPLIANCE_RULES",
-      data: complianceCard,
+      data: {
+        title: complianceCard.title,
+        description: complianceCard.description,
+        metadata: complianceCard.metadata,
+        confidence_score: complianceCard.confidence_score,
+        source_attribution: complianceCard.source_attribution,
+      },
       orderIndex: 3,
       priority: 2,
     },
     {
       type: "GHL_IMPLEMENTATION_NOTES",
-      data: ghlCard,
+      data: {
+        title: ghlCard.title,
+        description: ghlCard.description,
+        metadata: ghlCard.metadata,
+        confidence_score: ghlCard.confidence_score,
+        source_attribution: ghlCard.source_attribution,
+      },
       orderIndex: 4,
       priority: 3,
     },
@@ -1159,7 +1270,10 @@ async function generateAndSaveCards(
           type: cardDef.type,
           title: cardDef.data.title,
           description: cardDef.data.description || "",
-          metadata: cardDef.data.metadata || {},
+          metadata: {
+            ...(cardDef.data.metadata || {}),
+            confidence_score: cardDef.data.confidence_score || 0,
+          },
           orderIndex: cardDef.orderIndex,
           priority: cardDef.priority,
         },
@@ -1167,7 +1281,11 @@ async function generateAndSaveCards(
     )
   );
 
-  return savedCards;
+  // Map saved cards with their confidence scores
+  return savedCards.map((savedCard, index) => ({
+    ...savedCard,
+    confidence_score: cardDefinitions[index].data.confidence_score || 0,
+  }));
 }
 
 // ============================================================================
@@ -1722,12 +1840,14 @@ function generateGHLNotesFallback(intakeData: any): string {
 // ============================================================================
 
 export async function POST(request: Request) {
+  console.log("[Generate-Cards] API endpoint called");
   try {
     // Authentication
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("accessToken")?.value;
 
     if (!accessToken) {
+      console.error("[Generate-Cards] Not authenticated");
       return NextResponse.json(
         { success: false, error: "Not authenticated." },
         { status: 401 }
@@ -1736,6 +1856,7 @@ export async function POST(request: Request) {
 
     const decoded = await verifyAccessToken(accessToken);
     if (!decoded) {
+      console.error("[Generate-Cards] Invalid token");
       return NextResponse.json(
         { success: false, error: "Invalid token." },
         { status: 401 }
@@ -1789,6 +1910,28 @@ export async function POST(request: Request) {
       );
     }
 
+    // Log retrieved data
+    console.log("[Generate-Cards] Retrieved businessBrain:", {
+      id: businessBrain.id,
+      hasIntakeData: !!businessBrain.intakeData,
+      intakeDataType: typeof businessBrain.intakeData,
+      intakeDataIsObject: businessBrain.intakeData && typeof businessBrain.intakeData === 'object',
+      intakeDataKeys: businessBrain.intakeData && typeof businessBrain.intakeData === 'object' 
+        ? Object.keys(businessBrain.intakeData as any) 
+        : 'not an object',
+    });
+    
+    // Ensure intakeData is properly parsed (Prisma JSON fields might be strings)
+    let parsedIntakeData = businessBrain.intakeData;
+    if (typeof parsedIntakeData === 'string') {
+      try {
+        parsedIntakeData = JSON.parse(parsedIntakeData);
+        console.log("[Generate-Cards] Parsed intakeData from string");
+      } catch (e) {
+        console.error("[Generate-Cards] Failed to parse intakeData string:", e);
+      }
+    }
+
     // Initialize OpenAI
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
@@ -1802,12 +1945,25 @@ export async function POST(request: Request) {
     });
 
     // Generate and save cards
+    console.log("[Generate-Cards] Starting card generation...");
+    console.log("[Generate-Cards] Using parsed intakeData with keys:", parsedIntakeData ? Object.keys(parsedIntakeData as any) : "NULL");
+    console.log("[Generate-Cards] Parsed intakeData sample:", {
+      legalName: (parsedIntakeData as any)?.legalName,
+      website: (parsedIntakeData as any)?.website,
+      offers: (parsedIntakeData as any)?.offers?.substring(0, 100),
+      formalCasual: (parsedIntakeData as any)?.formalCasual,
+      soundsLike: (parsedIntakeData as any)?.soundsLike,
+      icps: (parsedIntakeData as any)?.icps?.length,
+    });
+    
     const cards = await generateAndSaveCards(
       openai,
       profileId,
-      businessBrain.intakeData as any,
+      parsedIntakeData as any,
       businessBrain.fileUploads as any
     );
+
+    console.log(`[Generate-Cards] Generated ${cards.length} cards successfully`);
 
     return NextResponse.json({
       success: true,
@@ -1819,6 +1975,7 @@ export async function POST(request: Request) {
         metadata: card.metadata,
         orderIndex: card.orderIndex,
         priority: card.priority,
+        confidence_score: (card as { confidence_score?: number }).confidence_score || 0,
       })),
     });
   } catch (err: any) {

@@ -189,7 +189,18 @@ export async function POST(request: Request) {
         let intakeData: any;
         try {
             intakeData = JSON.parse(rawIntakeData);
+            console.log("[Setup] Parsed intakeData keys:", Object.keys(intakeData));
+            console.log("[Setup] IntakeData sample values:", {
+                legalName: intakeData.legalName,
+                website: intakeData.website,
+                formalCasual: intakeData.formalCasual,
+                playfulSerious: intakeData.playfulSerious,
+                soundsLike: intakeData.soundsLike,
+                icpsCount: Array.isArray(intakeData.icps) ? intakeData.icps.length : 'not array',
+                icpsType: typeof intakeData.icps,
+            });
         } catch (parseError) {
+            console.error("[Setup] Failed to parse intake_json:", parseError);
             return NextResponse.json(
                 { success: false, error: "Invalid intake_json payload." },
                 { status: 400 }
@@ -246,13 +257,24 @@ export async function POST(request: Request) {
         }
 
         // Create BusinessBrain record first to get the ID for file paths
+        console.log("[Setup] Saving intakeData with keys:", Object.keys(intakeData));
+        console.log("[Setup] Sample intakeData:", {
+            legalName: intakeData.legalName,
+            website: intakeData.website,
+            formalCasual: intakeData.formalCasual,
+            soundsLike: intakeData.soundsLike,
+            icpsCount: Array.isArray(intakeData.icps) ? intakeData.icps.length : 0,
+        });
+        
         const businessBrain = await prisma.businessBrain.create({
             data: {
                 userOrganizationId: userOrganizationIdToUse,
                 intakeData: intakeData as any,
-                fileUploads: {} as any,
+                // fileUploads will be set after file processing
             } as any,
         });
+        
+        console.log("[Setup] BusinessBrain created with ID:", businessBrain.id);
 
         // Handle file uploads - store as array of objects with url, name, and type
         const fileUploads: Array<{ url: string; name: string; type: string }> = [];
@@ -276,16 +298,31 @@ export async function POST(request: Request) {
         }
 
         // Update BusinessBrain with file URLs
+        // Use undefined instead of null for optional JSON fields in Prisma
         const updatedBusinessBrain = await prisma.businessBrain.update({
             where: { id: businessBrain.id },
             data: {
-                fileUploads: fileUploads.length > 0 ? (fileUploads as any) : null,
+                fileUploads: fileUploads.length > 0 ? (fileUploads as any) : undefined,
             } as any,
         });
 
         // Note: Card generation is now handled by the frontend
         // The frontend will call /api/business-brain/generate-cards after receiving the businessBrainId
 
+        // Verify what was saved
+        console.log("[Setup] Saved businessBrain with intakeData:", {
+            id: updatedBusinessBrain.id,
+            hasIntakeData: !!updatedBusinessBrain.intakeData,
+            intakeDataType: typeof updatedBusinessBrain.intakeData,
+            intakeDataSample: updatedBusinessBrain.intakeData && typeof updatedBusinessBrain.intakeData === 'object'
+                ? {
+                    legalName: (updatedBusinessBrain.intakeData as any).legalName,
+                    website: (updatedBusinessBrain.intakeData as any).website,
+                    formalCasual: (updatedBusinessBrain.intakeData as any).formalCasual,
+                }
+                : 'not an object',
+        });
+        
         return NextResponse.json({
             success: true,
             businessBrainId: updatedBusinessBrain.id,
@@ -293,10 +330,24 @@ export async function POST(request: Request) {
         });
     } catch (err: any) {
         console.error("Error setting up business brain:", err);
+        
+        // Provide user-friendly error messages for common Prisma errors
+        let errorMessage = err.message || "Failed to setup business brain.";
+        
+        // Handle Prisma validation errors
+        if (err.message && err.message.includes("must not be null")) {
+            errorMessage = "An error occurred while saving your data. Please try again or contact support if the issue persists.";
+        }
+        
+        // Handle Prisma constraint errors
+        if (err.code === "P2002") {
+            errorMessage = "A business profile with this information already exists. Please check your details and try again.";
+        }
+        
         return NextResponse.json(
             {
                 success: false,
-                error: err.message || "Failed to setup business brain.",
+                error: errorMessage,
             },
             { status: 500 }
         );

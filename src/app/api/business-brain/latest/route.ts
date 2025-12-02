@@ -87,7 +87,10 @@ export async function GET(request: Request) {
                 intakeData: businessBrain.intakeData,
                 fileUploads: businessBrain.fileUploads,
             },
-            cards: businessBrain.cards,
+            cards: businessBrain.cards.map((card) => ({
+                ...card,
+                confidence_score: (card.metadata as any)?.confidence_score || undefined,
+            })),
         });
     } catch (err: any) {
         console.error("Error fetching latest business brain:", err);

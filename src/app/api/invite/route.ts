@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
+import { TenantRole } from "@prisma/client";
 import crypto from "crypto";
 import { sendInviteEmail } from "@/lib/email";
 
@@ -126,7 +127,7 @@ export async function POST(request: Request) {
         data: {
           organizationId: organizationId,
           email: normalizedEmail,
-          role: role as any, // Type assertion needed until Prisma types are fully synced
+          role: role as TenantRole,
           token: token,
           expiresAt: expiresAt,
           createdBy: decoded.userId,
@@ -208,7 +209,7 @@ export async function DELETE(request: Request) {
           },
         },
       },
-    }) as any;
+    });
 
     if (!invitation) {
       return NextResponse.json(
@@ -238,7 +239,7 @@ export async function DELETE(request: Request) {
       where: { id: inviteId },
       data: {
         cancelledAt: new Date(),
-      } as any,
+      },
     });
 
     return NextResponse.json({

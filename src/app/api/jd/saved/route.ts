@@ -93,7 +93,7 @@ export async function GET(request: Request) {
     const analysisMap = new Map<string, typeof allAnalyses[0]>();
     
     for (const analysis of allAnalyses) {
-      const key = (analysis as any).parentAnalysisId || analysis.id;
+      const key = analysis.parentAnalysisId || analysis.id;
       
       if (!analysisMap.has(key)) {
         // First time seeing this analysis or its parent
@@ -101,8 +101,8 @@ export async function GET(request: Request) {
       } else {
         // Compare version numbers - keep the one with higher version
         const existing = analysisMap.get(key)!;
-        const existingVersion = (existing as any).versionNumber || 1;
-        const currentVersion = (analysis as any).versionNumber || 1;
+        const existingVersion = existing.versionNumber || 1;
+        const currentVersion = analysis.versionNumber || 1;
         
         if (currentVersion > existingVersion) {
           analysisMap.set(key, analysis);
@@ -125,8 +125,8 @@ export async function GET(request: Request) {
       title: analysis.title,
       intakeData: analysis.intakeData as any,
       analysis: analysis.analysis as any,
-      isFinalized: (analysis as any).isFinalized || false,
-      finalizedAt: (analysis as any).finalizedAt?.toISOString() || null,
+      isFinalized: analysis.isFinalized || false,
+      finalizedAt: analysis.finalizedAt?.toISOString() || null,
       createdAt: analysis.createdAt.toISOString(),
       updatedAt: analysis.updatedAt.toISOString(),
       refinementCount: analysis.refinements.length,
