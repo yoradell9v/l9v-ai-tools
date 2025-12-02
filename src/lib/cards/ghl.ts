@@ -149,7 +149,7 @@ Generate the GHL implementation card JSON now.`,
       // Generate fallback from intake data
       parsed.metadata = parsed.metadata || {};
       const pipelineStages = context.intakeData?.pipelineStages 
-        ? context.intakeData.pipelineStages.split('→').map(s => s.trim()).filter(Boolean)
+        ? context.intakeData.pipelineStages.split('→').map((s: string) => s.trim()).filter(Boolean)
         : [];
       parsed.metadata.workflows = pipelineStages.length > 0 ? [{
         name: "Main Sales Workflow",

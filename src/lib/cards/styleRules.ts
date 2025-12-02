@@ -160,7 +160,7 @@ Generate the style rules card JSON now.`,
       // Generate fallback from intake data
       parsed.metadata = parsed.metadata || {};
       const forbiddenWords = context.intakeData?.forbiddenWords 
-        ? context.intakeData.forbiddenWords.split(',').map(w => w.trim()).filter(Boolean)
+        ? context.intakeData.forbiddenWords.split(',').map((w: string) => w.trim()).filter(Boolean)
         : [];
       parsed.metadata.rules = [
         "Maintain consistent tone based on brand voice sliders",
