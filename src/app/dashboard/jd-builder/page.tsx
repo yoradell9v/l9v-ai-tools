@@ -1834,15 +1834,19 @@ export default function JdBuilderPage() {
                                             deal_breakers: formData.dealBreakers || "",
                                             nice_to_have_skills: formData.niceToHaveSkills || "",
                                             existing_sops: formData.existingSOPs === "Yes",
-                                            sop_filename: files.sopFile?.name ?? null,
+                                            sop_filename: files.sopFile && files.sopFile.length > 0 
+                                                ? files.sopFile.map(f => f.name).join(", ") 
+                                                : null,
                                         };
 
                                         const payload = new FormData();
                                         payload.append("intake_json", JSON.stringify(intakePayload));
 
                                         // Handle SOP file upload (field id is 'sopFile')
-                                        if (files.sopFile) {
-                                            payload.append("sopFile", files.sopFile);
+                                        if (files.sopFile && Array.isArray(files.sopFile)) {
+                                            files.sopFile.forEach((file) => {
+                                                payload.append("sopFile", file);
+                                            });
                                         }
 
                                         const response = await fetch('/api/jd/analyze', {

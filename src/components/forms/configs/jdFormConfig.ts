@@ -34,6 +34,9 @@ export interface FormSection {
     title: string;
     description?: string;
     fields: FormField[];
+    isOptional?: boolean;
+    isCollapsible?: boolean;
+    defaultExpanded?: boolean;
 }
 
 export interface FormConfig {

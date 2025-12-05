@@ -14,7 +14,7 @@ interface BaseIntakeFormProps {
     onSuccess?: (data: any) => void;
     onProgress?: (stage: string) => void;
     onError?: (error: string) => void;
-    onSubmit?: (formData: Record<string, any>, files: Record<string, File | null>) => Promise<any>;
+    onSubmit?: (formData: Record<string, any>, files: Record<string, File[]>) => Promise<any>;
     initialData?: Record<string, any>;
 }
 
@@ -30,8 +30,9 @@ export default function BaseIntakeForm({
     initialData,
 }: BaseIntakeFormProps) {
     const [formData, setFormData] = useState<Record<string, any>>(config.defaultValues);
-    const [files, setFiles] = useState<Record<string, File | null>>({});
+    const [files, setFiles] = useState<Record<string, File[]>>({});
     const [fileErrors, setFileErrors] = useState<Record<string, string | null>>({});
+    const [dragOver, setDragOver] = useState<Record<string, boolean>>({});
     const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
     const [isClient, setIsClient] = useState(false);
@@ -40,12 +41,16 @@ export default function BaseIntakeForm({
     const [submitSuccess, setSubmitSuccess] = useState(false);
     const [showClearModal, setShowClearModal] = useState(false);
     const [isFormClearing, setIsFormClearing] = useState(false);
+    const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
     const calculateProgress = (): number => {
         let totalRequired = 0;
         let filledRequired = 0;
 
         config.sections.forEach((section) => {
+            // Only count required fields from non-optional sections for progress
+            if (section.isOptional) return;
+
             section.fields.forEach((field) => {
                 // Skip fields that shouldn't be shown
                 if (!shouldShowField(field)) return;
@@ -76,7 +81,8 @@ export default function BaseIntakeForm({
                             filledRequired++;
                         }
                     } else if (field.type === 'file') {
-                        if (files[field.id]) {
+                        const fieldFiles = files[field.id] || [];
+                        if (fieldFiles.length > 0) {
                             filledRequired++;
                         }
                     } else if (field.type === 'slider') {
@@ -94,8 +100,26 @@ export default function BaseIntakeForm({
         return totalRequired > 0 ? Math.round((filledRequired / totalRequired) * 100) : 0;
     };
 
+    const toggleSection = (sectionId: string) => {
+        setExpandedSections((prev) => ({
+            ...prev,
+            [sectionId]: !prev[sectionId],
+        }));
+    };
+
     useEffect(() => {
         setIsClient(true);
+
+        // Initialize expanded sections based on defaultExpanded
+        const initialExpanded: Record<string, boolean> = {};
+        config.sections.forEach((section) => {
+            if (section.isCollapsible) {
+                initialExpanded[section.id] = section.defaultExpanded ?? false;
+            } else {
+                initialExpanded[section.id] = true; // Non-collapsible sections are always expanded
+            }
+        });
+        setExpandedSections(initialExpanded);
 
         // Priority: initialData > localStorage
         if (initialData) {
@@ -184,35 +208,14 @@ export default function BaseIntakeForm({
         return fieldValue === conditionValue;
     };
 
-    const handleFileChange = (fieldId: string, file: File | null, field: FormField) => {
-        if (!file) {
-            setFiles((prev) => {
-                const newFiles = { ...prev };
-                delete newFiles[fieldId];
-                return newFiles;
-            });
-            setFileErrors((prev) => {
-                const newErrors = { ...prev };
-                delete newErrors[fieldId];
-                return newErrors;
-            });
-            return;
-        }
-
-        if (!field.fileConfig) return;
+    const validateFile = (file: File, field: FormField): string | null => {
+        if (!field.fileConfig) return null;
 
         const { maxSize, allowedExtensions, allowedMimeTypes } = field.fileConfig;
 
         // Check file size
         if (file.size > maxSize) {
-            setFileErrors((prev) => ({
-                ...prev,
-                [fieldId]: `File is too large. Please upload a file under ${(maxSize / (1024 * 1024)).toFixed(0)}MB.`,
-            }));
-            if (fileInputRefs.current[fieldId]) {
-                fileInputRefs.current[fieldId]!.value = "";
-            }
-            return;
+            return `File "${file.name}" is too large. Please upload files under ${(maxSize / (1024 * 1024)).toFixed(0)}MB.`;
         }
 
         // Check file extension
@@ -221,22 +224,108 @@ export default function BaseIntakeForm({
         const isMimeAllowed = file.type ? allowedMimeTypes.includes(file.type) : isExtensionAllowed;
 
         if (!isExtensionAllowed && !isMimeAllowed) {
-            setFileErrors((prev) => ({
-                ...prev,
-                [fieldId]: `Unsupported file type. Allowed types: ${allowedExtensions.join(", ").toUpperCase()}.`,
-            }));
-            if (fileInputRefs.current[fieldId]) {
-                fileInputRefs.current[fieldId]!.value = "";
-            }
-            return;
+            return `Unsupported file type for "${file.name}". Allowed types: ${allowedExtensions.join(", ").toUpperCase()}.`;
         }
 
-        setFiles((prev) => ({ ...prev, [fieldId]: file }));
+        return null;
+    };
+
+    const handleFilesAdd = (fieldId: string, newFiles: File[], field: FormField) => {
+        if (!field.fileConfig) return;
+
+        const currentFiles = files[fieldId] || [];
+        const validFiles: File[] = [];
+        const errors: string[] = [];
+
+        // Validate each file
+        newFiles.forEach((file) => {
+            const error = validateFile(file, field);
+            if (error) {
+                errors.push(error);
+            } else {
+                // Check for duplicates
+                const isDuplicate = currentFiles.some(
+                    (existingFile) => existingFile.name === file.name && existingFile.size === file.size
+                );
+                if (!isDuplicate) {
+                    validFiles.push(file);
+                }
+            }
+        });
+
+        // Add valid files
+        if (validFiles.length > 0) {
+            setFiles((prev) => ({
+                ...prev,
+                [fieldId]: [...currentFiles, ...validFiles],
+            }));
+        }
+
+        // Set error message if any
+        if (errors.length > 0) {
+            setFileErrors((prev) => ({
+                ...prev,
+                [fieldId]: errors.join(" "),
+            }));
+        } else {
+            setFileErrors((prev) => {
+                const newErrors = { ...prev };
+                delete newErrors[fieldId];
+                return newErrors;
+            });
+        }
+
+        // Clear input
+        if (fileInputRefs.current[fieldId]) {
+            fileInputRefs.current[fieldId]!.value = "";
+        }
+    };
+
+    const handleFileChange = (fieldId: string, fileList: FileList | null, field: FormField) => {
+        if (!fileList || fileList.length === 0) return;
+        const newFiles = Array.from(fileList);
+        handleFilesAdd(fieldId, newFiles, field);
+    };
+
+    const handleFileRemove = (fieldId: string, index: number) => {
+        setFiles((prev) => {
+            const currentFiles = prev[fieldId] || [];
+            const newFiles = currentFiles.filter((_, i) => i !== index);
+            if (newFiles.length === 0) {
+                const updated = { ...prev };
+                delete updated[fieldId];
+                return updated;
+            }
+            return { ...prev, [fieldId]: newFiles };
+        });
         setFileErrors((prev) => {
             const newErrors = { ...prev };
             delete newErrors[fieldId];
             return newErrors;
         });
+    };
+
+    const handleDragOver = (e: React.DragEvent, fieldId: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOver((prev) => ({ ...prev, [fieldId]: true }));
+    };
+
+    const handleDragLeave = (e: React.DragEvent, fieldId: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOver((prev) => ({ ...prev, [fieldId]: false }));
+    };
+
+    const handleDrop = (e: React.DragEvent, fieldId: string, field: FormField) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOver((prev) => ({ ...prev, [fieldId]: false }));
+
+        const droppedFiles = Array.from(e.dataTransfer.files);
+        if (droppedFiles.length > 0) {
+            handleFilesAdd(fieldId, droppedFiles, field);
+        }
     };
 
     const handleSliderChange = (fieldId: string, value: number) => {
@@ -249,6 +338,7 @@ export default function BaseIntakeForm({
             setFormData(config.defaultValues);
             setFiles({});
             setFileErrors({});
+            setDragOver({});
             onFormChange?.(config.defaultValues);
             localStorage.removeItem(`${config.storageKey}-${userId}`);
 
@@ -290,9 +380,11 @@ export default function BaseIntakeForm({
                 payload.append("intake_json", JSON.stringify(formData));
 
                 // Append files
-                Object.entries(files).forEach(([key, file]) => {
-                    if (file) {
-                        payload.append(key, file);
+                Object.entries(files).forEach(([key, fileArray]) => {
+                    if (fileArray && fileArray.length > 0) {
+                        fileArray.forEach((file) => {
+                            payload.append(key, file);
+                        });
                     }
                 });
 
@@ -393,7 +485,7 @@ export default function BaseIntakeForm({
                 errorMessage = (error as any).userFriendlyMessage || error.message;
             }
             setSubmitError(errorMessage);
-            
+
             // Notify parent component of error
             if (onError) {
                 onError(errorMessage);
@@ -405,7 +497,7 @@ export default function BaseIntakeForm({
 
     const inputClasses =
         "w-full px-3 py-2 rounded-lg border text-sm transition-all duration-200 focus:outline-none border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10";
-    const labelClasses = "block text-xs font-medium mb-2 text-[var(--text-primary)]";
+    const labelClasses = "block text-sm font-medium mb-2 text-[var(--text-primary)]";
     const sectionClasses = "space-y-3";
 
     const classNames = (...classes: (string | boolean | undefined)[]) => classes.filter(Boolean).join(" ");
@@ -645,45 +737,100 @@ export default function BaseIntakeForm({
                 );
 
             case 'file':
-                const file = files[field.id];
+                const fieldFiles = files[field.id] || [];
                 const fileError = fileErrors[field.id];
+                const isDragOver = dragOver[field.id] || false;
                 return (
                     <div key={field.id}>
                         <label className={labelClasses}>
                             {field.label} {field.required && <span className="text-red-500">*</span>}
                         </label>
-                        <input
-                            ref={(el) => {
-                                if (el) fileInputRefs.current[field.id] = el;
-                            }}
-                            type="file"
-                            accept={field.fileConfig?.allowedExtensions.join(',')}
-                            onChange={(e) => handleFileChange(field.id, e.target.files?.[0] ?? null, field)}
-                            className={inputClasses}
-                        />
-                        {file && (
-                            <div className="mt-2 flex items-center justify-between rounded-lg border px-3 py-2 text-xs border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)]">
-                                <span className="truncate">
-                                    {file.name} · {(file.size / (1024 * 1024)).toFixed(2)} MB
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        handleFileChange(field.id, null, field);
-                                        if (fileInputRefs.current[field.id]) {
-                                            fileInputRefs.current[field.id]!.value = "";
-                                        }
-                                    }}
-                                    className="ml-4 text-xs font-medium hover:underline text-[var(--accent)]"
+                        <div
+                            onDragOver={(e) => handleDragOver(e, field.id)}
+                            onDragLeave={(e) => handleDragLeave(e, field.id)}
+                            onDrop={(e) => handleDrop(e, field.id, field)}
+                            className={`relative border-2 border-dashed rounded-lg p-6 transition-all duration-200 ${isDragOver
+                                ? "border-[var(--primary)] bg-[var(--primary)]/5 dark:border-[var(--accent)] dark:bg-[var(--accent)]/5"
+                                : "border-[var(--border-color)] bg-[var(--card-bg)] hover:border-[var(--primary)]/50 dark:hover:border-[var(--accent)]/50"
+                                }`}
+                        >
+                            <input
+                                ref={(el) => {
+                                    if (el) fileInputRefs.current[field.id] = el;
+                                }}
+                                type="file"
+                                multiple
+                                accept={field.fileConfig?.allowedExtensions.join(',')}
+                                onChange={(e) => handleFileChange(field.id, e.target.files, field)}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            />
+                            <div className="flex flex-col items-center justify-center text-center">
+                                <svg
+                                    className="w-10 h-10 mb-3 text-[var(--text-secondary)]"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
                                 >
-                                    Remove
-                                </button>
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                                    />
+                                </svg>
+                                <p className="text-sm font-medium text-[var(--text-primary)] mb-1">
+                                    {isDragOver ? "Drop files here" : "Drag and drop files here"}
+                                </p>
+                                <p className="text-xs text-[var(--text-secondary)] mb-2">
+                                    or click to browse
+                                </p>
+                                {field.fileConfig && (
+                                    <p className="text-xs text-[var(--text-secondary)]">
+                                        Accepted: {field.fileConfig.allowedExtensions.join(", ").toUpperCase()} · Max: {(field.fileConfig.maxSize / (1024 * 1024)).toFixed(0)}MB per file
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                        {fieldFiles.length > 0 && (
+                            <div className="mt-3 space-y-2">
+                                {fieldFiles.map((file, index) => (
+                                    <div
+                                        key={`${file.name}-${index}`}
+                                        className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)]"
+                                    >
+                                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                                            <svg
+                                                className="w-4 h-4 flex-shrink-0 text-[var(--text-secondary)]"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                />
+                                            </svg>
+                                            <span className="truncate flex-1">
+                                                {file.name} · {(file.size / (1024 * 1024)).toFixed(2)} MB
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleFileRemove(field.id, index)}
+                                            className="ml-4 text-xs font-medium hover:underline text-red-500 dark:text-red-400 flex-shrink-0"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                ))}
                             </div>
                         )}
                         {fileError && (
                             <p className="mt-2 text-xs text-red-600 dark:text-red-400">{fileError}</p>
                         )}
-                        {field.helpText && !file && !fileError && (
+                        {field.helpText && fieldFiles.length === 0 && !fileError && (
                             <p className="mt-2 text-xs text-[var(--text-secondary)]">{field.helpText}</p>
                         )}
                     </div>
@@ -835,27 +982,73 @@ export default function BaseIntakeForm({
                 {/* Scrollable Form Content */}
                 <div className="flex-1 overflow-y-auto">
                     <div className="space-y-4">
-                        {config.sections.map((section) => (
-                            <div key={section.id} className="p-4 rounded-lg border border-[var(--border-color)] bg-[var(--hover-bg)]">
-                                <h3 className="text-sm font-medium mb-1 text-[var(--text-primary)]">
-                                    {section.title}
-                                </h3>
-                                {section.description && (
-                                    <p className="text-xs mb-3 text-[var(--text-secondary)]">
-                                        {section.description}
-                                    </p>
-                                )}
-                                <div className={sectionClasses}>
-                                    {section.fields.map((field) => {
-                                        // Handle conditional field display using showIf
-                                        if (!shouldShowField(field)) {
-                                            return null;
-                                        }
-                                        return renderField(field);
-                                    })}
+                        {config.sections.map((section) => {
+                            const isExpanded = expandedSections[section.id] ?? (section.defaultExpanded ?? true);
+                            const isCollapsible = section.isCollapsible ?? false;
+                            const isOptional = section.isOptional ?? false;
+
+                            return (
+                                <div key={section.id} className="rounded-lg border border-[var(--border-color)] bg-[var(--hover-bg)]">
+                                    <div
+                                        className={`p-4 ${isCollapsible ? 'cursor-pointer' : ''}`}
+                                        onClick={() => isCollapsible && toggleSection(section.id)}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="text-lg font-bold text-[var(--text-primary)]">
+                                                        {section.title}
+                                                    </h3>
+                                                    {isOptional && (
+                                                        <span className="text-xs px-2 py-0.5 rounded bg-[var(--primary)]/20 text-[var(--primary)] dark:bg-[var(--accent)]/20 dark:text-[var(--accent)] ">
+                                                            Optional
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {section.description && (
+                                                    <p className="text-xs mt-1 text-[var(--text-secondary)]">
+                                                        {section.description}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            {isCollapsible && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        toggleSection(section.id);
+                                                    }}
+                                                    className="ml-2 p-1 rounded transition-colors hover:bg-[var(--border-color)]"
+                                                    aria-label={isExpanded ? "Collapse section" : "Expand section"}
+                                                >
+                                                    <svg
+                                                        className={`w-5 h-5 text-[var(--text-secondary)] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {isExpanded && (
+                                        <div className="px-4 pb-4">
+                                            <div className={sectionClasses}>
+                                                {section.fields.map((field) => {
+                                                    // Handle conditional field display using showIf
+                                                    if (!shouldShowField(field)) {
+                                                        return null;
+                                                    }
+                                                    return renderField(field);
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 

@@ -57,15 +57,18 @@ model UserOrganization {
   
   role           TenantRole
   createdAt      DateTime @default(now())
+  deactivatedAt  DateTime?
   
   savedAnalyses SavedAnalysis[]
   refinementMessages RefinementMessage[]
   sops          SOP[]
   businessBrains BusinessBrain[]
+  businessConversations BusinessConversation[]
   
   @@unique([userId, organizationId])
   @@index([organizationId])
   @@index([userId])
+  @@index([deactivatedAt])
 }
 
 enum TenantRole {
@@ -207,14 +210,136 @@ model BusinessBrain {
   fileUploads        Json?             // file URLs (images, pdfs, documents)
 
   // AI-related
-  trainingData       Json?
   knowledgeBase      Json?
 
-  cards              BusinessCard[]   
+  cards              BusinessCard[]
+  conversations     BusinessConversation[]
+  enhancementAnalyses EnhancementAnalysis[]
   
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   
-
+  
+  completionScore    Int?
+  completionData     Json?
+  
+  // Completion data structure:
+  // {
+  //   tierOneComplete: boolean,
+  //   tierTwoSections: {
+  //     compliance: boolean,
+  //     proof: boolean,
+  //     voice: boolean,
+  //     operations: boolean
+  //   },
+  //   quickWins: [
+  //     {
+  //       id: string,
+  //       label: string,
+  //       completed: boolean,
+  //       impact: number, // +10%, +15%, etc.
+  //       category: string
+  //     }
+  //   ],
+  //   lastCalculated: timestamp
+  // }
+  
+  
   @@index([userOrganizationId])
+}
+
+model EnhancementAnalysis {
+  id              String   @id @default(cuid())
+  brainId         String
+  brain           BusinessBrain @relation(fields: [brainId], references: [id], onDelete: Cascade)
+  
+  // The analysis result
+  analysis        Json     // The full enhancementAnalysis object
+  
+  // Cache invalidation
+  dataHash        String   // Hash of cards + intakeData + fileUploads to detect changes
+  cardIds         String[] // Which cards were analyzed
+  cardConfidences Int[]    // Confidence scores at time of analysis
+  
+  // Metadata
+  generatedAt     DateTime @default(now())
+  generatedBy     String?  // userOrganizationId who triggered it
+  
+  // Version tracking
+  version         Int      @default(1)
+  
+  @@index([brainId])
+  @@index([generatedAt])
+  @@index([dataHash])
+}
+
+model BusinessConversation {
+  id                 String   @id @default(cuid())
+  brainId            String
+  brain              BusinessBrain @relation(fields: [brainId], references: [id], onDelete: Cascade)
+  
+  userOrganizationId String
+  userOrganization   UserOrganization @relation(fields: [userOrganizationId], references: [id], onDelete: Cascade)
+  
+  title              String   @default("New Conversation")  // Auto-generated from first message
+  
+  // Conversation state
+  status             ConversationStatus @default(ACTIVE)
+  lastMessageAt      DateTime @default(now())
+  messageCount       Int      @default(0)
+  
+  // Context tracking
+  activeCardIds      String[]          // Which cards are currently relevant
+  contextSummary     String? @db.Text  // AI-generated summary of conversation so far
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  messages           BusinessMessage[]
+  
+  @@index([brainId])
+  @@index([userOrganizationId])
+  @@index([status])
+  @@index([lastMessageAt])
+}
+
+enum ConversationStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
+}
+
+model BusinessMessage {
+  id                 String   @id @default(cuid())
+  conversationId     String
+  conversation       BusinessConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  role               MessageRole      // user | assistant
+  content            String   @db.Text
+  
+  // Rich metadata for AI responses
+  metadata           Json?    // {
+                              //   cardsReferenced: ["card_id_1", "card_id_2"],
+                              //   confidenceScore: 85,
+                              //   citedSources: [...],
+                              //   tokenCount: 450,
+                              //   model: "gpt-4o",
+                              //   promptTokens: 2000,
+                              //   completionTokens: 450
+                              // }
+  
+  // For user messages
+  attachments        Json?    // Array of file references if user uploads files
+  
+  // For assistant messages
+  cardCitations      Json?    // Structured citations: { cardId, excerpts, confidence }
+  generatedArtifacts Json?    // If AI generates content based on cards
+  
+  sequenceNumber     Int
+  createdAt          DateTime @default(now())
+  
+  @@unique([conversationId, sequenceNumber])
+  @@index([conversationId])
+  @@index([role])
+  @@index([createdAt])
 }

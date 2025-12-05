@@ -1089,6 +1089,17 @@ export async function POST(
       },
     });
 
+    // Invalidate enhancement analysis cache since knowledge base has changed
+    try {
+      await prisma.enhancementAnalysis.deleteMany({
+        where: { brainId: businessBrainId },
+      });
+      console.log("[Synthesize-Knowledge] Invalidated enhancement analysis cache");
+    } catch (error) {
+      console.error("[Synthesize-Knowledge] Error invalidating cache:", error);
+      // Don't fail the request if cache invalidation fails
+    }
+
     console.log("[Synthesize-Knowledge] Knowledge base synthesized and saved successfully");
     console.log(`[Synthesize-Knowledge] Metadata:`, {
       cardCount: knowledgeBase.metadata.cardCount,

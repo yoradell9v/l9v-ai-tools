@@ -19,6 +19,7 @@ export async function GET(request: Request) {
         }
 
         const decoded = await verifyAccessToken(accessToken);
+        console.log("Decoded token:", decoded);
         if (!decoded) {
             return NextResponse.json(
                 { success: false, error: "Invalid token." },

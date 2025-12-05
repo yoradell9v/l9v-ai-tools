@@ -54,6 +54,7 @@ export async function GET(
       email: userOrg.user.email,
       role: userOrg.role,
       joinedAt: userOrg.createdAt,
+      deactivatedAt: userOrg.deactivatedAt?.toISOString() || null,
     }));
 
     // Format pending invites

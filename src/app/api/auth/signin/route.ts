@@ -24,8 +24,9 @@ export async function POST(request: Request) {
       // Check if it's a connection error
       if (dbError.code === "P1017" || dbError.message?.includes("connection")) {
         return NextResponse.json(
-          { 
-            error: "Database connection error. Please check your DATABASE_URL and ensure the database server is running." 
+          {
+            error:
+              "Database connection error. Please check your DATABASE_URL and ensure the database server is running.",
           },
           { status: 503 }
         );
@@ -48,7 +49,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if user's organization is deactivated
     const userOrganizations: any = await prisma.userOrganization.findMany({
       where: { userId: user.id },
       include: {
@@ -71,16 +71,46 @@ export async function POST(request: Request) {
       );
     }
 
-    
+    // Check if user has at least one active organization
+    // User is active if: deactivatedAt is null/undefined AND organization is not deactivated
+    const hasActiveOrganization = userOrganizations.some(
+      (uo: any) => {
+        const isMemberActive = uo.deactivatedAt === null || uo.deactivatedAt === undefined;
+        const isOrgActive = uo.organization && (uo.organization.deactivatedAt === null || uo.organization.deactivatedAt === undefined);
+        return isMemberActive && isOrgActive;
+      }
+    );
+
+    // Only block signin if user has organizations but none are active
+    if (userOrganizations.length > 0 && !hasActiveOrganization) {
+      // User is deactivated in all organizations or all organizations are deactivated
+      const deactivatedMember: any = userOrganizations.find(
+        (uo: any) => {
+          const isDeactivated = uo.deactivatedAt !== null && uo.deactivatedAt !== undefined;
+          return isDeactivated;
+        }
+      );
+      
+      const orgName = deactivatedMember?.organization?.name || userOrganizations[0]?.organization?.name || "your organization";
+      
+      return NextResponse.json(
+        {
+          error: "Account deactivated",
+          message: `Your account has been deactivated in "${orgName}". Please contact your administrator.`,
+          memberDeactivated: true,
+        },
+        { status: 403 }
+      );
+    }
+
     if (user.globalRole === "SUPERADMIN" && user.lastLoginAt === null) {
-  
       const resetToken = crypto.randomBytes(32).toString("hex");
       const hashedToken = crypto
         .createHash("sha256")
         .update(resetToken)
         .digest("hex");
 
-      const resetTokenExpiry = new Date(Date.now() + 3600000); 
+      const resetTokenExpiry = new Date(Date.now() + 3600000);
 
       await prisma.user.update({
         where: { id: user.id },
@@ -102,12 +132,13 @@ export async function POST(request: Request) {
       );
     }
 
-    
     let accessToken: string;
     let refreshToken: string;
-    
+
     try {
-      const { generateAccessToken, generateRefreshToken } = await import("@/lib/auth");
+      const { generateAccessToken, generateRefreshToken } = await import(
+        "@/lib/auth"
+      );
 
       if (!generateAccessToken || !generateRefreshToken) {
         throw new Error("Failed to import JWT functions");
@@ -130,8 +161,10 @@ export async function POST(request: Request) {
       console.error("JWT error:", jwtError);
       console.error("JWT error stack:", jwtError.stack);
       return NextResponse.json(
-        { 
-          error: jwtError?.message || "JWT secrets not configured. Please set JWT_SECRET and REFRESH_SECRET in your environment variables." 
+        {
+          error:
+            jwtError?.message ||
+            "JWT secrets not configured. Please set JWT_SECRET and REFRESH_SECRET in your environment variables.",
         },
         { status: 500 }
       );

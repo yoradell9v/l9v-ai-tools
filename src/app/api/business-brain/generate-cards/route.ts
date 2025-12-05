@@ -19,21 +19,21 @@ export const runtime = "nodejs";
 
 /**
  * ENHANCED BUSINESS PROFILE ANALYSIS SYSTEM
- * 
+ *
  * This route implements a multi-stage deep analysis architecture:
- * 
+ *
  * PHASE 1: Deep Content Mining
  * - Extracts 30-50 specific, evidence-backed insights from all content sources
  * - Each insight must have specificity_score >= 7 (rejects generic observations)
  * - Includes exact quotes as evidence (not paraphrased)
  * - Cross-references insights to validate and identify contradictions
- * 
+ *
  * PHASE 2: Context-Rich Card Generation
  * - Uses deep insights + full content samples (not truncated)
  * - Generates comprehensive, actionable guides (3000+ words for brand voice)
  * - Every rule backed by exact quotes from source material
  * - Confidence scores based on evidence quality
- * 
+ *
  * Token Usage: 3-5x higher than previous version, justified by output quality
  * - Uses gpt-4o for complex analysis (deep insights, card generation)
  * - Uses gpt-4o-mini for simpler tasks (validation, pattern extraction)
@@ -56,30 +56,6 @@ interface ExtractedContent {
   }[];
 }
 
-interface VoiceSample {
-  text: string;
-  source: string;
-  characteristics: string[];
-  confidence: number;
-  sample_id?: number;
-}
-
-interface VoicePatterns {
-  sentence_stats: {
-    avg_length: number;
-    complexity_score: number;
-  };
-  vocabulary: {
-    power_words: string[];
-    jargon: string[];
-    formality_score: number;
-  };
-  tone: {
-    primary_emotion: string;
-    consistency_score: number;
-  };
-  consistency_score?: number;
-}
 
 // ============================================================================
 // STAGE 1: INTELLIGENT CONTENT EXTRACTION
@@ -229,12 +205,15 @@ async function extractTextFromBuffer(
         const pdfModule: any = await import("pdf-parse");
         // Handle different export formats for pdf-parse
         let pdfParse: any;
-        
+
         // Try different ways to access the function
         if (typeof pdfModule === "function") {
           pdfParse = pdfModule;
         } else if (pdfModule.default) {
-          pdfParse = typeof pdfModule.default === "function" ? pdfModule.default : pdfModule.default.default;
+          pdfParse =
+            typeof pdfModule.default === "function"
+              ? pdfModule.default
+              : pdfModule.default.default;
         } else if (pdfModule.pdfParse) {
           pdfParse = pdfModule.pdfParse;
         } else if (pdfModule.PDFParse) {
@@ -244,22 +223,27 @@ async function extractTextFromBuffer(
           // Last resort: try accessing the module directly
           pdfParse = pdfModule;
         }
-        
+
         if (typeof pdfParse !== "function") {
-          console.error(`pdf-parse is not a function for ${filename}. Module keys:`, Object.keys(pdfModule || {}));
+          console.error(
+            `pdf-parse is not a function for ${filename}. Module keys:`,
+            Object.keys(pdfModule || {})
+          );
           // Try using PDFParse class if available
           if (pdfModule.PDFParse && typeof pdfModule.PDFParse === "function") {
             const pdfParser = new pdfModule.PDFParse(buffer);
             const result = await pdfParser.parse();
             if (!result || !result.text) {
-              console.warn(`PDF ${filename} parsed but returned no text content`);
+              console.warn(
+                `PDF ${filename} parsed but returned no text content`
+              );
               return "";
             }
             return normalizeWhitespace(result.text);
           }
           return "";
         }
-        
+
         const result = await pdfParse(buffer);
         if (!result || !result.text) {
           console.warn(`PDF ${filename} parsed but returned no text content`);
@@ -642,458 +626,8 @@ function extractMetadata($: cheerio.CheerioAPI): {
 }
 
 // ============================================================================
-// STAGE 2: SPECIALIZED ANALYSIS PER CARD TYPE
+// VA-FOCUSED CARD GENERATORS
 // ============================================================================
-
-async function analyzeBrandVoice(
-  openai: OpenAI,
-  content: ExtractedContent,
-  intakeData: any
-): Promise<any> {
-  try {
-    // First pass: Extract voice samples
-    const voiceSamples = await extractVoiceSamples(openai, content);
-
-    // Second pass: Analyze patterns
-    const voicePatterns = await analyzeVoicePatterns(openai, voiceSamples);
-
-    // Third pass: Generate rules with validation
-    const voiceRules = await generateVoiceRules(
-      openai,
-      voicePatterns,
-      intakeData,
-      voiceSamples
-    );
-    return {
-      title: "Brand Voice & Communication Style",
-      description:
-        voiceRules.description ||
-        "Brand voice guidelines based on your content and preferences.",
-      metadata: voiceRules.metadata || {},
-      confidence_score: calculateConfidenceScore(voiceSamples, voicePatterns),
-      source_attribution: voiceRules.sources || [],
-    };
-  } catch (error) {
-    console.error("Error analyzing brand voice:", error);
-    return {
-      title: "Brand Voice & Communication Style",
-      description: "Brand voice guidelines based on your intake form data.",
-      metadata: {},
-      confidence_score: 50,
-      source_attribution: [],
-    };
-  }
-}
-
-async function extractVoiceSamples(
-  openai: OpenAI,
-  content: ExtractedContent
-): Promise<VoiceSample[]> {
-  const systemPrompt = `You are a linguistic analyst. Extract 10-15 representative text samples that showcase the brand's voice.
-  
-  For each sample, identify:
-  - The exact text (quote it precisely)
-  - Where it came from (hero, about page, email, etc.)
-  - What voice characteristics it demonstrates
-  - Confidence that this represents their authentic voice (1-10)
-  
-  Only extract samples that are clearly written BY the brand, not ABOUT them.
-  
-  Return JSON with format: { "samples": [{ "text": "...", "source": "...", "characteristics": [...], "confidence": 8 }] }`;
-
-  const samples: VoiceSample[] = [];
-
-  // Extract from website sections
-  const websiteText = [
-    { section: "hero", text: content.website.hero },
-    { section: "about", text: content.website.about },
-    { section: "services", text: content.website.services },
-  ].filter((item) => item.text && item.text.length > 50);
-
-  if (websiteText.length > 0) {
-    try {
-      const combinedText = websiteText
-        .map((item) => `${item.section}:\n${item.text}`)
-        .join("\n\n");
-      const result = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: `Extract voice samples from these website sections:\n\n${combinedText.substring(
-              0,
-              8000
-            )}`,
-          },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.3,
-      });
-
-      const extracted = JSON.parse(result.choices[0].message.content || "{}");
-      if (extracted.samples && Array.isArray(extracted.samples)) {
-        samples.push(...extracted.samples);
-      }
-    } catch (error) {
-      console.error("Error extracting voice samples from website:", error);
-    }
-  }
-
-  // Extract from files
-  for (const file of content.files) {
-    if (file.type === "brand_guide" || file.type === "style_guide") {
-      for (const section of file.sections.slice(0, 5)) {
-        if (section.content && section.content.length > 100) {
-          try {
-            const result = await openai.chat.completions.create({
-              model: "gpt-4o-mini",
-              messages: [
-                { role: "system", content: systemPrompt },
-                {
-                  role: "user",
-                  content: `Extract voice samples from "${
-                    section.title
-                  }":\n\n${section.content.substring(0, 4000)}`,
-                },
-              ],
-              response_format: { type: "json_object" },
-              temperature: 0.3,
-            });
-
-            const extracted = JSON.parse(
-              result.choices[0].message.content || "{}"
-            );
-            if (extracted.samples && Array.isArray(extracted.samples)) {
-              samples.push(...extracted.samples);
-            }
-          } catch (error) {
-            console.error(
-              `Error extracting voice samples from ${file.name}:`,
-              error
-            );
-          }
-        }
-      }
-    }
-  }
-
-  return samples.slice(0, 20); // Limit to 20 samples
-}
-
-async function analyzeVoicePatterns(
-  openai: OpenAI,
-  samples: VoiceSample[]
-): Promise<VoicePatterns> {
-  if (samples.length === 0) {
-    return {
-      sentence_stats: { avg_length: 15, complexity_score: 5 },
-      vocabulary: { power_words: [], jargon: [], formality_score: 5 },
-      tone: { primary_emotion: "neutral", consistency_score: 0.5 },
-    };
-  }
-
-  const systemPrompt = `You are a linguistic pattern analyst. Given these voice samples, identify:
-  
-  1. Sentence structure patterns (avg length, complexity, rhythm)
-  2. Vocabulary patterns (power words, jargon, formality level)
-  3. Emotional tone patterns (consistency, range, authenticity)
-  4. Rhetorical devices used (questions, imperatives, storytelling)
-  5. Quantitative metrics (reading level, sentence variety, vocabulary diversity)
-  
-  Be specific and data-driven. Calculate actual statistics.
-  
-  Return JSON with format matching VoicePatterns interface.`;
-
-  try {
-    const result = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: JSON.stringify(samples.slice(0, 15), null, 2),
-        },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.2,
-      max_tokens: 2000,
-    });
-
-    return JSON.parse(result.choices[0].message.content || "{}");
-  } catch (error) {
-    console.error("Error analyzing voice patterns:", error);
-    return {
-      sentence_stats: { avg_length: 15, complexity_score: 5 },
-      vocabulary: { power_words: [], jargon: [], formality_score: 5 },
-      tone: { primary_emotion: "neutral", consistency_score: 0.5 },
-    };
-  }
-}
-
-async function generateVoiceRules(
-  openai: OpenAI,
-  patterns: VoicePatterns,
-  intakeData: any,
-  samples: VoiceSample[]
-): Promise<any> {
-  const systemPrompt = `You are a brand voice architect. Create actionable writing rules.
-  
-  Rules must be:
-  - Specific enough to guide AI content generation
-  - Backed by examples from the provided samples
-  - Validated against the slider values from intake data
-  - Include source attribution for every claim
-  
-  Format: JSON with description, metadata (rules array), and sources array.`;
-
-  try {
-    const result = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: JSON.stringify(
-            {
-              patterns,
-              intakeData: {
-                formalCasual: intakeData?.formalCasual || 50,
-                playfulSerious: intakeData?.playfulSerious || 50,
-                directStoryDriven: intakeData?.directStoryDriven || 50,
-                punchyDetailed: intakeData?.punchyDetailed || 50,
-                inspirationalAnalytical:
-                  intakeData?.inspirationalAnalytical || 50,
-                soundsLike: intakeData?.soundsLike || "",
-              },
-              samples: samples
-                .map((s, i) => ({ ...s, sample_id: i }))
-                .slice(0, 10),
-            },
-            null,
-            2
-          ),
-        },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.4,
-      max_tokens: 4000,
-    });
-
-    return JSON.parse(result.choices[0].message.content || "{}");
-  } catch (error) {
-    console.error("Error generating voice rules:", error);
-    return {
-      description: "Brand voice guidelines based on your preferences.",
-      metadata: {},
-      sources: [],
-    };
-  }
-}
-
-async function analyzePositioning(
-  openai: OpenAI,
-  content: ExtractedContent,
-  intakeData: any
-): Promise<any> {
-  try {
-    const positioningSignals = await extractPositioningSignals(openai, content);
-    const competitiveIntel = await analyzeCompetitors(
-      openai,
-      intakeData?.competitors || "",
-      positioningSignals
-    );
-    const positioningFramework = await buildPositioningFramework(
-      openai,
-      positioningSignals,
-      competitiveIntel,
-      intakeData
-    );
-
-    return {
-      title: "Market Position & Competitive Strategy",
-      description:
-        positioningFramework.description ||
-        "Market positioning based on your business information.",
-      metadata: positioningFramework.metadata || {},
-      confidence_score: calculatePositioningConfidence(positioningSignals),
-      source_attribution: positioningFramework.sources || [],
-    };
-  } catch (error) {
-    console.error("Error analyzing positioning:", error);
-    return {
-      title: "Market Position & Competitive Strategy",
-      description: "Market positioning based on your intake form data.",
-      metadata: {},
-      confidence_score: 50,
-      source_attribution: [],
-    };
-  }
-}
-
-async function extractPositioningSignals(
-  openai: OpenAI,
-  content: ExtractedContent
-): Promise<any> {
-  try {
-    const result = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "Extract positioning signals from business content. Return JSON with value_proposition, target_audience, differentiation, and market_position.",
-        },
-        {
-          role: "user",
-          content: `Extract positioning from:\n\nWebsite: ${content.website.fullText.substring(
-            0,
-            4000
-          )}`,
-        },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.3,
-    });
-
-    return JSON.parse(result.choices[0].message.content || "{}");
-  } catch (error) {
-    console.error("Error extracting positioning signals:", error);
-    return {};
-  }
-}
-
-async function analyzeCompetitors(
-  openai: OpenAI,
-  competitors: any,
-  signals: any
-): Promise<any> {
-  if (!competitors || competitors.trim().length === 0) {
-    return {};
-  }
-
-  try {
-    const result = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "Analyze competitive landscape. Return JSON with competitor_analysis and differentiation_points.",
-        },
-        {
-          role: "user",
-          content: `Competitors mentioned: ${competitors}\n\nPositioning signals: ${JSON.stringify(
-            signals
-          )}`,
-        },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.3,
-    });
-
-    return JSON.parse(result.choices[0].message.content || "{}");
-  } catch (error) {
-    console.error("Error analyzing competitors:", error);
-    return {};
-  }
-}
-
-async function buildPositioningFramework(
-  openai: OpenAI,
-  signals: any,
-  intel: any,
-  intake: any
-): Promise<any> {
-  try {
-    const result = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content:
-            "Build a comprehensive positioning framework. Return JSON with description, metadata (framework details), and sources.",
-        },
-        {
-          role: "user",
-          content: JSON.stringify(
-            {
-              signals,
-              competitiveIntel: intel,
-              intakeData: {
-                offers: intake?.offers || "",
-                outcomePromise: intake?.outcomePromise || "",
-                icps: intake?.icps || [],
-                topCompetitor: intake?.topCompetitor || "",
-              },
-            },
-            null,
-            2
-          ),
-        },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.4,
-      max_tokens: 3000,
-    });
-
-    return JSON.parse(result.choices[0].message.content || "{}");
-  } catch (error) {
-    console.error("Error building positioning framework:", error);
-    return { metadata: {}, sources: [] };
-  }
-}
-
-// ============================================================================
-// STAGE 4: VALIDATION & CONFIDENCE SCORING
-// ============================================================================
-
-function calculateConfidenceScore(
-  samples: VoiceSample[],
-  patterns: VoicePatterns
-): number {
-  let score = 0;
-  let maxScore = 0;
-
-  // Factor 1: Sample quantity (max 30 points)
-  maxScore += 30;
-  score += Math.min(samples.length * 2, 30);
-
-  // Factor 2: Sample diversity (max 25 points)
-  maxScore += 25;
-  const uniqueSources = new Set(samples.map((s) => s.source)).size;
-  score += Math.min(uniqueSources * 5, 25);
-
-  // Factor 3: High-confidence samples (max 25 points)
-  maxScore += 25;
-  const highConfSamples = samples.filter((s) => s.confidence >= 8).length;
-  score += Math.min(highConfSamples * 3, 25);
-
-  // Factor 4: Pattern consistency (max 20 points)
-  maxScore += 20;
-  if (patterns.consistency_score) {
-    score += patterns.consistency_score * 20;
-  } else {
-    score += 10; // Default middle score
-  }
-
-  return Math.round((score / maxScore) * 100);
-}
-
-function calculatePositioningConfidence(signals: any): number {
-  if (!signals || Object.keys(signals).length === 0) {
-    return 30;
-  }
-
-  let score = 50; // Base score
-
-  if (signals.value_proposition) score += 15;
-  if (signals.target_audience) score += 15;
-  if (signals.differentiation) score += 10;
-  if (signals.market_position) score += 10;
-
-  return Math.min(score, 100);
-}
 
 function calculateOverallConfidence(cards: any[]): number {
   const scores = cards.map((c) => c.confidence_score || 0);
@@ -1129,11 +663,11 @@ async function generateAndSaveCards(
     hasIntakeData: !!intakeData,
     keys: intakeData ? Object.keys(intakeData) : [],
     website: intakeData?.website,
-    legalName: intakeData?.legalName,
-    formalCasual: intakeData?.formalCasual,
-    soundsLike: intakeData?.soundsLike,
+    businessName: intakeData?.businessName,
+    businessType: intakeData?.businessType,
+    brandVoiceStyle: intakeData?.brandVoiceStyle,
   });
-  
+
   const websiteUrl = intakeData?.website || "";
   const files: Array<{ url: string; name: string; type?: string }> = [];
 
@@ -1160,24 +694,36 @@ async function generateAndSaveCards(
     files: extractedContent.files,
     intakeData,
   };
-  
+
   console.log("[generateAndSaveCards] AnalysisContext intakeData:", {
     hasIntakeData: !!analysisContext.intakeData,
-    keys: analysisContext.intakeData ? Object.keys(analysisContext.intakeData) : [],
-    formalCasual: analysisContext.intakeData?.formalCasual,
-    soundsLike: analysisContext.intakeData?.soundsLike,
+    keys: analysisContext.intakeData
+      ? Object.keys(analysisContext.intakeData)
+      : [],
+    businessName: analysisContext.intakeData?.businessName,
+    brandVoiceStyle: analysisContext.intakeData?.brandVoiceStyle,
   });
 
   // PHASE 1: Mine deep insights from all content sources
   console.log("Mining deep insights...");
-  console.log(`Content available - Website: ${analysisContext.websiteContent.fullText.length > 0}, Files: ${analysisContext.files.length}`);
-  
+  console.log(
+    `Content available - Website: ${
+      analysisContext.websiteContent.fullText.length > 0
+    }, Files: ${analysisContext.files.length}`
+  );
+
   const miningResult = await mineDeepInsights(openai, analysisContext);
-  console.log(`Mined ${miningResult.total_insights} insights (${miningResult.high_confidence_count} high confidence, avg specificity: ${miningResult.specificity_avg})`);
-  console.log(`Categories covered: ${miningResult.categories_covered.join(", ")}`);
-  
+  console.log(
+    `Mined ${miningResult.total_insights} insights (${miningResult.high_confidence_count} high confidence, avg specificity: ${miningResult.specificity_avg})`
+  );
+  console.log(
+    `Categories covered: ${miningResult.categories_covered.join(", ")}`
+  );
+
   if (miningResult.total_insights === 0) {
-    console.warn("WARNING: No insights mined. Cards will be generated from content directly.");
+    console.warn(
+      "WARNING: No insights mined. Cards will be generated from content directly."
+    );
   }
 
   // PHASE 2: Generate enhanced cards using deep insights
@@ -1282,10 +828,23 @@ async function generateAndSaveCards(
   );
 
   // Map saved cards with their confidence scores
-  return savedCards.map((savedCard, index) => ({
+  const result = savedCards.map((savedCard, index) => ({
     ...savedCard,
     confidence_score: cardDefinitions[index].data.confidence_score || 0,
   }));
+
+  // Invalidate enhancement analysis cache since cards have changed
+  try {
+    await prisma.enhancementAnalysis.deleteMany({
+      where: { brainId },
+    });
+    console.log("[Generate-Cards] Invalidated enhancement analysis cache");
+  } catch (error) {
+    console.error("[Generate-Cards] Error invalidating cache:", error);
+    // Don't fail the request if cache invalidation fails
+  }
+
+  return result;
 }
 
 // ============================================================================
@@ -1413,10 +972,9 @@ Return JSON with:
             {
               formattingPatterns: patterns,
               intakeData: {
-                forbiddenWords: intakeData?.forbiddenWords || "",
-                soundsLike: intakeData?.soundsLike || "",
-                favoriteParagraphs: intakeData?.favoriteParagraphs || "",
-                avoidParagraphs: intakeData?.avoidParagraphs || "",
+                topicsToAvoid: intakeData?.topicsToAvoid || "",
+                exampleContentLinks: intakeData?.exampleContentLinks || "",
+                brandVoiceStyle: intakeData?.brandVoiceStyle || "",
               },
               styleSamples: styleSamples.slice(0, 5),
               websiteExcerpts: {
@@ -1594,10 +1152,8 @@ Return JSON with:
             {
               complianceSignals: signals,
               intakeData: {
-                isRegulated: intakeData?.isRegulated,
-                regulatedIndustryType: intakeData?.regulatedIndustryType,
-                disclaimers: intakeData?.disclaimers,
-                forbiddenWords: intakeData?.forbiddenWords,
+                businessType: intakeData?.businessType || "",
+                topicsToAvoid: intakeData?.topicsToAvoid || "",
               },
               existingDisclaimers: signals.disclaimers_found,
             },
@@ -1738,15 +1294,17 @@ Return JSON with:
             {
               crmPatterns: patterns,
               intakeData: {
-                crmPlatform: intakeData?.crmPlatform,
-                crmSubaccount: intakeData?.crmSubaccount,
-                pipelineStages: intakeData?.pipelineStages,
-                supportEmail: intakeData?.supportEmail,
-                emailSignoff: intakeData?.emailSignoff,
+                primaryCRM: intakeData?.primaryCRM || "",
+                customerJourney: intakeData?.customerJourney || "",
+                supportEmail: intakeData?.supportEmail || "",
+                bookingLink: intakeData?.bookingLink || "",
+                coreOfferSummary: intakeData?.coreOfferSummary || "",
               },
               businessModel: {
                 services: content.website.services.substring(0, 1000),
-                customerJourney: patterns.customer_journey_stages,
+                customerJourney:
+                  intakeData?.customerJourney ||
+                  patterns.customer_journey_stages.join(" → "),
               },
             },
             null,
@@ -1809,10 +1367,10 @@ function calculateGHLConfidence(patterns: any): number {
 
 function generateStyleRulesFallback(intakeData: any): string {
   const rules: string[] = [];
-  if (intakeData?.forbiddenWords)
-    rules.push(`Forbidden Words: ${intakeData.forbiddenWords}`);
-  if (intakeData?.soundsLike)
-    rules.push(`Sound Like: ${intakeData.soundsLike}`);
+  if (intakeData?.topicsToAvoid)
+    rules.push(`Topics to Avoid: ${intakeData.topicsToAvoid}`);
+  if (intakeData?.brandVoiceStyle)
+    rules.push(`Brand Voice Style: ${intakeData.brandVoiceStyle}`);
   return rules.length > 0
     ? rules.join("\n\n")
     : "Style rules based on your preferences.";
@@ -1820,18 +1378,22 @@ function generateStyleRulesFallback(intakeData: any): string {
 
 function generateComplianceRulesFallback(intakeData: any): string {
   const rules: string[] = [];
-  if (intakeData?.disclaimers)
-    rules.push(`Required Disclaimers:\n${intakeData.disclaimers}`);
-  if (intakeData?.forbiddenWords)
-    rules.push(`Never Use: ${intakeData.forbiddenWords}`);
+  if (intakeData?.businessType)
+    rules.push(`Business Type: ${intakeData.businessType}`);
+  if (intakeData?.topicsToAvoid)
+    rules.push(`Topics to Avoid: ${intakeData.topicsToAvoid}`);
   return rules.length > 0 ? rules.join("\n\n") : "Compliance guidelines.";
 }
 
 function generateGHLNotesFallback(intakeData: any): string {
   const notes: string[] = [];
-  if (intakeData?.crmPlatform) notes.push(`CRM: ${intakeData.crmPlatform}`);
-  if (intakeData?.pipelineStages)
-    notes.push(`Pipelines: ${intakeData.pipelineStages}`);
+  if (intakeData?.primaryCRM) notes.push(`CRM: ${intakeData.primaryCRM}`);
+  if (intakeData?.customerJourney)
+    notes.push(`Customer Journey: ${intakeData.customerJourney}`);
+  if (intakeData?.bookingLink)
+    notes.push(`Booking Link: ${intakeData.bookingLink}`);
+  if (intakeData?.supportEmail)
+    notes.push(`Support Email: ${intakeData.supportEmail}`);
   return notes.length > 0 ? notes.join("\n\n") : "GHL implementation notes.";
 }
 
@@ -1915,15 +1477,18 @@ export async function POST(request: Request) {
       id: businessBrain.id,
       hasIntakeData: !!businessBrain.intakeData,
       intakeDataType: typeof businessBrain.intakeData,
-      intakeDataIsObject: businessBrain.intakeData && typeof businessBrain.intakeData === 'object',
-      intakeDataKeys: businessBrain.intakeData && typeof businessBrain.intakeData === 'object' 
-        ? Object.keys(businessBrain.intakeData as any) 
-        : 'not an object',
+      intakeDataIsObject:
+        businessBrain.intakeData &&
+        typeof businessBrain.intakeData === "object",
+      intakeDataKeys:
+        businessBrain.intakeData && typeof businessBrain.intakeData === "object"
+          ? Object.keys(businessBrain.intakeData as any)
+          : "not an object",
     });
-    
+
     // Ensure intakeData is properly parsed (Prisma JSON fields might be strings)
     let parsedIntakeData = businessBrain.intakeData;
-    if (typeof parsedIntakeData === 'string') {
+    if (typeof parsedIntakeData === "string") {
       try {
         parsedIntakeData = JSON.parse(parsedIntakeData);
         console.log("[Generate-Cards] Parsed intakeData from string");
@@ -1946,16 +1511,18 @@ export async function POST(request: Request) {
 
     // Generate and save cards
     console.log("[Generate-Cards] Starting card generation...");
-    console.log("[Generate-Cards] Using parsed intakeData with keys:", parsedIntakeData ? Object.keys(parsedIntakeData as any) : "NULL");
+    console.log(
+      "[Generate-Cards] Using parsed intakeData with keys:",
+      parsedIntakeData ? Object.keys(parsedIntakeData as any) : "NULL"
+    );
     console.log("[Generate-Cards] Parsed intakeData sample:", {
-      legalName: (parsedIntakeData as any)?.legalName,
+      businessName: (parsedIntakeData as any)?.businessName,
       website: (parsedIntakeData as any)?.website,
-      offers: (parsedIntakeData as any)?.offers?.substring(0, 100),
-      formalCasual: (parsedIntakeData as any)?.formalCasual,
-      soundsLike: (parsedIntakeData as any)?.soundsLike,
-      icps: (parsedIntakeData as any)?.icps?.length,
+      whatYouSell: (parsedIntakeData as any)?.whatYouSell?.substring(0, 100),
+      businessType: (parsedIntakeData as any)?.businessType,
+      brandVoiceStyle: (parsedIntakeData as any)?.brandVoiceStyle,
     });
-    
+
     const cards = await generateAndSaveCards(
       openai,
       profileId,
@@ -1963,7 +1530,9 @@ export async function POST(request: Request) {
       businessBrain.fileUploads as any
     );
 
-    console.log(`[Generate-Cards] Generated ${cards.length} cards successfully`);
+    console.log(
+      `[Generate-Cards] Generated ${cards.length} cards successfully`
+    );
 
     return NextResponse.json({
       success: true,
@@ -1975,7 +1544,8 @@ export async function POST(request: Request) {
         metadata: card.metadata,
         orderIndex: card.orderIndex,
         priority: card.priority,
-        confidence_score: (card as { confidence_score?: number }).confidence_score || 0,
+        confidence_score:
+          (card as { confidence_score?: number }).confidence_score || 0,
       })),
     });
   } catch (err: any) {

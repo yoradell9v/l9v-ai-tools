@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Navbar from "@/components/ui/Navbar";
 import Modal from "@/components/ui/Modal";
-import { Plus, Mail, ChevronDown, Trash2, Users, AlertCircle } from "lucide-react";
+import { Plus, Mail, ChevronDown, Trash2, Users, AlertCircle, PowerOff, CheckCircle2, MoreVertical } from "lucide-react";
 import { motion } from "framer-motion";
 import { Listbox } from "@headlessui/react";
 
@@ -15,6 +15,7 @@ interface Member {
     email: string;
     role: "ADMIN" | "MEMBER";
     joinedAt: string;
+    deactivatedAt?: string | null;
 }
 
 interface PendingInvite {
@@ -46,7 +47,14 @@ export default function TenantMembers() {
     const [inviteError, setInviteError] = useState<string | null>(null);
     const [cancellingInviteId, setCancellingInviteId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<"members" | "invites">("members");
+    const [activeTab, setActiveTab] = useState<"members" | "invites" | "deactivated">("members");
+    const [memberToDeactivate, setMemberToDeactivate] = useState<Member | null>(null);
+    const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+    const [isDeactivating, setIsDeactivating] = useState(false);
+    const [memberToActivate, setMemberToActivate] = useState<Member | null>(null);
+    const [showActivateModal, setShowActivateModal] = useState(false);
+    const [isActivating, setIsActivating] = useState(false);
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
     const roleOptions = [
         { value: "ADMIN" as const, label: "Tenant Admin" },
@@ -63,6 +71,17 @@ export default function TenantMembers() {
             setSelectedOrganization(organizations[0]);
         }
     }, [organizations, selectedOrganization]);
+
+    // Close menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (openMenuId) {
+                setOpenMenuId(null);
+            }
+        };
+        document.addEventListener("click", handleClickOutside);
+        return () => document.removeEventListener("click", handleClickOutside);
+    }, [openMenuId]);
 
     const fetchMembers = async () => {
         try {
@@ -136,6 +155,76 @@ export default function TenantMembers() {
             console.error("Error cancelling invitation:", error);
         } finally {
             setCancellingInviteId(null);
+        }
+    };
+
+    const handleDeactivateMember = async () => {
+        if (!memberToDeactivate) return;
+
+        setIsDeactivating(true);
+        try {
+            const response = await fetch("/api/members", {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    memberId: memberToDeactivate.id,
+                    action: "deactivate",
+                }),
+                credentials: "include",
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                console.error("Error deactivating member:", data.message);
+                return;
+            }
+
+            setShowDeactivateModal(false);
+            setMemberToDeactivate(null);
+            setOpenMenuId(null);
+            await fetchMembers();
+        } catch (error) {
+            console.error("Error deactivating member:", error);
+        } finally {
+            setIsDeactivating(false);
+        }
+    };
+
+    const handleActivateMember = async () => {
+        if (!memberToActivate) return;
+
+        setIsActivating(true);
+        try {
+            const response = await fetch("/api/members", {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    memberId: memberToActivate.id,
+                    action: "activate",
+                }),
+                credentials: "include",
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                console.error("Error activating member:", data.message);
+                return;
+            }
+
+            setShowActivateModal(false);
+            setMemberToActivate(null);
+            setOpenMenuId(null);
+            await fetchMembers();
+        } catch (error) {
+            console.error("Error activating member:", error);
+        } finally {
+            setIsActivating(false);
         }
     };
 
@@ -356,6 +445,20 @@ export default function TenantMembers() {
                                     />
                                 )}
                             </button>
+                            <button
+                                onClick={() => setActiveTab("deactivated")}
+                                className={`px-4 py-2 text-sm font-medium transition-all duration-200 relative ${activeTab === "deactivated" ? "text-[#18416B] dark:text-[#FAC133]" : "text-gray-600 dark:text-gray-400 opacity-60 hover:opacity-100"
+                                    }`}
+                            >
+                                Deactivated
+                                {activeTab === "deactivated" && (
+                                    <motion.div
+                                        layoutId="activeTab"
+                                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FAC133]"
+                                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                    />
+                                )}
+                            </button>
                         </div>
                     )}
 
@@ -416,6 +519,7 @@ export default function TenantMembers() {
 
                                 // Active Members Tab
                                 if (activeTab === "members") {
+                                    const activeMembers = selectedOrganization.members.filter(m => !m.deactivatedAt);
                                     return (
                                         <div className="overflow-x-auto">
                                             <table className="w-full">
@@ -433,19 +537,22 @@ export default function TenantMembers() {
                                                         <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
                                                             Joined
                                                         </th>
+                                                        <th className="text-right py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                                                            Actions
+                                                        </th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {selectedOrganization.members.length === 0 ? (
+                                                    {activeMembers.length === 0 ? (
                                                         <tr>
-                                                            <td colSpan={4} className="py-12 text-center">
+                                                            <td colSpan={5} className="py-12 text-center">
                                                                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                                    No members yet
+                                                                    No active members yet
                                                                 </p>
                                                             </td>
                                                         </tr>
                                                     ) : (
-                                                        selectedOrganization.members.map((member) => (
+                                                        activeMembers.map((member) => (
                                                             <tr
                                                                 key={member.id}
                                                                 className="border-b hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-gray-300 dark:border-gray-600"
@@ -477,6 +584,167 @@ export default function TenantMembers() {
                                                                     <p className="text-sm text-gray-600 dark:text-gray-400">
                                                                         {new Date(member.joinedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                                                     </p>
+                                                                </td>
+                                                                <td className="py-3 px-4 text-right">
+                                                                    <div className="relative flex justify-end">
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setOpenMenuId(openMenuId === member.id ? null : member.id);
+                                                                            }}
+                                                                            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
+                                                                        >
+                                                                            <MoreVertical size={16} />
+                                                                        </button>
+                                                                        {openMenuId === member.id && (
+                                                                            <>
+                                                                                <div
+                                                                                    className="fixed inset-0 z-10"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setOpenMenuId(null);
+                                                                                    }}
+                                                                                />
+                                                                                <div
+                                                                                    className="absolute right-0 mt-1 z-20 rounded-lg border shadow-lg overflow-hidden border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a] min-w-[140px]"
+                                                                                    onClick={(e) => e.stopPropagation()}
+                                                                                >
+                                                                                    <button
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setMemberToDeactivate(member);
+                                                                                            setShowDeactivateModal(true);
+                                                                                            setOpenMenuId(null);
+                                                                                        }}
+                                                                                        className="w-full text-left px-3 py-2 text-xs transition-colors hover:bg-red-500/10 flex items-center gap-2"
+                                                                                        style={{ color: "rgb(239, 68, 68)" }}
+                                                                                    >
+                                                                                        <PowerOff size={14} />
+                                                                                        <span>Deactivate</span>
+                                                                                    </button>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    );
+                                }
+
+                                // Deactivated Members Tab
+                                if (activeTab === "deactivated") {
+                                    const deactivatedMembers = selectedOrganization.members.filter(m => m.deactivatedAt);
+                                    return (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full">
+                                                <thead>
+                                                    <tr className="border-b border-gray-300 dark:border-gray-600">
+                                                        <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                                                            Name
+                                                        </th>
+                                                        <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                                                            Email
+                                                        </th>
+                                                        <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                                                            Role
+                                                        </th>
+                                                        <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                                                            Deactivated
+                                                        </th>
+                                                        <th className="text-right py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                                                            Actions
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {deactivatedMembers.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={5} className="py-12 text-center">
+                                                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                                    No deactivated members
+                                                                </p>
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        deactivatedMembers.map((member) => (
+                                                            <tr
+                                                                key={member.id}
+                                                                className="border-b hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-gray-300 dark:border-gray-600 opacity-60"
+                                                            >
+                                                                <td className="py-3 px-4">
+                                                                    <p className="text-sm font-medium text-[#1a1a1a] dark:text-[#e0e0e0]">
+                                                                        {member.firstname} {member.lastname}
+                                                                    </p>
+                                                                </td>
+                                                                <td className="py-3 px-4">
+                                                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                                        {member.email}
+                                                                    </p>
+                                                                </td>
+                                                                <td className="py-3 px-4">
+                                                                    <span
+                                                                        className={`
+  px-2 py-1 text-xs font-medium rounded-full
+  ${member.role === "ADMIN"
+                                                                                ? "bg-amber-100 text-amber-500"
+                                                                                : "bg-blue-200 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                                                                            }
+`}
+                                                                    >
+                                                                        {member.role}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="py-3 px-4">
+                                                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                                        {member.deactivatedAt ? new Date(member.deactivatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '-'}
+                                                                    </p>
+                                                                </td>
+                                                                <td className="py-3 px-4 text-right">
+                                                                    <div className="relative flex justify-end">
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setOpenMenuId(openMenuId === member.id ? null : member.id);
+                                                                            }}
+                                                                            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
+                                                                        >
+                                                                            <MoreVertical size={16} />
+                                                                        </button>
+                                                                        {openMenuId === member.id && (
+                                                                            <>
+                                                                                <div
+                                                                                    className="fixed inset-0 z-10"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setOpenMenuId(null);
+                                                                                    }}
+                                                                                />
+                                                                                <div
+                                                                                    className="absolute right-0 mt-1 z-20 rounded-lg border shadow-lg overflow-hidden border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a] min-w-[140px]"
+                                                                                    onClick={(e) => e.stopPropagation()}
+                                                                                >
+                                                                                    <button
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setMemberToActivate(member);
+                                                                                            setShowActivateModal(true);
+                                                                                            setOpenMenuId(null);
+                                                                                        }}
+                                                                                        className="w-full text-left px-3 py-2 text-xs transition-colors hover:bg-green-500/10 flex items-center gap-2"
+                                                                                        style={{ color: "rgb(34, 197, 94)" }}
+                                                                                    >
+                                                                                        <CheckCircle2 size={14} />
+                                                                                        <span>Activate</span>
+                                                                                    </button>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
                                                                 </td>
                                                             </tr>
                                                         ))
@@ -643,6 +911,100 @@ export default function TenantMembers() {
                     isSubmitting={isSendingInvitation}
                 />
             )}
+
+            {/* Deactivate Member Confirmation Modal */}
+            <Modal
+                isOpen={showDeactivateModal}
+                onClose={() => {
+                    if (!isDeactivating) {
+                        setShowDeactivateModal(false);
+                        setMemberToDeactivate(null);
+                    }
+                }}
+                onConfirm={handleDeactivateMember}
+                title="Deactivate Member"
+                message={
+                    memberToDeactivate
+                        ? `Are you sure you want to deactivate "${memberToDeactivate.firstname} ${memberToDeactivate.lastname}"? This will prevent them from accessing the system. This action can be reversed later.`
+                        : ""
+                }
+                confirmText={
+                    isDeactivating ? (
+                        <span className="flex items-center gap-2">
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                <circle
+                                    className="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="none"
+                                />
+                                <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                />
+                            </svg>
+                            Deactivating...
+                        </span>
+                    ) : (
+                        "Deactivate"
+                    )
+                }
+                cancelText="Cancel"
+                confirmVariant="danger"
+                maxWidth="md"
+                isSubmitting={isDeactivating}
+            />
+
+            {/* Activate Member Confirmation Modal */}
+            <Modal
+                isOpen={showActivateModal}
+                onClose={() => {
+                    if (!isActivating) {
+                        setShowActivateModal(false);
+                        setMemberToActivate(null);
+                    }
+                }}
+                onConfirm={handleActivateMember}
+                title="Activate Member"
+                message={
+                    memberToActivate
+                        ? `Are you sure you want to activate "${memberToActivate.firstname} ${memberToActivate.lastname}"? This will restore their access to the system.`
+                        : ""
+                }
+                confirmText={
+                    isActivating ? (
+                        <span className="flex items-center gap-2">
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                <circle
+                                    className="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="none"
+                                />
+                                <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                />
+                            </svg>
+                            Activating...
+                        </span>
+                    ) : (
+                        "Activate"
+                    )
+                }
+                cancelText="Cancel"
+                confirmVariant="primary"
+                maxWidth="md"
+                isSubmitting={isActivating}
+            />
         </>
     );
 }

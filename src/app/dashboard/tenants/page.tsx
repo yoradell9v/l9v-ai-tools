@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Navbar from "@/components/ui/Navbar";
 import Modal from "@/components/ui/Modal";
 import { Plus, Building2, X, UserPlus, Mail, Link2, ChevronDown, Trash2, MoreVertical, PowerOff, CheckCircle2 } from "lucide-react";
+import { useUser } from "@/context/UserContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Listbox } from "@headlessui/react";
 
@@ -29,6 +30,7 @@ interface Collaborator {
     email: string;
     role: "ADMIN" | "MEMBER";
     joinedAt: string;
+    deactivatedAt?: string | null;
 }
 
 interface PendingInvite {
@@ -45,6 +47,8 @@ interface TenantDetails extends Tenant {
 }
 
 export default function TenantsPage() {
+    const { user } = useUser();
+    const isSuperAdmin = user?.globalRole === "SUPERADMIN";
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState<OrganizationFormData>({
         name: "",
@@ -75,6 +79,13 @@ export default function TenantsPage() {
     const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
     const [currentTenantDetails, setCurrentTenantDetails] = useState<TenantDetails | null>(null);
     const [isLoadingCurrentTenant, setIsLoadingCurrentTenant] = useState(false);
+    const [collaboratorMenuOpenId, setCollaboratorMenuOpenId] = useState<string | null>(null);
+    const [collaboratorToDeactivate, setCollaboratorToDeactivate] = useState<Collaborator | null>(null);
+    const [showDeactivateCollaboratorModal, setShowDeactivateCollaboratorModal] = useState(false);
+    const [isDeactivatingCollaborator, setIsDeactivatingCollaborator] = useState(false);
+    const [collaboratorToActivate, setCollaboratorToActivate] = useState<Collaborator | null>(null);
+    const [showActivateCollaboratorModal, setShowActivateCollaboratorModal] = useState(false);
+    const [isActivatingCollaborator, setIsActivatingCollaborator] = useState(false);
 
     const roleOptions = [
         { value: "ADMIN" as const, label: "Tenant Admin" },
@@ -99,10 +110,13 @@ export default function TenantsPage() {
             if (openMenuId) {
                 setOpenMenuId(null);
             }
+            if (collaboratorMenuOpenId) {
+                setCollaboratorMenuOpenId(null);
+            }
         };
         document.addEventListener("click", handleClickOutside);
         return () => document.removeEventListener("click", handleClickOutside);
-    }, [openMenuId]);
+    }, [openMenuId, collaboratorMenuOpenId]);
 
     const fetchTenants = async () => {
         try {
@@ -179,6 +193,7 @@ export default function TenantsPage() {
         setInviteError(null);
         setCancellingInviteId(null);
         setOpenMenuId(null);
+        setCollaboratorMenuOpenId(null);
     };
 
     const handleDeactivateTenant = async () => {
@@ -211,6 +226,76 @@ export default function TenantsPage() {
             console.error("Error deactivating tenant:", error);
         } finally {
             setIsDeactivating(false);
+        }
+    };
+
+    const handleDeactivateCollaborator = async () => {
+        if (!collaboratorToDeactivate || !selectedTenant) return;
+
+        setIsDeactivatingCollaborator(true);
+        try {
+            const response = await fetch("/api/members", {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    memberId: collaboratorToDeactivate.id,
+                    action: "deactivate",
+                }),
+                credentials: "include",
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                console.error("Error deactivating collaborator:", data.message);
+                return;
+            }
+
+            setShowDeactivateCollaboratorModal(false);
+            setCollaboratorToDeactivate(null);
+            setCollaboratorMenuOpenId(null);
+            await fetchTenantDetails(selectedTenant.id);
+        } catch (error) {
+            console.error("Error deactivating collaborator:", error);
+        } finally {
+            setIsDeactivatingCollaborator(false);
+        }
+    };
+
+    const handleActivateCollaborator = async () => {
+        if (!collaboratorToActivate || !selectedTenant) return;
+
+        setIsActivatingCollaborator(true);
+        try {
+            const response = await fetch("/api/members", {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    memberId: collaboratorToActivate.id,
+                    action: "activate",
+                }),
+                credentials: "include",
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                console.error("Error activating collaborator:", data.message);
+                return;
+            }
+
+            setShowActivateCollaboratorModal(false);
+            setCollaboratorToActivate(null);
+            setCollaboratorMenuOpenId(null);
+            await fetchTenantDetails(selectedTenant.id);
+        } catch (error) {
+            console.error("Error activating collaborator:", error);
+        } finally {
+            setIsActivatingCollaborator(false);
         }
     };
 
@@ -1014,6 +1099,100 @@ export default function TenantsPage() {
                 isSubmitting={isActivating}
             />
 
+            {/* Deactivate Collaborator Confirmation Modal */}
+            <Modal
+                isOpen={showDeactivateCollaboratorModal}
+                onClose={() => {
+                    if (!isDeactivatingCollaborator) {
+                        setShowDeactivateCollaboratorModal(false);
+                        setCollaboratorToDeactivate(null);
+                    }
+                }}
+                onConfirm={handleDeactivateCollaborator}
+                title="Deactivate Collaborator"
+                message={
+                    collaboratorToDeactivate
+                        ? `Are you sure you want to deactivate "${collaboratorToDeactivate.firstname} ${collaboratorToDeactivate.lastname}"? This will prevent them from accessing the system. This action can be reversed later.`
+                        : ""
+                }
+                confirmText={
+                    isDeactivatingCollaborator ? (
+                        <span className="flex items-center gap-2">
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                <circle
+                                    className="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="none"
+                                />
+                                <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                />
+                            </svg>
+                            Deactivating...
+                        </span>
+                    ) : (
+                        "Deactivate"
+                    )
+                }
+                cancelText="Cancel"
+                confirmVariant="danger"
+                maxWidth="md"
+                isSubmitting={isDeactivatingCollaborator}
+            />
+
+            {/* Activate Collaborator Confirmation Modal */}
+            <Modal
+                isOpen={showActivateCollaboratorModal}
+                onClose={() => {
+                    if (!isActivatingCollaborator) {
+                        setShowActivateCollaboratorModal(false);
+                        setCollaboratorToActivate(null);
+                    }
+                }}
+                onConfirm={handleActivateCollaborator}
+                title="Activate Collaborator"
+                message={
+                    collaboratorToActivate
+                        ? `Are you sure you want to activate "${collaboratorToActivate.firstname} ${collaboratorToActivate.lastname}"? This will restore their access to the system.`
+                        : ""
+                }
+                confirmText={
+                    isActivatingCollaborator ? (
+                        <span className="flex items-center gap-2">
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                <circle
+                                    className="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="none"
+                                />
+                                <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                />
+                            </svg>
+                            Activating...
+                        </span>
+                    ) : (
+                        "Activate"
+                    )
+                }
+                cancelText="Cancel"
+                confirmVariant="primary"
+                maxWidth="md"
+                isSubmitting={isActivatingCollaborator}
+            />
+
             {/* Side Panel */}
             <AnimatePresence>
                 {isPanelOpen && selectedTenant && (
@@ -1386,7 +1565,7 @@ export default function TenantsPage() {
                                                         {selectedTenant.collaborators.map((collaborator) => (
                                                             <div
                                                                 key={collaborator.id}
-                                                                className="p-3 rounded-lg border transition-all duration-150 hover:shadow-sm"
+                                                                className={`p-3 rounded-lg border transition-all duration-150 hover:shadow-sm ${collaborator.deactivatedAt ? "opacity-60" : ""}`}
                                                                 style={{
                                                                     borderColor: "var(--border-color)",
                                                                     backgroundColor: "var(--hover-bg)",
@@ -1411,21 +1590,84 @@ export default function TenantsPage() {
                                                                             className="text-xs mt-0.5"
                                                                             style={{ color: "var(--text-secondary)" }}
                                                                         >
-                                                                            Joined {new Date(collaborator.joinedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                                                                            {collaborator.deactivatedAt
+                                                                                ? `Deactivated ${new Date(collaborator.deactivatedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`
+                                                                                : `Joined ${new Date(collaborator.joinedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`
+                                                                            }
                                                                         </p>
                                                                     </div>
-                                                                    <span
-                                                                        className={`
-  px-2 py-0.5 text-xs font-medium rounded-full flex-shrink-0
+                                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                                        <span
+                                                                            className={`
+  px-2 py-0.5 text-xs font-medium rounded-full
   ${collaborator.role === "ADMIN"
-                                                                                ? "bg-[var(--primary)]/10 text-[var(--primary)] dark:text-[var(--accent)]"
-                                                                                : "bg-[var(--accent)]/10 text-[var(--accent)] "
-                                                                            }
+                                                                                    ? "bg-[var(--primary)]/10 text-[var(--primary)] dark:text-[var(--accent)]"
+                                                                                    : "bg-[var(--accent)]/10 text-[var(--accent)] "
+                                                                                }
 `}
 
-                                                                    >
-                                                                        {collaborator.role}
-                                                                    </span>
+                                                                        >
+                                                                            {collaborator.role}
+                                                                        </span>
+                                                                        {isSuperAdmin && (
+                                                                            <div className="relative">
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setCollaboratorMenuOpenId(collaboratorMenuOpenId === collaborator.id ? null : collaborator.id);
+                                                                                    }}
+                                                                                    className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
+                                                                                >
+                                                                                    <MoreVertical size={14} />
+                                                                                </button>
+                                                                                {collaboratorMenuOpenId === collaborator.id && (
+                                                                                    <>
+                                                                                        <div
+                                                                                            className="fixed inset-0 z-10"
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                setCollaboratorMenuOpenId(null);
+                                                                                            }}
+                                                                                        />
+                                                                                        <div
+                                                                                            className="absolute right-0 mt-1 z-20 rounded-lg border shadow-lg overflow-hidden border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a] min-w-[140px]"
+                                                                                            onClick={(e) => e.stopPropagation()}
+                                                                                        >
+                                                                                            {!collaborator.deactivatedAt ? (
+                                                                                                <button
+                                                                                                    onClick={(e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        setCollaboratorToDeactivate(collaborator);
+                                                                                                        setShowDeactivateCollaboratorModal(true);
+                                                                                                        setCollaboratorMenuOpenId(null);
+                                                                                                    }}
+                                                                                                    className="w-full text-left px-3 py-2 text-xs transition-colors hover:bg-red-500/10 flex items-center gap-2"
+                                                                                                    style={{ color: "rgb(239, 68, 68)" }}
+                                                                                                >
+                                                                                                    <PowerOff size={14} />
+                                                                                                    <span>Deactivate</span>
+                                                                                                </button>
+                                                                                            ) : (
+                                                                                                <button
+                                                                                                    onClick={(e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        setCollaboratorToActivate(collaborator);
+                                                                                                        setShowActivateCollaboratorModal(true);
+                                                                                                        setCollaboratorMenuOpenId(null);
+                                                                                                    }}
+                                                                                                    className="w-full text-left px-3 py-2 text-xs transition-colors hover:bg-green-500/10 flex items-center gap-2"
+                                                                                                    style={{ color: "rgb(34, 197, 94)" }}
+                                                                                                >
+                                                                                                    <CheckCircle2 size={14} />
+                                                                                                    <span>Activate</span>
+                                                                                                </button>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         ))}

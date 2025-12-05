@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import path from "path";
+import * as cheerio from "cheerio";
 
 export const runtime = "nodejs";
 
@@ -44,6 +45,303 @@ function validateSopFile(file: File) {
 
 function normalizeWhitespace(text: string) {
   return text.replace(/\s+/g, " ").trim();
+}
+
+async function extractWebsiteContent(url: string) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch website: ${response.statusText}`);
+    }
+
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    return {
+      hero: extractHeroSection($),
+      about: extractAboutSection($),
+      services: extractServicesSection($),
+      testimonials: extractTestimonials($),
+      fullText: extractBodyText($, { maxLength: 50000 }),
+      metadata: extractMetadata($),
+      companyInfo: extractCompanyInfo($),
+      team: extractTeamSection($),
+      values: extractValuesSection($),
+      contact: extractContactInfo($),
+    };
+  } catch (error) {
+    console.error("Error extracting website content:", error);
+    return {
+      hero: "",
+      about: "",
+      services: "",
+      testimonials: [],
+      fullText: "",
+      metadata: { title: "", description: "" },
+      companyInfo: "",
+      team: "",
+      values: "",
+      contact: "",
+    };
+  }
+}
+
+function extractHeroSection($: cheerio.CheerioAPI): string {
+  const selectors = [
+    "section.hero",
+    "section[class*='hero']",
+    "div.hero",
+    "div[class*='hero']",
+    "header .hero",
+    ".hero-section",
+    "h1",
+  ];
+
+  for (const selector of selectors) {
+    const element = $(selector).first();
+    if (element.length > 0) {
+      const text = element.text().trim();
+      if (text.length > 20) {
+        return text.substring(0, 500);
+      }
+    }
+  }
+
+  const h1 = $("h1").first();
+  if (h1.length > 0) {
+    return h1.text().trim().substring(0, 500);
+  }
+
+  return "";
+}
+
+function extractAboutSection($: cheerio.CheerioAPI): string {
+  const selectors = [
+    "section.about",
+    "section[class*='about']",
+    "section#about",
+    "div.about",
+    "div[class*='about']",
+    "div#about",
+    "[data-section='about']",
+  ];
+
+  for (const selector of selectors) {
+    const element = $(selector).first();
+    if (element.length > 0) {
+      const text = element.text().trim();
+      if (text.length > 50) {
+        return text.substring(0, 2000);
+      }
+    }
+  }
+
+  return "";
+}
+
+function extractServicesSection($: cheerio.CheerioAPI): string {
+  const selectors = [
+    "section.services",
+    "section[class*='service']",
+    "section#services",
+    "div.services",
+    "div[class*='service']",
+    "div#services",
+    "[data-section='services']",
+  ];
+
+  for (const selector of selectors) {
+    const element = $(selector).first();
+    if (element.length > 0) {
+      const text = element.text().trim();
+      if (text.length > 50) {
+        return text.substring(0, 2000);
+      }
+    }
+  }
+
+  return "";
+}
+
+function extractTestimonials($: cheerio.CheerioAPI): string[] {
+  const testimonials: string[] = [];
+
+  const selectors = [
+    "blockquote",
+    ".testimonial",
+    "[class*='testimonial']",
+    ".review",
+    "[class*='review']",
+    ".quote",
+    "[class*='quote']",
+  ];
+
+  for (const selector of selectors) {
+    $(selector).each((_, element) => {
+      const text = $(element).text().trim();
+      if (text.length > 20 && text.length < 500) {
+        testimonials.push(text);
+      }
+    });
+  }
+
+  return [...new Set(testimonials)].slice(0, 10);
+}
+
+function extractBodyText(
+  $: cheerio.CheerioAPI,
+  options: { maxLength: number }
+): string {
+  $("script, style, noscript").remove();
+
+  const body = $("body");
+  if (body.length > 0) {
+    let text = body.text();
+    text = normalizeWhitespace(text);
+    return text.substring(0, options.maxLength);
+  }
+
+  return "";
+}
+
+function extractMetadata($: cheerio.CheerioAPI): {
+  title: string;
+  description: string;
+} {
+  const title =
+    $("title").text().trim() ||
+    $('meta[property="og:title"]').attr("content") ||
+    "";
+
+  const description =
+    $('meta[name="description"]').attr("content") ||
+    $('meta[property="og:description"]').attr("content") ||
+    "";
+
+  return { title, description };
+}
+
+function extractCompanyInfo($: cheerio.CheerioAPI): string {
+  const selectors = [
+    "section.company",
+    "section[class*='company']",
+    "section#company",
+    ".company-info",
+    "[data-section='company']",
+    ".mission",
+    ".vision",
+  ];
+
+  let combinedText = "";
+
+  for (const selector of selectors) {
+    const element = $(selector).first();
+    if (element.length > 0) {
+      const text = element.text().trim();
+      if (text.length > 50) {
+        combinedText += text.substring(0, 1000) + " ";
+      }
+    }
+  }
+
+  const mission = $(".mission, [class*='mission']").first().text().trim();
+  const vision = $(".vision, [class*='vision']").first().text().trim();
+
+  if (mission) combinedText += `Mission: ${mission.substring(0, 500)} `;
+  if (vision) combinedText += `Vision: ${vision.substring(0, 500)} `;
+
+  return normalizeWhitespace(combinedText).substring(0, 2000);
+}
+
+function extractTeamSection($: cheerio.CheerioAPI): string {
+  const selectors = [
+    "section.team",
+    "section[class*='team']",
+    "section#team",
+    ".team-section",
+    "[data-section='team']",
+  ];
+
+  for (const selector of selectors) {
+    const element = $(selector).first();
+    if (element.length > 0) {
+      const text = element.text().trim();
+      if (text.length > 50) {
+        return text.substring(0, 2000);
+      }
+    }
+  }
+
+  return "";
+}
+
+function extractValuesSection($: cheerio.CheerioAPI): string {
+  const selectors = [
+    "section.values",
+    "section[class*='value']",
+    "section#values",
+    ".values-section",
+    "[data-section='values']",
+    ".culture",
+    "[class*='culture']",
+  ];
+
+  let combinedText = "";
+
+  for (const selector of selectors) {
+    const element = $(selector).first();
+    if (element.length > 0) {
+      const text = element.text().trim();
+      if (text.length > 50) {
+        combinedText += text.substring(0, 1000) + " ";
+      }
+    }
+  }
+
+  return normalizeWhitespace(combinedText).substring(0, 2000);
+}
+
+function extractContactInfo($: cheerio.CheerioAPI): string {
+  const contactSelectors = [
+    "section.contact",
+    "section[class*='contact']",
+    "section#contact",
+    ".contact-section",
+    "[data-section='contact']",
+  ];
+
+  let contactText = "";
+
+  for (const selector of contactSelectors) {
+    const element = $(selector).first();
+    if (element.length > 0) {
+      const text = element.text().trim();
+      if (text.length > 20) {
+        contactText += text.substring(0, 500) + " ";
+      }
+    }
+  }
+
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const emails = $("body").text().match(emailRegex);
+  if (emails) {
+    contactText += `Emails: ${emails.slice(0, 3).join(", ")} `;
+  }
+
+  // Extract phone numbers
+  const phoneRegex = /[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}/g;
+  const phones = $("body").text().match(phoneRegex);
+  if (phones) {
+    contactText += `Phones: ${phones.slice(0, 2).join(", ")} `;
+  }
+
+  return normalizeWhitespace(contactText).substring(0, 1000);
 }
 
 async function extractTextFromSop(file: File) {
@@ -143,68 +441,94 @@ function normalizeStringArray(input: unknown): string[] {
   return [];
 }
 
-// Helper function to format user-friendly error messages
-function formatErrorMessage(error: any): { error: string; details: string; userMessage: string } {
+function formatErrorMessage(error: any): {
+  error: string;
+  details: string;
+  userMessage: string;
+} {
   const errorMessage = error instanceof Error ? error.message : String(error);
-  
-  // OpenAI API errors
-  if (errorMessage.includes("429") || errorMessage.includes("quota") || errorMessage.includes("billing")) {
+
+  if (
+    errorMessage.includes("429") ||
+    errorMessage.includes("quota") ||
+    errorMessage.includes("billing")
+  ) {
     return {
       error: "OpenAI API quota exceeded",
       details: errorMessage,
-      userMessage: "OpenAI API quota has been exceeded. Please check your OpenAI billing and plan details, or contact support."
+      userMessage:
+        "OpenAI API quota has been exceeded. Please check your OpenAI billing and plan details, or contact support.",
     };
   }
-  
-  if (errorMessage.includes("401") || errorMessage.includes("Invalid API key")) {
+
+  if (
+    errorMessage.includes("401") ||
+    errorMessage.includes("Invalid API key")
+  ) {
     return {
       error: "OpenAI API authentication failed",
       details: errorMessage,
-      userMessage: "OpenAI API key is invalid or missing. Please check your API configuration."
+      userMessage:
+        "OpenAI API key is invalid or missing. Please check your API configuration.",
     };
   }
-  
-  if (errorMessage.includes("500") || errorMessage.includes("Internal server error")) {
+
+  if (
+    errorMessage.includes("500") ||
+    errorMessage.includes("Internal server error")
+  ) {
     return {
       error: "OpenAI API server error",
       details: errorMessage,
-      userMessage: "OpenAI service is experiencing issues. Please try again in a few moments."
+      userMessage:
+        "OpenAI service is experiencing issues. Please try again in a few moments.",
     };
   }
-  
-  if (errorMessage.includes("timeout") || errorMessage.includes("ETIMEDOUT") || errorMessage.includes("ECONNREFUSED")) {
+
+  if (
+    errorMessage.includes("timeout") ||
+    errorMessage.includes("ETIMEDOUT") ||
+    errorMessage.includes("ECONNREFUSED")
+  ) {
     return {
       error: "Connection error",
       details: errorMessage,
-      userMessage: "Unable to connect to the AI service. Please check your internet connection and try again."
+      userMessage:
+        "Unable to connect to the AI service. Please check your internet connection and try again.",
     };
   }
-  
-  if (errorMessage.includes("rate limit") || errorMessage.includes("rate_limit")) {
+
+  if (
+    errorMessage.includes("rate limit") ||
+    errorMessage.includes("rate_limit")
+  ) {
     return {
       error: "Rate limit exceeded",
       details: errorMessage,
-      userMessage: "Too many requests. Please wait a moment and try again."
+      userMessage: "Too many requests. Please wait a moment and try again.",
     };
   }
-  
-  if (errorMessage.includes("insufficient_quota") || errorMessage.includes("insufficient tokens")) {
+
+  if (
+    errorMessage.includes("insufficient_quota") ||
+    errorMessage.includes("insufficient tokens")
+  ) {
     return {
       error: "Insufficient tokens",
       details: errorMessage,
-      userMessage: "Insufficient API credits. Please add credits to your OpenAI account and try again."
+      userMessage:
+        "Insufficient API credits. Please add credits to your OpenAI account and try again.",
     };
   }
-  
-  // Generic error
+
   return {
     error: "Analysis failed",
     details: errorMessage,
-    userMessage: "An error occurred while analyzing your job description. Please try again or contact support if the issue persists."
+    userMessage:
+      "An error occurred while analyzing your job description. Please try again or contact support if the issue persists.",
   };
 }
 
-// Helper function to remove team_support_areas for Dedicated VA service type
 function cleanTeamSupportAreas(analysisResult: any): any {
   if (!analysisResult) return analysisResult;
 
@@ -217,19 +541,16 @@ function cleanTeamSupportAreas(analysisResult: any): any {
   if (serviceType === "Dedicated VA") {
     const cleaned = JSON.parse(JSON.stringify(analysisResult)); // Deep clone
 
-    // Remove from preview
     if (cleaned.preview?.team_support_areas !== undefined) {
       delete cleaned.preview.team_support_areas;
     }
 
-    // Remove from full_package.service_structure
     if (
       cleaned.full_package?.service_structure?.team_support_areas !== undefined
     ) {
       delete cleaned.full_package.service_structure.team_support_areas;
     }
 
-    // Also check if it's directly in full_package
     if (cleaned.full_package?.team_support_areas !== undefined) {
       delete cleaned.full_package.team_support_areas;
     }
@@ -240,19 +561,41 @@ function cleanTeamSupportAreas(analysisResult: any): any {
   return analysisResult;
 }
 
-// ============================================================================
-// STAGE 1: DEEP DISCOVERY
-// ============================================================================
+//Stage 1: Deep Discovery
 
 async function runDeepDiscovery(
   openai: OpenAI,
   intakeData: any,
   sopText: string | null
 ) {
+  const websiteInfo = intakeData.websiteContent
+    ? `
+WEBSITE CONTENT (extracted company information):
+- Hero/Main Message: ${intakeData.websiteContent.hero || "Not available"}
+- About Section: ${intakeData.websiteContent.about || "Not available"}
+- Services/Offerings: ${intakeData.websiteContent.services || "Not available"}
+- Company Info: ${intakeData.websiteContent.companyInfo || "Not available"}
+- Team Information: ${intakeData.websiteContent.team || "Not available"}
+- Values/Culture: ${intakeData.websiteContent.values || "Not available"}
+- Contact Info: ${intakeData.websiteContent.contact || "Not available"}
+- Testimonials: ${
+        (intakeData.websiteContent.testimonials || [])
+          .slice(0, 3)
+          .join(" | ") || "Not available"
+      }
+- Full Website Text (sample): ${(
+        intakeData.websiteContent.fullText || ""
+      ).substring(0, 5000)}
+- Metadata: ${JSON.stringify(intakeData.websiteContent.metadata || {})}
+`
+    : "";
+
   const discoveryPrompt = `You are a business analyst conducting deep discovery for a virtual assistant placement.
   
 INTAKE DATA:
-${JSON.stringify(intakeData, null, 2)}
+${JSON.stringify({ ...intakeData, websiteContent: undefined }, null, 2)}
+
+${websiteInfo}
 
 ${
   sopText
@@ -335,16 +678,13 @@ Be specific and insightful. Look for what's NOT said but is clearly implied.`;
   return JSON.parse(completion.choices[0].message.content || "{}");
 }
 
-// ============================================================================
-// STAGE 1.5: SERVICE TYPE CLASSIFICATION
-// ============================================================================
+//Stage 1.5: Service Type Classification
 
 async function classifyServiceType(
   openai: OpenAI,
   intakeData: any,
   discovery: any
 ) {
-  // Pre-classification checks - hard rules that override scoring
   const preClassificationChecks = `
 
 HARD RULES (these override scoring):
@@ -555,9 +895,7 @@ Be analytical and objective. The goal is to match the client's actual needs to t
   return JSON.parse(completion.choices[0].message.content || "{}");
 }
 
-// ============================================================================
-// STAGE 2: SERVICE-AWARE ROLE ARCHITECTURE
-// ============================================================================
+//Stage 2: Service-Aware Role Architecture
 
 async function designRoleArchitecture(
   openai: OpenAI,
@@ -738,9 +1076,7 @@ Make every section specific and actionable. Avoid generic statements.`;
   return JSON.parse(completion.choices[0].message.content || "{}");
 }
 
-// ============================================================================
-// STAGE 3A: DETAILED JD GENERATION (For Dedicated VA or Core Unicorn VA)
-// ============================================================================
+//Stage 3A: Detailed JD Generation (For Dedicated VA or Core Unicorn VA)
 
 async function generateDetailedJD(
   openai: OpenAI,
@@ -979,9 +1315,7 @@ Make each project specification detailed enough to be executed independently.`;
   return JSON.parse(completion.choices[0].message.content || "{}");
 }
 
-// ============================================================================
-// STAGE 4: VALIDATION & RISK ANALYSIS (Service-Aware)
-// ============================================================================
+//Stage 4: Validation & Risk Analysis (Service-Aware)
 
 async function validateAndAnalyzeRisks(
   openai: OpenAI,
@@ -1111,9 +1445,7 @@ Be brutally honest. This is the final QA check before showing to the client.`;
   return JSON.parse(completion.choices[0].message.content || "{}");
 }
 
-// ============================================================================
-// STAGE 5: CLIENT-FACING PACKAGE ASSEMBLY
-// ============================================================================
+//Stage 5: Client-Facing Package Assembly
 
 function assembleClientPackage(
   discovery: any,
@@ -1485,9 +1817,7 @@ function generateMonitoringPlan(validation: any) {
   };
 }
 
-// ============================================================================
-// MAIN ROUTE HANDLER
-// ============================================================================
+//Main Function
 
 export async function POST(request: Request) {
   try {
@@ -1530,7 +1860,6 @@ export async function POST(request: Request) {
       console.log("Intake Data: ", intake_json);
     }
 
-    // Normalize intake data
     const normalizedTasks = normalizeTasks(intake_json?.tasks_top5);
 
     if (!intake_json?.brand?.name || normalizedTasks.length === 0) {
@@ -1560,9 +1889,7 @@ export async function POST(request: Request) {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    // ========================================================================
-    // MULTI-STAGE ANALYSIS PIPELINE WITH STREAMING PROGRESS
-    // ========================================================================
+    //Stage 1: Deep Discovery
 
     // Create a streaming response
     const stream = new ReadableStream({
@@ -1575,7 +1902,29 @@ export async function POST(request: Request) {
         };
 
         try {
-          // Process SOP (if provided)
+          let websiteContent: any = null;
+          if (
+            augmentedIntakeJson.website &&
+            augmentedIntakeJson.website.trim()
+          ) {
+            sendProgress("Extracting company information from website...");
+            try {
+              websiteContent = await extractWebsiteContent(
+                augmentedIntakeJson.website
+              );
+              console.log("Extracted website content:", {
+                hasHero: !!websiteContent.hero,
+                hasAbout: !!websiteContent.about,
+                hasServices: !!websiteContent.services,
+                testimonialsCount: websiteContent.testimonials?.length || 0,
+                fullTextLength: websiteContent.fullText?.length || 0,
+              });
+            } catch (websiteError) {
+              console.error("Error extracting website content:", websiteError);
+              websiteContent = null;
+            }
+          }
+
           let sopText: string | null = null;
 
           if (sopFile) {
@@ -1602,7 +1951,10 @@ export async function POST(request: Request) {
             try {
               console.log("Extracting text from SOP...");
               sopText = await extractTextFromSop(sopFile);
-              console.log("Successfully extracted text, length:", sopText?.length);
+              console.log(
+                "Successfully extracted text, length:",
+                sopText?.length
+              );
             } catch (extractionError) {
               console.error("SOP extraction failed:", extractionError);
               const errorMsg = JSON.stringify({
@@ -1622,23 +1974,34 @@ export async function POST(request: Request) {
           sendProgress("Stage 1: Running deep discovery...");
           const discovery = await runDeepDiscovery(
             openai,
-            augmentedIntakeJson,
+            {
+              ...augmentedIntakeJson,
+              websiteContent,
+            },
             sopText
           );
 
           sendProgress("Stage 1.5: Classifying service type...");
           const serviceClassification = await classifyServiceType(
             openai,
-            augmentedIntakeJson,
+            {
+              ...augmentedIntakeJson,
+              websiteContent,
+            },
             discovery
           );
 
           const recommendedService =
             serviceClassification.service_type_analysis.recommended_service;
-          sendProgress(`Stage 2: Designing role architecture for ${recommendedService}...`);
+          sendProgress(
+            `Stage 2: Designing role architecture for ${recommendedService}...`
+          );
           const architecture = await designRoleArchitecture(
             openai,
-            augmentedIntakeJson,
+            {
+              ...augmentedIntakeJson,
+              websiteContent,
+            },
             discovery,
             serviceClassification
           );
@@ -1651,14 +2014,20 @@ export async function POST(request: Request) {
               openai,
               architecture.dedicated_va_role,
               discovery,
-              augmentedIntakeJson
+              {
+                ...augmentedIntakeJson,
+                websiteContent,
+              }
             );
           } else if (recommendedService === "Projects on Demand") {
             detailedSpecs = await generateProjectSpecs(
               openai,
               architecture.projects,
               discovery,
-              augmentedIntakeJson
+              {
+                ...augmentedIntakeJson,
+                websiteContent,
+              }
             );
           } else if (recommendedService === "Unicorn VA Service") {
             detailedSpecs = {
@@ -1666,7 +2035,10 @@ export async function POST(request: Request) {
                 openai,
                 architecture.core_va_role,
                 discovery,
-                augmentedIntakeJson
+                {
+                  ...augmentedIntakeJson,
+                  websiteContent,
+                }
               ),
               team_support_specs: architecture.team_support_areas,
             };
@@ -1678,7 +2050,10 @@ export async function POST(request: Request) {
             architecture,
             detailedSpecs,
             discovery,
-            augmentedIntakeJson,
+            {
+              ...augmentedIntakeJson,
+              websiteContent,
+            },
             serviceClassification
           );
 
@@ -1692,7 +2067,6 @@ export async function POST(request: Request) {
             serviceClassification
           );
 
-          // Build final response
           const preview: any = {
             summary: clientPackage.executive_summary.what_you_told_us,
             primary_outcome: augmentedIntakeJson.outcome_90d,
@@ -1718,7 +2092,8 @@ export async function POST(request: Request) {
 
           if (recommendedService === "Dedicated VA") {
             preview.role_title = architecture.dedicated_va_role.title;
-            preview.hours_per_week = architecture.dedicated_va_role.hours_per_week;
+            preview.hours_per_week =
+              architecture.dedicated_va_role.hours_per_week;
           } else if (recommendedService === "Projects on Demand") {
             preview.project_count = architecture.projects.length;
             preview.total_hours = architecture.total_investment.hours;
@@ -1744,17 +2119,19 @@ export async function POST(request: Request) {
               service_classification_scores:
                 serviceClassification.service_type_analysis.service_fit_scores,
               sop_processed: Boolean(sopText),
-              discovery_insights_count: discovery.task_analysis.task_clusters.length,
+              discovery_insights_count:
+                discovery.task_analysis.task_clusters.length,
               risks_identified: validation.risk_analysis.length,
               quality_scores: validation.quality_assessment,
             },
           };
 
-          // Clean team_support_areas for Dedicated VA before returning
           const cleanedResponse = cleanTeamSupportAreas(response);
 
-          // Send final result
-          const final = JSON.stringify({ type: "result", data: cleanedResponse });
+          const final = JSON.stringify({
+            type: "result",
+            data: cleanedResponse,
+          });
           controller.enqueue(encoder.encode(final + "\n"));
           controller.close();
         } catch (error) {
@@ -1779,7 +2156,6 @@ export async function POST(request: Request) {
         Connection: "keep-alive",
       },
     });
-
   } catch (error) {
     console.error("JD Analysis error:", error);
     const formattedError = formatErrorMessage(error);
@@ -1794,10 +2170,7 @@ export async function POST(request: Request) {
   }
 }
 
-// ============================================================================
-// OPTIONAL: REFINEMENT ENDPOINT (For iterative improvements)
-// ============================================================================
-
+//Refinement Function
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();

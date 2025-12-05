@@ -7,7 +7,7 @@ type ModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
-  title?: string;
+  title?: string | ReactNode;
   message?: string;
   body?: ReactNode | string;
   confirmText?: string | ReactNode;
@@ -56,12 +56,12 @@ export default function Modal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm"
             onClick={onClose}
           />
 
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 pointer-events-none">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 pointer-events-none">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -73,10 +73,15 @@ export default function Modal({
               <div className="flex-1 flex flex-col overflow-hidden p-8">
                 {/* Title */}
                 {title && (
-                  <h3 className="text-xl font-semibold mb-2 text-[var(--primary)] dark:text-[var(--accent)]">
-                    {title}
-                  </h3>
-
+                  <div className="mb-2">
+                    {typeof title === "string" ? (
+                      <h3 className="text-xl font-semibold text-[var(--primary)] dark:text-[var(--accent)]">
+                        {title}
+                      </h3>
+                    ) : (
+                      title
+                    )}
+                  </div>
                 )}
 
                 {/* Message */}
