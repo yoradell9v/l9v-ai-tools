@@ -25,7 +25,6 @@ export async function GET(request: Request) {
       );
     }
 
-    // Get user with globalRole
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       select: {
@@ -41,7 +40,6 @@ export async function GET(request: Request) {
       );
     }
 
-    // Get user's organizations
     const userOrganizations = await prisma.userOrganization.findMany({
       where: {
         userId: decoded.userId,
@@ -56,11 +54,13 @@ export async function GET(request: Request) {
     });
 
     const userOrganizationIds = userOrganizations.map((uo) => uo.id);
+    const currentUserOrganizationIds = userOrganizations.map(
+      (uo) => uo.organizationId
+    );
 
     let businessBrains;
 
     if (user.globalRole === "SUPERADMIN") {
-      // SUPERADMIN sees all business brains from all organizations
       businessBrains = await prisma.businessBrain.findMany({
         include: {
           userOrganization: {
@@ -100,7 +100,6 @@ export async function GET(request: Request) {
         },
       });
     } else {
-      // Tenant admin/members see only their organization's business brains
       businessBrains = await prisma.businessBrain.findMany({
         where: {
           userOrganizationId: {
@@ -146,12 +145,11 @@ export async function GET(request: Request) {
       });
     }
 
-    // Format response
     const formattedBrains = businessBrains.map((brain) => {
       const intakeData = brain.intakeData as any;
       return {
         id: brain.id,
-        businessName: intakeData?.legalName || "Unnamed Business",
+        businessName: intakeData?.businessName || "Unnamed Business",
         createdAt: brain.createdAt,
         updatedAt: brain.updatedAt,
         completionScore: brain.completionScore,
@@ -166,6 +164,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       businessBrains: formattedBrains,
+      currentUserOrganizationIds,
+      currentUserGlobalRole: user.globalRole,
     });
   } catch (err: any) {
     console.error("Error fetching business brains list:", err);

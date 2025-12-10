@@ -4,202 +4,156 @@ import { DeepInsight, AnalysisContext } from "../analysis/types";
 export interface GHLCard {
   title: string;
   description: string;
-  metadata: {
-    workflows: Array<{
-      name: string;
-      description: string;
-      stages: string[];
-    }>;
-    pipelines: Array<{
-      name: string;
-      description: string;
-      stages: string[];
-    }>;
-    automations: Array<{
-      name: string;
-      description: string;
-      stages: string[];
-    }>;
-    templates: Array<{
-      name: string;
-      subject: string;
-      body: string;
-    }>;
-    confidence_score: number;
-  };
+  metadata: Record<string, any> & { confidence_score: number };
   confidence_score: number;
-  source_attribution: string[];
+  source_attribution: Array<string | { source?: string; insight?: string }>;
 }
 
-/**
- * Generate enhanced GHL Implementation card using deep insights
- */
 export async function generateGHLCard(
   openai: OpenAI,
   insights: DeepInsight[],
   context: AnalysisContext
 ): Promise<GHLCard> {
   try {
-    // Filter CRM-related insights
-    const crmInsights = insights.filter(i => i.category === "crm_pattern");
+    const crmInsights = insights.filter((i) => i.category === "crm_pattern");
+    const enhanced = context.enhancedContext;
 
-    const systemPrompt = `You are a CRM implementation strategist. Create GHL-specific implementation notes.
+    const ghlPrompt = `You are a GoHighLevel CRM implementation strategist. Create actionable GHL setup instructions.
 
-FOCUS ON:
-1. Workflow automation opportunities based on their business model
-2. Customer journey mapping for GHL pipelines
-3. Communication sequences and templates
-4. Integration points with their existing tools
-5. Specific GHL features they should leverage
-
-6. CRITICAL: Use intake data (pipelineStages, crmPlatform, supportEmail, emailSignoff) to generate content. Do not return empty arrays.
-
-Return JSON with this EXACT structure:
-{
-  "description": "GHL implementation strategy",
-  "metadata": {
-    "workflows": [
-      {
-        "name": "Workflow name",
-        "description": "Description",
-        "stages": ["stage1", "stage2"]
-      }
-    ],
-    "pipelines": [
-      {
-        "name": "Pipeline name",
-        "description": "Description",
-        "stages": ["stage1", "stage2"]
-      }
-    ],
-    "automations": [
-      {
-        "name": "Automation name",
-        "description": "Description",
-        "stages": ["stage1", "stage2"]
-      }
-    ],
-    "templates": [
-      {
-        "name": "Template name",
-        "subject": "Email subject",
-        "body": "Email body"
-      }
-    ],
-    "confidence_score": 70
+INPUTS:
+${JSON.stringify(
+  {
+    crmPlatform: enhanced?.ghlImplementation.crmPlatform,
+    customerJourney: enhanced?.ghlImplementation.customerJourney,
+    pipelineStages: enhanced?.ghlImplementation.pipelineStages,
+    bookingLink: enhanced?.ghlImplementation.bookingLink,
+    supportEmail: enhanced?.ghlImplementation.supportEmail,
+    coreOffer: enhanced?.ghlImplementation.coreOffer,
+    goal90Day: enhanced?.ghlImplementation.goal90Day,
   },
-  "source_attribution": ["source1"]
-}
+  null,
+  2
+)}
 
-IMPORTANT: Populate ALL fields. Use intake data pipelineStages if provided.`;
+TASK: Create GHL implementation guide with these REQUIRED sections:
+
+## 1. Pipeline Configuration
+PIPELINE NAME: "Sales Pipeline"
+STAGES: [list each stage with automation triggers]
+Map customer journey to pipeline stages.
+
+## 2. Email Sequence Templates
+Create 3 sequences:
+- "New Lead Nurture" (5 emails over 7 days)
+- "Strategy Call No-Show" (3 touchpoints)
+- "Proposal Follow-Up" (4 emails over 7 days)
+
+For each email, provide:
+- Day/timing
+- Subject line
+- Body structure (3-4 bullet points)
+- CTA
+
+## 3. Workflow Automations
+Create workflows for:
+- New lead intake
+- Appointment no-shows
+- Proposal follow-up
+- Stale pipeline alerts
+
+Each workflow: TRIGGER → ACTIONS (step-by-step)
+
+## 4. Tag & Custom Field Strategy
+TAGS: [list 10-15 tags with use cases]
+CUSTOM FIELDS: [list 5-10 fields with purposes]
+Explain when and how to use each.
+
+## 5. Integration Requirements
+List integrations needed:
+- Calendar (Calendly/Acuity)
+- Payment processor
+- Zoom/meeting platform
+- Other tools
+
+Provide setup steps for each.
+
+## 6. Reporting & KPIs
+Define dashboards:
+- "Sales Overview" (8-10 metrics)
+- "Marketing Performance" (5-7 metrics)
+Map to their 90-day goal.
+
+OUTPUT FORMAT: Return JSON with actionable templates and workflows.`;
 
     const result = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: ghlPrompt },
         {
           role: "user",
-          content: `Analyze this GHL implementation data and generate implementation notes.
+          content: `Use the mined insights and samples below to generate the card.
 
-INSIGHTS (${crmInsights.length} total):
+INSIGHTS (${crmInsights.length}):
 ${JSON.stringify(crmInsights.slice(0, 20), null, 2)}
 
 WEBSITE CONTENT:
-${context.websiteContent.fullText.substring(0, 2000)}
+${context.websiteContent.fullText.substring(0, 1500)}
 
-INTAKE DATA:
-${JSON.stringify({
-  crmPlatform: context.intakeData?.crmPlatform || "",
-  crmSubaccount: context.intakeData?.crmSubaccount || "",
-  pipelineStages: context.intakeData?.pipelineStages || "",
-  supportEmail: context.intakeData?.supportEmail || "",
-  emailSignoff: context.intakeData?.emailSignoff || "",
-  offers: context.intakeData?.offers || "",
-  icps: context.intakeData?.icps || [],
-}, null, 2)}
-
-Generate the GHL implementation card JSON now.`,
+EXAMPLE CONTENT LINKS (from contentLinks field):
+${enhanced?.brandVoice.exampleLinkContent && enhanced.brandVoice.exampleLinkContent.length > 0
+  ? enhanced.brandVoice.exampleLinkContent
+      .map(
+        (link: any) => `URL: ${link.url}
+Title: ${link.metadata?.title || "N/A"}
+Full Text: ${link.fullText || ""}`
+      )
+      .join("\n\n---\n\n")
+  : "No example content links provided"}
+`,
         },
       ],
       response_format: { type: "json_object" },
-      temperature: 0.3,
-      max_tokens: 3000,
+      temperature: 0.35,
+      max_tokens: 9000,
     });
 
     const rawResponse = result.choices[0].message.content || "{}";
     let parsed: any = {};
-    
+
     try {
       parsed = JSON.parse(rawResponse);
     } catch (parseError) {
       console.error("Error parsing GHL card response:", parseError);
-      console.error("Raw response (first 500 chars):", rawResponse.substring(0, 500));
-    }
-    
-    console.log("[GHL] LLM Response Structure:", {
-      hasMetadata: !!parsed.metadata,
-      hasWorkflows: !!parsed.metadata?.workflows,
-      workflowsCount: parsed.metadata?.workflows?.length || 0,
-      hasPipelines: !!parsed.metadata?.pipelines,
-      metadataKeys: parsed.metadata ? Object.keys(parsed.metadata) : [],
-    });
-    
-    if (!parsed.metadata || parsed.metadata.workflows?.length === 0) {
-      console.warn("GHL card: No workflows found in response, generating fallback");
-      // Generate fallback from intake data
-      parsed.metadata = parsed.metadata || {};
-      const pipelineStages = context.intakeData?.pipelineStages 
-        ? context.intakeData.pipelineStages.split('→').map((s: string) => s.trim()).filter(Boolean)
-        : [];
-      parsed.metadata.workflows = pipelineStages.length > 0 ? [{
-        name: "Main Sales Workflow",
-        description: "Customer journey through pipeline stages",
-        stages: pipelineStages,
-      }] : [];
-      parsed.metadata.pipelines = pipelineStages.length > 0 ? [{
-        name: "Sales Pipeline",
-        description: "Primary sales pipeline",
-        stages: pipelineStages,
-      }] : [];
-      parsed.metadata.automations = [];
-      parsed.metadata.templates = context.intakeData?.emailSignoff ? [{
-        name: "Standard Email Template",
-        subject: "Thank you for your inquiry",
-        body: `Thank you for reaching out.\n\n${context.intakeData.emailSignoff}`,
-      }] : [];
-      console.log("[GHL] Generated fallback from intake data");
     }
 
-    const confidenceScores = crmInsights.map(i => i.confidence);
-    const avgConfidence = confidenceScores.length > 0
-      ? Math.round(confidenceScores.reduce((a, b) => a + b, 0) / confidenceScores.length)
-      : 35;
+    const fallbackConfidence =
+      crmInsights.length > 0
+        ? Math.round(
+            crmInsights.reduce((a, b) => a + (b.confidence || 0), 0) /
+              crmInsights.length
+          )
+        : 35;
+
+    const confidence = parsed.confidence_score || fallbackConfidence;
 
     return {
-      title: "GoHighLevel Implementation Notes",
+      title: parsed.title || "GoHighLevel Implementation Notes",
       description: parsed.description || "GHL implementation strategy.",
       metadata: {
-        workflows: parsed.metadata?.workflows || [],
-        pipelines: parsed.metadata?.pipelines || [],
-        automations: parsed.metadata?.automations || [],
-        templates: parsed.metadata?.templates || [],
-        confidence_score: parsed.metadata?.confidence_score || avgConfidence,
+        ...(parsed.metadata || {}),
+        confidence_score: confidence,
       },
-      confidence_score: avgConfidence,
-      source_attribution: parsed.source_attribution || crmInsights.map(i => i.source_locations.join(", ")),
+      confidence_score: confidence,
+      source_attribution:
+        parsed.source_attribution ||
+        crmInsights.map((i) => i.source_locations.join(", ")),
     };
   } catch (error) {
     console.error("Error generating GHL card:", error);
     return {
       title: "GoHighLevel Implementation Notes",
       description: "GHL implementation notes.",
-      metadata: {
-        workflows: [],
-        pipelines: [],
-        automations: [],
-        templates: [],
-        confidence_score: 30,
-      },
+      metadata: { confidence_score: 30 },
       confidence_score: 30,
       source_attribution: [],
     };

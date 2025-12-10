@@ -17,6 +17,7 @@ import {
   ArrowRight,
   Search,
   Rocket,
+  Trash,
 } from "lucide-react";
 
 type BusinessBrain = {
@@ -41,6 +42,15 @@ type BusinessBrain = {
   conversationsCount: number;
 };
 
+type OrganizationStat = {
+  organization: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  count: number;
+};
+
 export default function BusinessBrainList() {
   const { user } = useUser();
   const router = useRouter();
@@ -52,6 +62,16 @@ export default function BusinessBrainList() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [activeTab, setActiveTab] = useState<string>("all");
+  const [currentUserOrgIds, setCurrentUserOrgIds] = useState<string[]>([]);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BusinessBrain | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [organizationStats, setOrganizationStats] = useState<OrganizationStat[]>([]);
+
+  const effectiveGlobalRole = user?.globalRole || currentUserRole;
+  const isSuperadmin = effectiveGlobalRole === "SUPERADMIN";
 
   useEffect(() => {
     const loadBusinessBrains = async () => {
@@ -66,6 +86,21 @@ export default function BusinessBrainList() {
 
         if (result.success) {
           setBusinessBrains(result.businessBrains || []);
+          setCurrentUserOrgIds(result.currentUserOrganizationIds || []);
+          if (result.currentUserGlobalRole) {
+            setCurrentUserRole(result.currentUserGlobalRole);
+          }
+          if (result.organizationStats) {
+            setOrganizationStats(result.organizationStats);
+          }
+          if (
+            (user?.globalRole === "SUPERADMIN" ||
+              result.currentUserGlobalRole === "SUPERADMIN") &&
+            result.currentUserOrganizationIds?.length &&
+            activeTab === "all"
+          ) {
+            setActiveTab(result.currentUserOrganizationIds[0]);
+          }
         } else {
           setError(result.error || "Failed to load business brains");
         }
@@ -139,6 +174,50 @@ export default function BusinessBrainList() {
     return "bg-red-100 dark:bg-red-900/20";
   };
 
+  const handleDeleteClick = (
+    e: React.MouseEvent,
+    brain: BusinessBrain
+  ) => {
+    e.stopPropagation();
+    setDeleteTarget(brain);
+    setDeleteError(null);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const response = await fetch(
+        `/api/business-brain/${deleteTarget.id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Failed to delete business brain");
+      }
+
+      setBusinessBrains((prev) =>
+        prev.filter((brain) => brain.id !== deleteTarget.id)
+      );
+      setIsDeleteModalOpen(false);
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error("Error deleting business brain:", err);
+      setDeleteError(
+        err instanceof Error
+          ? err.message
+          : "Failed to delete business brain"
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <>
       <Navbar />
@@ -163,8 +242,31 @@ export default function BusinessBrainList() {
             </button>
           </div>
 
+          {isSuperadmin && (
+            <div className="mb-4 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+              Only members of an organization can access its business profiles and conversation history. Cross-organization access is restricted for privacy.
+            </div>
+          )}
+
+          {/* Tenant counts for superadmins */}
+          {isSuperadmin && organizationStats.length > 0 && (
+            <div className="mb-4 flex flex-wrap gap-2">
+              {organizationStats.map((stat) => (
+                <div
+                  key={stat.organization.id}
+                  className="px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] text-xs text-[var(--text-primary)] flex items-center gap-2"
+                >
+                  <span className="font-semibold">{stat.organization.name}</span>
+                  <span className="text-[var(--text-secondary)]">
+                    {stat.count} business brain{stat.count === 1 ? "" : "s"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Tabs */}
-          {organizations.length > 0 && (
+          {isSuperadmin && organizations.length > 0 && (
             <div className="mb-6">
               <div className="flex items-center gap-2 border-b border-[var(--border-color)] overflow-x-auto">
                 <button
@@ -179,18 +281,24 @@ export default function BusinessBrainList() {
                 {organizations.map((org) => {
                   const orgGroup = brainsByOrganization[org.id];
                   const count = orgGroup ? orgGroup.brains.length : 0;
+                  const isUsersOrg = currentUserOrgIds.includes(org.id);
                   return (
                     <button
                       key={org.id}
                       onClick={() => setActiveTab(org.id)}
-                      className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap border-b-2 flex items-center gap-2 ${activeTab === org.id
+                      className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap border-b-2 flex items-center gap-2 rounded-t ${activeTab === org.id
                         ? "border-[var(--primary)] text-[var(--primary)]"
                         : "border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                        }`}
+                        } ${isUsersOrg ? "bg-[var(--primary)]/10 dark:bg-[var(--accent)]/10" : ""}`}
                     >
                       <Building2 size={14} />
                       <span>{org.name}</span>
                       <span className="text-xs opacity-70">({count})</span>
+                      {isUsersOrg && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--primary)] text-white dark:bg-[var(--accent)]">
+                          Yours
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -322,74 +430,91 @@ export default function BusinessBrainList() {
           {/* Business Brains Grid */}
           {!isLoading && !error && filteredBrains.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredBrains.map((brain) => (
-                <div
-                  key={brain.id}
-                  onClick={() =>
-                    router.push(`/dashboard/ai-business-brain/${brain.id}`)
-                  }
-                  className="p-6 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:border-[var(--primary)]/50 dark:hover:border-[var(--accent)]/50 cursor-pointer transition-all duration-200 hover:shadow-lg"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1 truncate">
-                        {brain.businessName}
-                      </h3>
-                      <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                        <Building2 size={14} />
-                        <span className="truncate">{brain.organization.name}</span>
+              {filteredBrains.map((brain) => {
+                const isUsersOrg = currentUserOrgIds.includes(brain.organization.id);
+                const canNavigate = !isSuperadmin || isUsersOrg;
+                return (
+                  <div
+                    key={brain.id}
+                    onClick={() => {
+                      if (canNavigate) {
+                        router.push(`/dashboard/ai-business-brain/${brain.id}`);
+                      }
+                    }}
+                    className={`p-6 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:border-[var(--primary)]/50 dark:hover:border-[var(--accent)]/50 transition-all duration-200 hover:shadow-lg ${canNavigate ? "cursor-pointer" : "cursor-not-allowed opacity-90"}`}
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1 truncate">
+                          {brain.businessName}
+                        </h3>
+                        <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                          <Building2 size={14} />
+                          <span className="truncate">{brain.organization.name}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        {brain.createdBy.id === user?.id && (
+                          <button
+                            onClick={(e) => handleDeleteClick(e, brain)}
+                            className="p-2 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors"
+                            aria-label="Delete business brain"
+                          >
+                            <Trash size={16} />
+                          </button>
+                        )}
+                        <div
+                          className={`flex-shrink-0 w-12 h-12 rounded-lg ${getCompletionBg(
+                            brain.completionScore
+                          )} flex items-center justify-center`}
+                        >
+                          <span
+                            className={`text-sm font-bold ${getCompletionColor(
+                              brain.completionScore
+                            )}`}
+                          >
+                            {brain.completionScore ?? "—"}%
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    <div
-                      className={`flex-shrink-0 w-12 h-12 rounded-lg ${getCompletionBg(
-                        brain.completionScore
-                      )} flex items-center justify-center`}
-                    >
-                      <span
-                        className={`text-sm font-bold ${getCompletionColor(
-                          brain.completionScore
-                        )}`}
-                      >
-                        {brain.completionScore ?? "—"}%
-                      </span>
-                    </div>
-                  </div>
 
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                      <User size={14} />
-                      <span>
-                        {brain.createdBy.firstname} {brain.createdBy.lastname}
-                      </span>
+                    <div className="space-y-2 mb-4">
+                      <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                        <User size={14} />
+                        <span>
+                          {brain.createdBy.firstname} {brain.createdBy.lastname}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                        <Calendar size={14} />
+                        <span>Created {formatDate(brain.createdAt)}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                      <Calendar size={14} />
-                      <span>Created {formatDate(brain.createdAt)}</span>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center justify-between pt-4 border-t border-[var(--border-color)]">
-                    <div className="flex items-center gap-4 text-xs text-[var(--text-secondary)]">
-                      {brain.hasCards && (
-                        <div className="flex items-center gap-1">
-                          <CheckCircle2 size={14} className="text-green-500" />
-                          <span>{brain.cardsCount} cards</span>
-                        </div>
-                      )}
-                      {brain.conversationsCount > 0 && (
-                        <div className="flex items-center gap-1">
-                          <Brain size={14} />
-                          <span>{brain.conversationsCount} chats</span>
-                        </div>
-                      )}
+                    <div className="flex items-center justify-between pt-4 border-t border-[var(--border-color)]">
+                      <div className="flex items-center gap-4 text-xs text-[var(--text-secondary)]">
+                        {brain.hasCards && (
+                          <div className="flex items-center gap-1">
+                            <CheckCircle2 size={14} className="text-green-500" />
+                            <span>{brain.cardsCount} cards</span>
+                          </div>
+                        )}
+                        {brain.conversationsCount > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Brain size={14} />
+                            <span>{brain.conversationsCount} chats</span>
+                          </div>
+                        )}
+                      </div>
+                      <ArrowRight
+                        size={16}
+                        className="text-[var(--text-secondary)]"
+                      />
                     </div>
-                    <ArrowRight
-                      size={16}
-                      className="text-[var(--text-secondary)]"
-                    />
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -568,6 +693,30 @@ export default function BusinessBrainList() {
           maxWidth="4xl"
         />
       )}
+
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          if (!isDeleting) {
+            setIsDeleteModalOpen(false);
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }
+        }}
+        onConfirm={handleConfirmDelete}
+        title="Delete this Business Brain?"
+        message="This action cannot be undone. You can only delete business brains you created."
+        body={
+          deleteError ? (
+            <div className="text-sm text-red-500">{deleteError}</div>
+          ) : null
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmVariant="danger"
+        isSubmitting={isDeleting}
+        maxWidth="sm"
+      />
     </>
   );
 }

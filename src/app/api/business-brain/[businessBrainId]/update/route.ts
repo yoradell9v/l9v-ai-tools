@@ -154,6 +154,15 @@ export async function POST(
     if (rawIntakeUpdates && typeof rawIntakeUpdates === "string") {
       try {
         intakeUpdates = JSON.parse(rawIntakeUpdates);
+        console.log(`[Update] Parsed ${Object.keys(intakeUpdates).length} intake update fields`);
+        
+        // Log refinement answers specifically
+        const refinementAnswerKeys = Object.keys(intakeUpdates).filter(key => 
+          key.includes("_") && !businessBrainFormConfig.sections.flatMap(s => s.fields).some(f => f.id === key)
+        );
+        if (refinementAnswerKeys.length > 0) {
+          console.log(`[Update] Found ${refinementAnswerKeys.length} refinement answers:`, refinementAnswerKeys);
+        }
       } catch (e) {
         console.error("[Update] Failed to parse intake updates:", e);
       }
@@ -164,6 +173,8 @@ export async function POST(
       ...existingIntakeData,
       ...intakeUpdates,
     };
+    
+    console.log(`[Update] Merged intake data: ${Object.keys(updatedIntakeData).length} total fields`);
 
     // Handle file uploads - merge with existing files
     // Support dynamic field names from enhancement analysis

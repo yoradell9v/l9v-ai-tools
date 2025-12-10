@@ -1,10 +1,12 @@
 import OpenAI from "openai";
-import { DeepInsight, InsightCategory, AnalysisContext, MiningResult } from "./types";
+import {
+  DeepInsight,
+  InsightCategory,
+  AnalysisContext,
+  MiningResult,
+} from "./types";
 import { calculateInsightConfidence, validateInsight } from "./confidence";
 
-/**
- * Main function to mine deep insights from all content sources
- */
 export async function mineDeepInsights(
   openai: OpenAI,
   context: AnalysisContext
@@ -12,37 +14,73 @@ export async function mineDeepInsights(
   const allInsights: DeepInsight[] = [];
 
   try {
-    // Mine website insights
-    const websiteInsights = await mineWebsiteInsights(openai, context.websiteContent);
+    const websiteInsights = await mineWebsiteInsights(
+      openai,
+      context.websiteContent
+    );
     allInsights.push(...websiteInsights);
 
-    // Mine file insights
+    // Mine insights from contentLinks URLs
+    if (context.contentLinks && context.contentLinks.length > 0) {
+      console.log(`[mineDeepInsights] Mining insights from ${context.contentLinks.length} content links`);
+      for (const contentLink of context.contentLinks) {
+        try {
+          // Treat each contentLink as a website-like source
+          const linkInsights = await mineWebsiteInsights(openai, {
+            hero: contentLink.hero,
+            about: contentLink.about,
+            services: contentLink.services,
+            testimonials: contentLink.testimonials,
+            fullText: contentLink.fullText,
+            metadata: contentLink.metadata,
+          });
+          
+          // Update source locations to indicate these came from contentLinks
+          const adjustedInsights = linkInsights.map((insight) => ({
+            ...insight,
+            source_locations: insight.source_locations.map(
+              (loc) => `contentLink:${contentLink.url} - ${loc}`
+            ),
+          }));
+          
+          allInsights.push(...adjustedInsights);
+        } catch (error) {
+          console.error(`Failed to mine insights from content link ${contentLink.url}:`, error);
+        }
+      }
+    }
+
     for (const file of context.files) {
       try {
         const fileInsights = await mineFileInsights(openai, file, context);
         allInsights.push(...fileInsights);
       } catch (error) {
         console.error(`Failed to mine insights from ${file.name}:`, error);
-        // Continue with other files
       }
     }
 
-    // Cross-reference and validate insights
-    const validatedInsights = await crossReferenceInsights(openai, allInsights);
+    const validInsights = allInsights.filter(validateInsight);
 
-    // Filter to only valid insights
-    const validInsights = validatedInsights.filter(validateInsight);
+    const validatedInsights = await crossReferenceInsights(
+      openai,
+      validInsights
+    );
 
-    // Calculate statistics
-    const highConfidenceCount = validInsights.filter(i => i.confidence >= 8).length;
-    const specificityAvg = validInsights.length > 0
-      ? validInsights.reduce((sum, i) => sum + i.specificity_score, 0) / validInsights.length
-      : 0;
-    const categoriesCovered = [...new Set(validInsights.map(i => i.category))] as InsightCategory[];
+    const highConfidenceCount = validatedInsights.filter(
+      (i) => i.confidence >= 8
+    ).length;
+    const specificityAvg =
+      validatedInsights.length > 0
+        ? validatedInsights.reduce((sum, i) => sum + i.specificity_score, 0) /
+          validatedInsights.length
+        : 0;
+    const categoriesCovered = [
+      ...new Set(validatedInsights.map((i) => i.category)),
+    ] as InsightCategory[];
 
     return {
-      insights: validInsights,
-      total_insights: validInsights.length,
+      insights: validatedInsights,
+      total_insights: validatedInsights.length,
       high_confidence_count: highConfidenceCount,
       specificity_avg: Math.round(specificityAvg * 10) / 10,
       categories_covered: categoriesCovered,
@@ -60,9 +98,6 @@ export async function mineDeepInsights(
   }
 }
 
-/**
- * Mine insights from website content
- */
 async function mineWebsiteInsights(
   openai: OpenAI,
   websiteContent: AnalysisContext["websiteContent"]
@@ -102,12 +137,11 @@ Return JSON array with format:
 }`;
 
   try {
-    // Combine website sections, but keep full text for analysis
     const combinedContent = [
       `HERO: ${websiteContent.hero}`,
       `ABOUT: ${websiteContent.about}`,
       `SERVICES: ${websiteContent.services}`,
-      `FULL TEXT: ${websiteContent.fullText.substring(0, 10000)}`, // Pass up to 10k chars
+      `FULL TEXT: ${websiteContent.fullText.substring(0, 10000)}`,
     ].join("\n\n");
 
     const result = await openai.chat.completions.create({
@@ -124,19 +158,23 @@ Return JSON array with format:
       max_tokens: 4000,
     });
 
+    console.log("Website insights: Received response from LLM", result);
     const rawResponse = result.choices[0].message.content || "{}";
     let parsed: any = {};
-    
+
     try {
       parsed = JSON.parse(rawResponse);
     } catch (parseError) {
       console.error("Error parsing website insights response:", parseError);
-      console.error("Raw response (first 500 chars):", rawResponse.substring(0, 500));
+      console.error(
+        "Raw response (first 500 chars):",
+        rawResponse.substring(0, 500)
+      );
       return [];
     }
-    
+
     const rawInsights = parsed.insights || [];
-    
+
     if (rawInsights.length === 0) {
       console.warn("Website insights: No insights extracted from content");
       console.log("Response structure:", Object.keys(parsed));
@@ -144,26 +182,30 @@ Return JSON array with format:
         console.error("LLM reported error:", parsed.error);
       }
     } else {
-      console.log(`Website insights: Extracted ${rawInsights.length} raw insights`);
+      console.log(
+        `Website insights: Extracted ${rawInsights.length} raw insights`
+      );
     }
 
-    // Process and validate insights
-    const insights: DeepInsight[] = rawInsights.map((raw: any, index: number) => {
-      const insight: DeepInsight = {
-        finding: raw.finding || "",
-        evidence: Array.isArray(raw.evidence) ? raw.evidence : [],
-        source_locations: Array.isArray(raw.source_locations) ? raw.source_locations : ["website"],
-        category: raw.category || "language_pattern",
-        unique_identifier: raw.unique_identifier || raw.finding,
-        specificity_score: raw.specificity_score || 5,
-        confidence: 0, // Will be calculated
-      };
+    const insights: DeepInsight[] = rawInsights.map(
+      (raw: any, index: number) => {
+        const insight: DeepInsight = {
+          finding: raw.finding || "",
+          evidence: Array.isArray(raw.evidence) ? raw.evidence : [],
+          source_locations: Array.isArray(raw.source_locations)
+            ? raw.source_locations
+            : ["website"],
+          category: raw.category || "language_pattern",
+          unique_identifier: raw.unique_identifier || raw.finding,
+          specificity_score: raw.specificity_score || 5,
+          confidence: 0, // Will be calculated
+        };
 
-      // Calculate confidence
-      insight.confidence = calculateInsightConfidence(insight);
+        insight.confidence = calculateInsightConfidence(insight);
 
-      return insight;
-    });
+        return insight;
+      }
+    );
 
     return insights;
   } catch (error) {
@@ -172,9 +214,6 @@ Return JSON array with format:
   }
 }
 
-/**
- * Mine insights from uploaded files
- */
 async function mineFileInsights(
   openai: OpenAI,
   file: AnalysisContext["files"][0],
@@ -198,14 +237,13 @@ Focus on:
 Return JSON array with insights matching DeepInsight format.`;
 
   try {
-    // Combine all sections with full content (not truncated)
     const sections = file.sections
-      .slice(0, 10) // Limit to top 10 sections to manage tokens
-      .map(section => `[${section.title}]\n${section.content}`)
+      .slice(0, 10)
+      .map((section) => `[${section.title}]\n${section.content}`)
       .join("\n\n");
 
     if (!sections || sections.trim().length < 100) {
-      return []; // Skip files with insufficient content
+      return [];
     }
 
     const result = await openai.chat.completions.create({
@@ -214,7 +252,9 @@ Return JSON array with insights matching DeepInsight format.`;
         { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `Extract insights from this ${file.type} document "${file.name}":\n\n${sections.substring(0, 15000)}`, // Up to 15k chars
+          content: `Extract insights from this ${file.type} document "${
+            file.name
+          }":\n\n${sections.substring(0, 15000)}`,
         },
       ],
       response_format: { type: "json_object" },
@@ -224,28 +264,38 @@ Return JSON array with insights matching DeepInsight format.`;
 
     const rawResponse = result.choices[0].message.content || "{}";
     let parsed: any = {};
-    
+
     try {
       parsed = JSON.parse(rawResponse);
     } catch (parseError) {
-      console.error(`Error parsing file insights response for ${file.name}:`, parseError);
-      console.error("Raw response (first 500 chars):", rawResponse.substring(0, 500));
+      console.error(
+        `Error parsing file insights response for ${file.name}:`,
+        parseError
+      );
+      console.error(
+        "Raw response (first 500 chars):",
+        rawResponse.substring(0, 500)
+      );
       return [];
     }
-    
+
     const rawInsights = parsed.insights || [];
-    
+
     if (rawInsights.length === 0) {
       console.warn(`File insights (${file.name}): No insights extracted`);
     } else {
-      console.log(`File insights (${file.name}): Extracted ${rawInsights.length} raw insights`);
+      console.log(
+        `File insights (${file.name}): Extracted ${rawInsights.length} raw insights`
+      );
     }
 
     const insights: DeepInsight[] = rawInsights.map((raw: any) => {
       const insight: DeepInsight = {
         finding: raw.finding || "",
         evidence: Array.isArray(raw.evidence) ? raw.evidence : [],
-        source_locations: [`${file.name}: ${raw.source_location || "document"}`],
+        source_locations: [
+          `${file.name}: ${raw.source_location || "document"}`,
+        ],
         category: raw.category || "structure",
         unique_identifier: raw.unique_identifier || raw.finding,
         specificity_score: raw.specificity_score || 5,
@@ -263,9 +313,6 @@ Return JSON array with insights matching DeepInsight format.`;
   }
 }
 
-/**
- * Cross-reference insights to validate, merge, and identify contradictions
- */
 async function crossReferenceInsights(
   openai: OpenAI,
   insights: DeepInsight[]
@@ -294,12 +341,16 @@ Return JSON with validated insights array.`;
 
   try {
     const result = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Use mini for validation (simpler task)
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `Cross-reference these insights:\n\n${JSON.stringify(insightsWithIds.slice(0, 50), null, 2)}`, // Limit to 50 for token management
+          content: `Cross-reference these insights:\n\n${JSON.stringify(
+            insightsWithIds.slice(0, 50),
+            null,
+            2
+          )}`,
         },
       ],
       response_format: { type: "json_object" },
@@ -310,10 +361,12 @@ Return JSON with validated insights array.`;
     const parsed = JSON.parse(result.choices[0].message.content || "{}");
     const validated = parsed.insights || insightsWithIds;
 
-    // Merge validated data back into insights
     return insightsWithIds.map((insight, index) => {
-      const validatedInsight = validated.find((v: any) => v.id === insight.id) || validated[index] || {};
-      
+      const validatedInsight =
+        validated.find((v: any) => v.id === insight.id) ||
+        validated[index] ||
+        {};
+
       return {
         ...insight,
         confirmed_by: validatedInsight.confirmed_by || 0,
@@ -324,8 +377,6 @@ Return JSON with validated insights array.`;
     });
   } catch (error) {
     console.error("Error cross-referencing insights:", error);
-    // Return insights without validation if cross-reference fails
     return insights;
   }
 }
-

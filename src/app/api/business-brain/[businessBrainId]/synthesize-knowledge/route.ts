@@ -237,71 +237,41 @@ interface KnowledgeBaseSchema {
 // ============================================================================
 
 function normalizeIntakeData(intakeData: any): any {
-  if (!intakeData || typeof intakeData !== 'object') {
+  if (!intakeData || typeof intakeData !== "object") {
     return {};
   }
 
+  // Map strictly to fields defined in businessBrainFormConfig
   return {
-    // Business basics
-    legalName: String(intakeData.legalName || "").trim(),
-    publicName: String(intakeData.publicName || "").trim(),
+    businessName: String(intakeData.businessName || "").trim(),
     website: String(intakeData.website || "").trim(),
-    offers: String(intakeData.offers || "").trim(),
-    outcomePromise: String(intakeData.outcomePromise || "").trim(),
-    pricing: String(intakeData.pricing || "").trim(),
-    geography: String(intakeData.geography || "").trim(),
-    primaryCTA: String(intakeData.primaryCTA || "").trim(),
-    customCTA: String(intakeData.customCTA || "").trim(),
-
-    // Audience & positioning
-    icps: Array.isArray(intakeData.icps) ? intakeData.icps : [],
-    objections: String(intakeData.objections || "").trim(),
-    topCompetitor: String(intakeData.topCompetitor || "").trim(),
-    competitors: String(intakeData.competitors || "").trim(),
-
-    // Brand voice
-    brandVoice: {
-      formalCasual: Number(intakeData.formalCasual) || 50,
-      playfulSerious: Number(intakeData.playfulSerious) || 50,
-      directStoryDriven: Number(intakeData.directStoryDriven) || 50,
-      punchyDetailed: Number(intakeData.punchyDetailed) || 50,
-      inspirationalAnalytical: Number(intakeData.inspirationalAnalytical) || 50,
-      soundsLike: String(intakeData.soundsLike || "").trim(),
-    },
-
-    // Compliance
-    compliance: {
-      forbiddenWords: String(intakeData.forbiddenWords || "").trim(),
-      disclaimers: String(intakeData.disclaimers || "").trim(),
-      isRegulated: String(intakeData.isRegulated || "no").trim(),
-      regulatedIndustryType: String(intakeData.regulatedIndustryType || "").trim(),
-    },
-
-    // Operations
-    operations: {
-      crmPlatform: String(intakeData.crmPlatform || "").trim(),
-      crmSubaccount: String(intakeData.crmSubaccount || "").trim(),
-      pipelineStages: String(intakeData.pipelineStages || "").trim(),
-      supportEmail: String(intakeData.supportEmail || "").trim(),
-      emailSignoff: String(intakeData.emailSignoff || "").trim(),
-      meetingLink: String(intakeData.meetingLink || "").trim(),
-      brandEmails: String(intakeData.brandEmails || "").trim(),
-    },
-
-    // Content
-    content: {
-      favoriteParagraphs: String(intakeData.favoriteParagraphs || "").trim(),
-      avoidParagraphs: String(intakeData.avoidParagraphs || "").trim(),
-      contentLinks: String(intakeData.contentLinks || "").trim(),
-      avoidTopics: String(intakeData.avoidTopics || "").trim(),
-      avoidCompetitors: String(intakeData.avoidCompetitors || "").trim(),
-    },
-
-    // Proof
-    proof: {
-      hasProofAssets: String(intakeData.hasProofAssets || "no").trim(),
-      proofAssetsList: String(intakeData.proofAssetsList || "").trim(),
-    },
+    whatYouSell: String(intakeData.whatYouSell || "").trim(),
+    businessType: String(intakeData.businessType || "").trim(),
+    businessTypeOther: String(intakeData.businessTypeOther || "").trim(),
+    monthlyRevenue: String(intakeData.monthlyRevenue || "").trim(),
+    goal90Day: String(intakeData.goal90Day || "").trim(),
+    biggestBottleneck: String(intakeData.biggestBottleneck || "").trim(),
+    idealCustomer: String(intakeData.idealCustomer || "").trim(),
+    topObjection: String(intakeData.topObjection || "").trim(),
+    coreOffer: String(intakeData.coreOffer || "").trim(),
+    customerJourney: String(intakeData.customerJourney || "").trim(),
+    brandVoiceStyle: String(intakeData.brandVoiceStyle || "").trim(),
+    riskBoldnessLevel: String(intakeData.riskBoldnessLevel || "").trim(),
+    primaryCRM: String(intakeData.primaryCRM || "").trim(),
+    bookingLink: String(intakeData.bookingLink || "").trim(),
+    supportEmail: String(intakeData.supportEmail || "").trim(),
+    isRegulated: String(intakeData.isRegulated || "").trim(),
+    regulatedIndustryType: String(intakeData.regulatedIndustryType || "").trim(),
+    forbiddenWords: String(intakeData.forbiddenWords || "").trim(),
+    disclaimers: String(intakeData.disclaimers || "").trim(),
+    hasProofAssets: String(intakeData.hasProofAssets || "").trim(),
+    proofAssets: String(intakeData.proofAssets || "").trim(),
+    pipelineStages: String(intakeData.pipelineStages || "").trim(),
+    emailSignoff: String(intakeData.emailSignoff || "").trim(),
+    brandEmails: String(intakeData.brandEmails || "").trim(),
+    voiceExamplesGood: String(intakeData.voiceExamplesGood || "").trim(),
+    voiceExamplesAvoid: String(intakeData.voiceExamplesAvoid || "").trim(),
+    contentLinks: String(intakeData.contentLinks || "").trim(),
   };
 }
 
@@ -376,36 +346,36 @@ function detectCrossReferences(normalizedIntake: any, cardInsights: any): {
   const contradictions: Array<{ contradiction: string; sources: string[] }> = [];
 
   // Link objections → positioning strategy
-  if (normalizedIntake.objections && cardInsights.positioning?.metadata?.framework_details) {
+  if (normalizedIntake.topObjection && cardInsights.positioning?.metadata?.framework_details) {
     crossLinks.push({
-      from: "objections",
+      from: "topObjection",
       to: "positioning",
       relationship: "Objections inform positioning strategy and differentiation messaging",
     });
   }
 
   // Link ICPs → content guidelines
-  if (normalizedIntake.icps?.length > 0 && cardInsights.brandVoice?.metadata?.rules) {
+  if (normalizedIntake.idealCustomer && cardInsights.brandVoice?.metadata?.rules) {
     crossLinks.push({
-      from: "icps",
+      from: "idealCustomer",
       to: "brandVoice",
       relationship: "Target audience characteristics inform brand voice and communication style",
     });
   }
 
   // Link pricing → value justification
-  if (normalizedIntake.pricing && cardInsights.positioning?.metadata?.framework_details?.value_proposition) {
+  if (normalizedIntake.coreOffer && cardInsights.positioning?.metadata?.framework_details?.value_proposition) {
     crossLinks.push({
-      from: "pricing",
+      from: "coreOffer",
       to: "positioning",
       relationship: "Pricing model must align with value proposition messaging",
     });
   }
 
   // Link disclaimers → compliance rules
-  if (normalizedIntake.compliance.disclaimers && cardInsights.compliance?.metadata?.required_disclaimers) {
+  if (normalizedIntake.disclaimers && cardInsights.compliance?.metadata?.required_disclaimers) {
     crossLinks.push({
-      from: "intake_disclaimers",
+      from: "disclaimers",
       to: "compliance_card",
       relationship: "Intake disclaimers must match compliance card requirements",
     });
@@ -414,17 +384,18 @@ function detectCrossReferences(normalizedIntake: any, cardInsights: any): {
   // Detect contradictions
   // Example: If brand voice says "casual" but soundsLike says "Apple Support" (formal)
   if (
-    normalizedIntake.brandVoice.formalCasual < 40 &&
-    normalizedIntake.brandVoice.soundsLike.toLowerCase().includes("apple")
+    typeof normalizedIntake.brandVoiceStyle === "string" &&
+    normalizedIntake.brandVoiceStyle.toLowerCase().includes("casual") &&
+    (normalizedIntake.voiceExamplesGood || "").toLowerCase().includes("apple support")
   ) {
     contradictions.push({
-      contradiction: "Brand voice slider indicates casual (${normalizedIntake.brandVoice.formalCasual}), but soundsLike references Apple Support which is typically more formal",
-      sources: ["intakeData.brandVoice.formalCasual", "intakeData.brandVoice.soundsLike"],
+      contradiction: "Brand voice indicates casual, but examples reference Apple Support which is typically more formal",
+      sources: ["intakeData.brandVoiceStyle", "intakeData.voiceExamplesGood"],
     });
   }
 
   // Check if forbidden words in intake match compliance card
-  const intakeForbidden = normalizedIntake.compliance.forbiddenWords
+  const intakeForbidden = normalizedIntake.forbiddenWords
     .split(",")
     .map((w: string) => w.trim().toLowerCase())
     .filter(Boolean);
@@ -454,7 +425,7 @@ function buildKnowledgePrompt(
   cardInsights: any,
   crossAnalysis: { crossLinks: any[]; contradictions: any[] }
 ): string {
-  return `You are an expert knowledge synthesis architect. Your task is to create a DEEP, ANALYTICAL, and ACTIONABLE knowledge base from business intake data and generated intelligence cards.
+  return `You are an expert knowledge synthesis architect. Your task is to create a DEEP, ANALYTICAL, and ACTIONABLE knowledge base from business intake data and generated intelligence cards. Return a valid JSON object only (the word "json" is explicitly included here).
 
 CRITICAL REQUIREMENTS:
 
@@ -583,7 +554,7 @@ function buildUserMessage(
   cardInsights: any,
   crossAnalysis: { crossLinks: any[]; contradictions: any[] }
 ): string {
-  return `Synthesize a comprehensive, deeply analytical knowledge base from this business data:
+  return `Synthesize a comprehensive, deeply analytical knowledge base from this business data. Respond with a JSON object only (json required):
 
 === INTAKE DATA ===
 ${JSON.stringify(normalizedIntake, null, 2)}
@@ -675,43 +646,58 @@ function buildFallbackKnowledgeBase(
   cardInsights: any,
   cardCount: number
 ): KnowledgeBaseSchema {
-  const offers = normalizedIntake.offers
-    ? normalizedIntake.offers.split("\n").filter((line: string) => line.trim().startsWith("•"))
-      .map((line: string) => line.replace(/^•\s*/, "").trim())
-      .filter(Boolean)
+  const offers = normalizedIntake.coreOffer
+    ? [normalizedIntake.coreOffer]
+    : normalizedIntake.whatYouSell
+    ? [normalizedIntake.whatYouSell]
     : [];
 
-  const objections = normalizedIntake.objections
-    ? normalizedIntake.objections.split("\n").filter(Boolean).map((obj: string) => obj.trim())
+  const objections = normalizedIntake.topObjection
+    ? [normalizedIntake.topObjection]
     : [];
 
-  const forbiddenWords = normalizedIntake.compliance.forbiddenWords
-    ? normalizedIntake.compliance.forbiddenWords.split(",").map((w: string) => w.trim()).filter(Boolean)
+  const forbiddenWords = normalizedIntake.forbiddenWords
+    ? normalizedIntake.forbiddenWords
+        .split(",")
+        .map((w: string) => w.trim())
+        .filter(Boolean)
     : [];
 
-  const disclaimers = normalizedIntake.compliance.disclaimers
-    ? normalizedIntake.compliance.disclaimers.split("\n").filter(Boolean).map((d: string) => d.trim())
+  const disclaimers = normalizedIntake.disclaimers
+    ? normalizedIntake.disclaimers
+        .split("\n")
+        .filter(Boolean)
+        .map((d: string) => d.trim())
     : [];
 
-  const pipelineStages = normalizedIntake.operations.pipelineStages
-    ? normalizedIntake.operations.pipelineStages.split("→").map((s: string) => s.trim()).filter(Boolean)
+  const pipelineStages = normalizedIntake.pipelineStages
+    ? normalizedIntake.pipelineStages
+        .split(/→|->|\n|,/)
+        .map((s: string) => s.trim())
+        .filter(Boolean)
     : [];
 
   return {
     businessOverview: {
-      name: normalizedIntake.legalName || normalizedIntake.publicName || "Unknown",
-      publicName: normalizedIntake.publicName || undefined,
+      name: normalizedIntake.businessName || "Unknown",
+      publicName: normalizedIntake.businessName || "Unknown",
       website: normalizedIntake.website || "Unknown",
       offers: offers.length > 0 ? offers : ["Not provided"],
-      outcomePromise: normalizedIntake.outcomePromise || "Not provided",
-      pricing: normalizedIntake.pricing || "Not provided",
-      geography: normalizedIntake.geography || "Not provided",
-      primaryCTA: normalizedIntake.primaryCTA || "Not provided",
-      customCTA: normalizedIntake.customCTA || undefined,
+      outcomePromise: normalizedIntake.goal90Day || "Not provided",
+      pricing: "Not provided",
+      geography: "Not provided",
+      primaryCTA: normalizedIntake.bookingLink || "Not provided",
+      customCTA: undefined,
     },
     brandVoice: {
-      sliders: normalizedIntake.brandVoice,
-      soundsLike: normalizedIntake.brandVoice.soundsLike || "Not provided",
+      sliders: {
+        formalCasual: normalizedIntake.brandVoiceStyle ? 50 : 50,
+        playfulSerious: 50,
+        directStoryDriven: 50,
+        punchyDetailed: 50,
+        inspirationalAnalytical: 50,
+      },
+      soundsLike: normalizedIntake.brandVoiceStyle || "Not provided",
       rules: cardInsights.brandVoice?.metadata?.rules || [],
       vocabulary: cardInsights.brandVoice?.metadata?.vocabulary || {
         frequent_words: [],
@@ -732,27 +718,37 @@ function buildFallbackKnowledgeBase(
       },
     },
     positioning: {
-      value_proposition: cardInsights.positioning?.metadata?.framework_details?.value_proposition || normalizedIntake.outcomePromise || "Not provided",
-      target_audience: normalizedIntake.icps.map((icp: any) => ({
-        segment: icp.segment || "Not provided",
-        pain: icp.pain || "Not provided",
-        outcome: icp.outcome || "Not provided",
-        psychological_triggers: [],
-        content_angles: [],
-      })),
+      value_proposition:
+        cardInsights.positioning?.metadata?.framework_details?.value_proposition ||
+        normalizedIntake.whatYouSell ||
+        "Not provided",
+      target_audience: normalizedIntake.idealCustomer
+        ? [
+            {
+              segment: normalizedIntake.idealCustomer,
+              pain: normalizedIntake.biggestBottleneck || "Not provided",
+              outcome: normalizedIntake.goal90Day || "Not provided",
+              psychological_triggers: [],
+              content_angles: [],
+            },
+          ]
+        : [],
       market_position: cardInsights.positioning?.metadata?.framework_details?.market_position || "Not provided",
-      differentiation: cardInsights.positioning?.metadata?.framework_details?.differentiation || normalizedIntake.competitors || "Not provided",
+      differentiation: cardInsights.positioning?.metadata?.framework_details?.differentiation || "Not provided",
       competitive_advantage: [],
-      objections: objections.map((obj: string) => ({
-        objection: obj,
-        response_strategy: "Not provided",
-        proof_points: [],
-      })),
+      objections:
+        objections.length > 0
+          ? objections.map((obj: string) => ({
+              objection: obj,
+              response_strategy: "Not provided",
+              proof_points: [],
+            }))
+          : [],
     },
     marketingStrategy: {
       primary_channels: [],
       messaging_hierarchy: [],
-      proof_strategy: normalizedIntake.proof.hasProofAssets === "yes" ? ["Use provided proof assets"] : [],
+      proof_strategy: normalizedIntake.hasProofAssets === "yes" ? ["Use provided proof assets"] : [],
       risk_reversal: [],
       decision_criteria: [],
     },
@@ -786,17 +782,17 @@ function buildFallbackKnowledgeBase(
         mitigation: "Not provided",
         source: "Compliance Card",
       })) || [],
-      regulated_industry: normalizedIntake.compliance.isRegulated === "yes"
+      regulated_industry: normalizedIntake.isRegulated === "yes"
         ? {
-            type: normalizedIntake.compliance.regulatedIndustryType || "other",
+            type: normalizedIntake.regulatedIndustryType || "other",
             specific_requirements: [],
           }
         : undefined,
     },
     operations: {
       crm: {
-        platform: normalizedIntake.operations.crmPlatform || "Not provided",
-        subaccount: normalizedIntake.operations.crmSubaccount || undefined,
+        platform: normalizedIntake.primaryCRM || "Not provided",
+        subaccount: undefined,
         pipelines: pipelineStages.length > 0
           ? [
               {
@@ -810,11 +806,11 @@ function buildFallbackKnowledgeBase(
       workflows: cardInsights.ghl?.metadata?.workflows || [],
       templates: cardInsights.ghl?.metadata?.templates || [],
       communication: {
-        support_email: normalizedIntake.operations.supportEmail || "Not provided",
-        email_signoff: normalizedIntake.operations.emailSignoff || "Not provided",
-        meeting_link: normalizedIntake.operations.meetingLink || undefined,
-        brand_emails: normalizedIntake.operations.brandEmails
-          ? normalizedIntake.operations.brandEmails.split(",").map((e: string) => e.trim()).filter(Boolean)
+        support_email: normalizedIntake.supportEmail || "Not provided",
+        email_signoff: normalizedIntake.emailSignoff || "Not provided",
+        meeting_link: normalizedIntake.bookingLink || undefined,
+        brand_emails: normalizedIntake.brandEmails
+          ? normalizedIntake.brandEmails.split(",").map((e: string) => e.trim()).filter(Boolean)
           : [],
       },
     },

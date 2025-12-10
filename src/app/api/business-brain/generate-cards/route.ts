@@ -8,7 +8,13 @@ import { join } from "path";
 import * as cheerio from "cheerio";
 
 import { mineDeepInsights } from "@/lib/analysis/mineInsights";
-import { AnalysisContext } from "@/lib/analysis/types";
+import {
+  AnalysisContext,
+  ComplianceMarkers,
+  DocumentAnalysis,
+  EnhancedContext,
+  FormattingPatterns,
+} from "@/lib/analysis/types";
 import { generateBrandVoiceCard } from "@/lib/cards/brandVoice";
 import { generatePositioningCard } from "@/lib/cards/positioning";
 import { generateStyleRulesCard } from "@/lib/cards/styleRules";
@@ -48,22 +54,363 @@ interface ExtractedContent {
     fullText: string;
     metadata: { title: string; description: string };
   };
-  files: {
-    name: string;
-    type: "brand_guide" | "style_guide" | "other";
-    sections: { title: string; content: string; importance: number }[];
-    keyPhrases: string[];
-  }[];
+  files: DocumentAnalysis[];
+  contentLinks: Array<{
+    url: string;
+    hero: string;
+    about: string;
+    services: string;
+    testimonials: string[];
+    fullText: string;
+    metadata: { title: string; description: string };
+  }>;
 }
 
+function safeSplit(
+  value: any,
+  delimiter: RegExp | string = /,|\n|;/
+): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v).trim()).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(delimiter)
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
 
-// ============================================================================
+function inferComplianceRisk(
+  businessType?: string,
+  isRegulated?: string | boolean
+): string {
+  if (isRegulated === "yes" || isRegulated === true) return "HIGH";
+  const type = (businessType || "").toLowerCase();
+  if (
+    type.includes("finance") ||
+    type.includes("financial") ||
+    type.includes("health") ||
+    type.includes("medical") ||
+    type.includes("insurance") ||
+    type.includes("legal") ||
+    type.includes("investment")
+  ) {
+    return "HIGH";
+  }
+  if (
+    type.includes("coaching") ||
+    type.includes("consulting") ||
+    type.includes("marketing") ||
+    type.includes("education")
+  ) {
+    return "MEDIUM";
+  }
+  return "LOW";
+}
+
+function buildEnhancedContext(
+  intakeData: any = {},
+  extractedContent: ExtractedContent
+): EnhancedContext {
+  const websiteSamples = extractedContent?.website || {
+    hero: "",
+    about: "",
+    services: "",
+  };
+
+  const documentSamples =
+    extractedContent?.files?.slice(0, 5).map((file) => ({
+      source: file.name,
+      content:
+        file.sections?.[0]?.content?.substring(0, 500) ||
+        file.sections?.map((s) => s.content).join(" ").substring(0, 500) ||
+        "",
+      formatting: file.formattingPatterns
+        ? `Headings: ${file.formattingPatterns.headingStyles.join(", ")}; Bullets: ${file.formattingPatterns.listUsage.bulletPoints}; Numbered: ${file.formattingPatterns.listUsage.numberedLists}`
+        : "Not detected",
+    })) || [];
+
+  const riskLevel = inferComplianceRisk(
+    intakeData.businessType,
+    intakeData.isRegulated
+  );
+
+  // Extract content from contentLinks (already processed URLs with full content)
+  const contentLinkSamples = extractedContent?.contentLinks?.slice(0, 5).map((link) => ({
+    url: link.url,
+    hero: link.hero?.substring(0, 500) || "",
+    about: link.about?.substring(0, 500) || "",
+    fullText: link.fullText?.substring(0, 2000) || "",
+    metadata: link.metadata,
+  })) || [];
+
+  return {
+    brandVoice: {
+      stylePreference: intakeData.brandVoiceStyle || "Balanced and clear",
+      riskLevel: intakeData.riskBoldnessLevel || riskLevel,
+      goodExamples: safeSplit(intakeData.voiceExamplesGood, /\n{2,}|\n|;/),
+      avoidExamples: safeSplit(intakeData.voiceExamplesAvoid, /\n{2,}|\n|;/),
+      exampleLinks: safeSplit(intakeData.contentLinks || intakeData.links || ""), // Keep raw URLs for reference
+      exampleLinkContent: contentLinkSamples, // Include extracted content for analysis
+    },
+    positioning: {
+      corePitch: intakeData.whatYouSell || "",
+      targetAudience: intakeData.idealCustomer || "",
+      mainObjection: intakeData.topObjection || "",
+      coreOffer: intakeData.coreOffer || "",
+      businessStage: intakeData.monthlyRevenue || "",
+      uniqueContext: `${intakeData.businessType || ""} | ${intakeData.goal90Day || ""}`.trim(),
+    },
+    styleRules: {
+      voiceStyle: intakeData.brandVoiceStyle || "",
+      goodExamples: safeSplit(intakeData.voiceExamplesGood, /\n{2,}|\n|;/),
+      avoidExamples: safeSplit(intakeData.voiceExamplesAvoid, /\n{2,}|\n|;/),
+      websiteSamples: {
+        hero: websiteSamples.hero || "",
+        about: websiteSamples.about || "",
+        services: websiteSamples.services || "",
+      },
+      documentSamples,
+    },
+    compliance: {
+      isRegulated:
+        intakeData.isRegulated === "yes" || intakeData.isRegulated === true,
+      industryType: `${intakeData.regulatedIndustryType || ""} ${intakeData.businessType || ""}`.trim(),
+      forbiddenWords: safeSplit(intakeData.forbiddenWords),
+      requiredDisclaimers: safeSplit(
+        intakeData.disclaimers,
+        /\n{2,}|\n|;|,/
+      ),
+      proofAssets: intakeData.proofAssets || "",
+      riskLevel,
+    },
+    ghlImplementation: {
+      crmPlatform: intakeData.primaryCRM || "",
+      customerJourney: intakeData.customerJourney || "",
+      pipelineStages: intakeData.pipelineStages || "",
+      bookingLink: intakeData.bookingLink || "",
+      supportEmail: intakeData.supportEmail || "",
+      emailSignoff: intakeData.emailSignoff || "",
+      coreOffer: intakeData.coreOffer || "",
+      goal90Day: intakeData.goal90Day || "",
+    },
+  };
+}
+
+interface CardValidation {
+  isValid: boolean;
+  missingElements: string[];
+  qualityScore: number;
+  warnings: string[];
+}
+
+function validateCard(card: any, cardType: string): CardValidation {
+  const validation: CardValidation = {
+    isValid: true,
+    missingElements: [],
+    qualityScore: 100,
+    warnings: [],
+  };
+
+  if (!card) {
+    return {
+      isValid: false,
+      missingElements: ["Card payload missing"],
+      qualityScore: 0,
+      warnings: ["Card not generated"],
+    };
+  }
+
+  switch (cardType) {
+    case "BRAND_VOICE_CARD":
+      if (!card.metadata?.core_attributes?.length) {
+        validation.missingElements.push("Core voice attributes");
+        validation.qualityScore -= 20;
+      }
+      if (!card.metadata?.examples?.length) {
+        validation.missingElements.push("Before/after examples");
+        validation.qualityScore -= 15;
+      }
+      if ((card.description || "").length < 2000) {
+        validation.warnings.push("Description seems too short (< 2000 chars)");
+        validation.qualityScore -= 10;
+      }
+      break;
+    case "COMPLIANCE_RULES":
+      if (!card.metadata?.forbidden_words?.length) {
+        validation.missingElements.push("Forbidden words list");
+        validation.qualityScore -= 25;
+      }
+      if (!card.metadata?.disclaimers?.length) {
+        validation.warnings.push("No disclaimers found");
+        validation.qualityScore -= 10;
+      }
+      break;
+    case "STYLE_RULES":
+      if (!card.metadata?.rules?.length) {
+        validation.missingElements.push("Formatting rules");
+        validation.qualityScore -= 20;
+      }
+      break;
+    case "POSITIONING_CARD":
+      if (!card.metadata?.positioning_statement) {
+        validation.missingElements.push("Positioning statement");
+        validation.qualityScore -= 15;
+      }
+      break;
+    case "GHL_IMPLEMENTATION_NOTES":
+      if (!card.metadata?.workflows?.length && !card.metadata?.pipelines?.length) {
+        validation.missingElements.push("Workflows/Pipelines");
+        validation.qualityScore -= 15;
+      }
+      break;
+  }
+
+  validation.isValid = validation.qualityScore >= 60;
+  return validation;
+}
+
+function calculateCardConfidence(
+  card: any,
+  context: EnhancedContext,
+  sources: string[]
+): number {
+  let confidence = 40;
+
+  const normalizedSources = (sources || []).map((s: any) => {
+    if (typeof s === "string") return s;
+    if (s && typeof s === "object") {
+      // common shape: { source, insight }
+      if ((s as any).source) return String((s as any).source);
+      return JSON.stringify(s);
+    }
+    return String(s ?? "");
+  });
+  const uniqueSources = new Set(
+    normalizedSources.map((s: string) => s.split(":")[0])
+  );
+  confidence += Math.min(uniqueSources.size * 5, 20);
+
+  const metadataKeys = card?.metadata ? Object.keys(card.metadata) : [];
+  confidence += Math.min(metadataKeys.length * 3, 15);
+
+  const attributions = card?.source_attribution?.length || 0;
+  confidence += Math.min(attributions * 2, 15);
+
+  const descriptionLength = card?.description?.length || 0;
+  if (descriptionLength > 3000) confidence += 10;
+  else if (descriptionLength > 2000) confidence += 5;
+
+  // slight boost if compliance risk high but data provided
+  if (context?.compliance?.isRegulated) confidence += 5;
+
+  return Math.min(confidence, 100);
+}
+
 // STAGE 1: INTELLIGENT CONTENT EXTRACTION
-// ============================================================================
+
+/**
+ * Extract URLs from contentLinks field
+ * Supports comma, newline, or semicolon separated URLs
+ */
+function extractUrlsFromContentLinks(contentLinks: string | undefined): string[] {
+  if (!contentLinks || typeof contentLinks !== "string") {
+    return [];
+  }
+
+  const urls = safeSplit(contentLinks, /,|\n|;/)
+    .map((url) => url.trim())
+    .filter((url) => {
+      // Basic URL validation
+      try {
+        const parsed = new URL(url);
+        return parsed.protocol === "http:" || parsed.protocol === "https:";
+      } catch {
+        return false;
+      }
+    });
+
+  return urls;
+}
+
+/**
+ * Extract content from a single content link URL
+ * Uses the same extraction logic as the main website
+ */
+async function extractContentLinkSemanticContent(url: string): Promise<{
+  url: string;
+  hero: string;
+  about: string;
+  services: string;
+  testimonials: string[];
+  fullText: string;
+  metadata: { title: string; description: string };
+}> {
+  try {
+    // Add timeout to prevent hanging (30 seconds)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch content link: ${response.statusText}`);
+    }
+
+    const html = await response.text();
+    
+    if (!html || html.trim().length === 0) {
+      throw new Error("Empty response from content link");
+    }
+
+    const $ = cheerio.load(html);
+
+    const extracted = {
+      url,
+      hero: extractHeroSection($),
+      about: extractAboutSection($),
+      services: extractServicesSection($),
+      testimonials: extractTestimonials($),
+      fullText: extractBodyText($, { maxLength: 50000 }),
+      metadata: extractMetadata($),
+    };
+
+    console.log(`[ContentLinks] Successfully extracted from ${url}: ${extracted.fullText.length} chars, ${extracted.testimonials.length} testimonials`);
+
+    return extracted;
+  } catch (error: any) {
+    if (error.name === "AbortError") {
+      console.error(`[ContentLinks] Timeout extracting content from ${url} (30s limit)`);
+    } else {
+      console.error(`[ContentLinks] Error extracting content from ${url}:`, error.message || error);
+    }
+    return {
+      url,
+      hero: "",
+      about: "",
+      services: "",
+      testimonials: [],
+      fullText: "",
+      metadata: { title: "", description: "" },
+    };
+  }
+}
 
 async function intelligentContentExtraction(
   websiteUrl: string,
-  files: Array<{ url: string; name: string; type?: string }>
+  files: Array<{ url: string; name: string; type?: string }>,
+  contentLinks?: string
 ): Promise<ExtractedContent> {
   const websiteContent = await extractWebsiteSemanticContent(websiteUrl);
   console.log("Extracted Website Content:", websiteContent);
@@ -73,9 +420,45 @@ async function intelligentContentExtraction(
   );
   console.log("Processed Files:", processedFiles);
 
+  // Extract and process contentLinks URLs
+  const contentLinkUrls = extractUrlsFromContentLinks(contentLinks);
+  console.log(`[ContentLinks] Found ${contentLinkUrls.length} URLs to process`);
+  
+  // Limit to first 10 URLs to avoid performance issues
+  const urlsToProcess = contentLinkUrls.slice(0, 10);
+  if (contentLinkUrls.length > 10) {
+    console.log(`[ContentLinks] Limiting to first 10 URLs (${contentLinkUrls.length} total provided)`);
+  }
+
+  // Process URLs with concurrency limit (process 3 at a time to avoid overwhelming)
+  const processedContentLinks: Array<{
+    url: string;
+    hero: string;
+    about: string;
+    services: string;
+    testimonials: string[];
+    fullText: string;
+    metadata: { title: string; description: string };
+  }> = [];
+  
+  for (let i = 0; i < urlsToProcess.length; i += 3) {
+    const batch = urlsToProcess.slice(i, i + 3);
+    const batchResults = await Promise.all(
+      batch.map((url) => extractContentLinkSemanticContent(url))
+    );
+    processedContentLinks.push(...batchResults);
+  }
+
+  // Filter out failed extractions (empty fullText)
+  const validContentLinks = processedContentLinks.filter(
+    (content) => content.fullText.trim().length > 0
+  );
+  console.log(`[ContentLinks] Successfully extracted content from ${validContentLinks.length}/${urlsToProcess.length} URLs`);
+
   return {
     website: websiteContent,
     files: processedFiles,
+    contentLinks: validContentLinks,
   };
 }
 
@@ -133,20 +516,22 @@ async function processFileWithChunking(file: {
       };
     }
 
-    // Classify file type
     const fileType = await classifyFileType(fullText, file.name);
-
-    // Split into semantic sections
     const sections = await extractSemanticSections(fullText, fileType);
 
-    // Extract key phrases
     const keyPhrases = extractRepeatedPhrases(fullText);
+    const formattingPatterns = analyzeFormattingPatterns(fullText);
+    const complianceMarkers = extractComplianceMarkers(fullText);
+    const voiceSamples = extractVoiceSamples(fullText);
 
     return {
       name: file.name,
       type: fileType,
       sections,
       keyPhrases,
+      formattingPatterns,
+      complianceMarkers,
+      voiceSamples,
     };
   } catch (error) {
     console.error(`Error processing file ${file.name}:`, error);
@@ -155,6 +540,9 @@ async function processFileWithChunking(file: {
       type: "other" as const,
       sections: [],
       keyPhrases: [],
+      formattingPatterns: undefined,
+      complianceMarkers: undefined,
+      voiceSamples: [],
     };
   }
 }
@@ -340,17 +728,14 @@ async function extractSemanticSections(
   const lines = text.split("\n");
   let currentSection = { title: "Introduction", content: "", importance: 5 };
 
-  // Markdown heading patterns
   const mdHeadingRegex = /^#{1,6}\s+(.+)$/;
-  // Common document heading patterns
   const headingPatterns = [
-    /^[A-Z][A-Z\s]{2,}$/, // ALL CAPS (min 3 chars)
-    /^\d+\.\s+[A-Z]/, // "1. Title" or "1.1 Title"
-    /^[IVX]+\.\s+[A-Z]/, // "I. Title" (Roman numerals)
+    /^[A-Z][A-Z\s]{2,}$/, 
+    /^\d+\.\s+[A-Z]/, 
+    /^[IVX]+\.\s+[A-Z]/, 
     /^(Chapter|Section|Part|Appendix)\s+\d+/i,
   ];
 
-  // Keywords for importance scoring
   const highImportance =
     /\b(critical|important|key|essential|required|must|warning|note|summary|conclusion)\b/i;
   const mediumImportance =
@@ -369,21 +754,19 @@ async function extractSemanticSections(
     let headingText = trimmed;
     let headingLevel = 0;
 
-    // Check for Markdown headings
     const mdMatch = trimmed.match(mdHeadingRegex);
     if (mdMatch) {
       isHeading = true;
       headingText = mdMatch[1];
-      headingLevel = trimmed.indexOf(" "); // Number of #'s
+      headingLevel = trimmed.indexOf(" "); 
     }
-    // Check other heading patterns
+    
     else if (
       trimmed.length >= 3 &&
       trimmed.length <= 100 &&
       headingPatterns.some((pattern) => pattern.test(trimmed))
     ) {
       isHeading = true;
-      // Check if next line is empty or next line is indented (common heading pattern)
       const nextLine = lines[i + 1]?.trim();
       if (
         !nextLine ||
@@ -395,12 +778,9 @@ async function extractSemanticSections(
     }
 
     if (isHeading) {
-      // Save previous section if it has content
       if (currentSection.content.trim().length > 50) {
         sections.push(currentSection);
       }
-
-      // Calculate importance
       let importance = 5;
       if (highImportance.test(headingText)) {
         importance = 8;
@@ -420,12 +800,10 @@ async function extractSemanticSections(
     }
   }
 
-  // Add final section
   if (currentSection.content.trim().length > 50) {
     sections.push(currentSection);
   }
 
-  // Fallback: no sections found, create chunks
   if (sections.length === 0 && text.trim().length > 0) {
     const chunkSize = 5000;
     const chunks = Math.ceil(text.length / chunkSize);
@@ -440,14 +818,11 @@ async function extractSemanticSections(
       });
     }
   }
-
-  // Enhance importance based on content characteristics
   sections.forEach((section) => {
     const contentLower = section.content.toLowerCase();
     if (contentLower.includes("warning") || contentLower.includes("caution")) {
       section.importance = Math.max(section.importance, 7);
     }
-    // Boost sections with lists or structured data
     if (
       section.content.match(/^[\s]*[-*•]\s/m) ||
       section.content.match(/^\d+\./m)
@@ -465,13 +840,11 @@ function extractRepeatedPhrases(text: string): string[] {
   const words = text.toLowerCase().match(/\b\w{4,}\b/g) || [];
   const phraseCounts: Record<string, number> = {};
 
-  // Extract 2-3 word phrases
   for (let i = 0; i < words.length - 1; i++) {
     const phrase = `${words[i]} ${words[i + 1]}`;
     phraseCounts[phrase] = (phraseCounts[phrase] || 0) + 1;
   }
 
-  // Return phrases that appear 3+ times, sorted by frequency
   return Object.entries(phraseCounts)
     .filter(([_, count]) => count >= 3)
     .sort(([_, a], [__, b]) => b - a)
@@ -479,12 +852,165 @@ function extractRepeatedPhrases(text: string): string[] {
     .map(([phrase]) => phrase);
 }
 
+function analyzeFormattingPatterns(content: string): FormattingPatterns {
+  const patterns: FormattingPatterns = {
+    headingStyles: [],
+    listUsage: { bulletPoints: 0, numberedLists: 0, examples: [] },
+    paragraphStructure: { avgLength: 0, avgSentenceLength: 0, examples: [] },
+    emphasisPatterns: { bold: [], italic: [], allCaps: [] },
+    ctaPatterns: [],
+  };
+
+  if (!content) return patterns;
+
+  if (content.match(/^#{1,6}\s/m)) patterns.headingStyles.push("Markdown");
+  if (content.match(/^[A-Z][A-Z\s]{5,}$/m)) patterns.headingStyles.push("ALL CAPS");
+  if (content.match(/^[A-Z][a-z]+(?:\s[A-Z][a-z]+)*$/m))
+    patterns.headingStyles.push("Title Case");
+
+  patterns.listUsage.bulletPoints =
+    (content.match(/^[\s]*[-*•]/gm) || []).length;
+  patterns.listUsage.numberedLists =
+    (content.match(/^[\s]*\d+\./gm) || []).length;
+
+  const listMatches =
+    content.match(/^[\s]*[-*•]\s.+(\n[\s]*[-*•]\s.+){2,}/gm) || [];
+  if (listMatches.length > 0) {
+    patterns.listUsage.examples = listMatches.slice(0, 3);
+  }
+
+  const paragraphs = content
+    .split(/\n\n+/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 20);
+  const wordCounts = paragraphs.map((p) => p.split(/\s+/).length);
+  if (wordCounts.length > 0) {
+    patterns.paragraphStructure.avgLength =
+      wordCounts.reduce((a, b) => a + b, 0) / wordCounts.length;
+    patterns.paragraphStructure.examples = paragraphs.slice(0, 5);
+  }
+
+  const sentences = content
+    .split(/[.!?]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  const sentenceWordCounts = sentences.map((s) => s.split(/\s+/).length);
+  if (sentenceWordCounts.length > 0) {
+    patterns.paragraphStructure.avgSentenceLength =
+      sentenceWordCounts.reduce((a, b) => a + b, 0) / sentenceWordCounts.length;
+  }
+  const boldMatches = content.match(/\*\*(.+?)\*\*/g);
+  if (boldMatches)
+    patterns.emphasisPatterns.bold = boldMatches
+      .slice(0, 10)
+      .map((m) => m.replace(/\*\*/g, ""));
+
+  const italicMatches = content.match(/\*(.+?)\*/g);
+  if (italicMatches)
+    patterns.emphasisPatterns.italic = italicMatches
+      .slice(0, 10)
+      .map((m) => m.replace(/\*/g, ""));
+
+  const capsMatches = content.match(/\b[A-Z]{3,}\b/g);
+  if (capsMatches)
+    patterns.emphasisPatterns.allCaps = [...new Set(capsMatches)].slice(0, 10);
+
+  const ctaRegexes = [
+    /book (your|a|now)/gi,
+    /get started/gi,
+    /learn more/gi,
+    /download/gi,
+    /schedule/gi,
+    /contact (us|me)/gi,
+    /apply now/gi,
+  ];
+  ctaRegexes.forEach((pattern) => {
+    const matches = content.match(pattern);
+    if (matches) patterns.ctaPatterns.push(...matches);
+  });
+
+  return patterns;
+}
+
+function extractComplianceMarkers(content: string): ComplianceMarkers {
+  if (!content) {
+    return { disclaimers: [], legalTerms: [], warningLanguage: [] };
+  }
+
+  const disclaimers =
+    content
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(
+        (line) =>
+          line.toLowerCase().includes("disclaimer") ||
+          line.toLowerCase().includes("results may vary") ||
+          line.toLowerCase().includes("not financial advice") ||
+          line.toLowerCase().includes("not legal advice")
+      )
+      .slice(0, 10) || [];
+
+  const legalTerms = Array.from(
+    new Set(
+      (content.match(
+        /\b(privacy|terms|liability|indemnity|warranty|guarantee|risk|compliance|regulation|hipaa|finra|sec|fda|ftc|gdpr)\b/gi
+      ) || []).map((t) => t.trim())
+    )
+  ).slice(0, 20);
+
+  const warningLanguage = Array.from(
+    new Set(
+      (content.match(/\b(important|warning|caution|note|must)\b/gi) || []).map(
+        (t) => t.trim()
+      )
+    )
+  ).slice(0, 20);
+
+  return {
+    disclaimers,
+    legalTerms,
+    warningLanguage,
+  };
+}
+
+function extractVoiceSamples(
+  content: string
+): Array<{
+  type: "testimonial" | "sales_copy" | "explanation" | "other";
+  text: string;
+  context: string;
+}> {
+  if (!content) return [];
+
+  const paragraphs = content
+    .split(/\n\n+/)
+    .map((p) => p.trim())
+    .filter((p) => p.split(/\s+/).length >= 40);
+
+  const classify = (text: string) => {
+    const lower = text.toLowerCase();
+    if (lower.includes("testimonial") || lower.includes("client said"))
+      return "testimonial";
+    if (lower.includes("offer") || lower.includes("book") || lower.includes("call"))
+      return "sales_copy";
+    if (lower.includes("how it works") || lower.includes("we help"))
+      return "explanation";
+    return "other";
+  };
+
+  return paragraphs.slice(0, 5).map((p, idx) => ({
+    type: classify(p),
+    text: p.substring(0, 1200),
+    context: `paragraph_${idx + 1}`,
+  }));
+}
+
 // ============================================================================
 // HTML PARSING FUNCTIONS (Using Cheerio)
 // ============================================================================
 
 function extractHeroSection($: cheerio.CheerioAPI): string {
-  // Try multiple selectors for hero section
+  
   const selectors = [
     "section.hero",
     "section[class*='hero']",
@@ -565,7 +1091,6 @@ function extractServicesSection($: cheerio.CheerioAPI): string {
 function extractTestimonials($: cheerio.CheerioAPI): string[] {
   const testimonials: string[] = [];
 
-  // Try multiple testimonial selectors
   const selectors = [
     "blockquote",
     ".testimonial",
@@ -584,8 +1109,6 @@ function extractTestimonials($: cheerio.CheerioAPI): string[] {
       }
     });
   }
-
-  // Remove duplicates and return
   return [...new Set(testimonials)].slice(0, 10);
 }
 
@@ -593,14 +1116,12 @@ function extractBodyText(
   $: cheerio.CheerioAPI,
   options: { maxLength: number }
 ): string {
-  // Remove script and style elements
   $("script, style, noscript").remove();
 
-  // Get text from body
   const body = $("body");
   if (body.length > 0) {
     let text = body.text();
-    // Normalize whitespace
+  
     text = normalizeWhitespace(text);
     return text.substring(0, options.maxLength);
   }
@@ -624,34 +1145,6 @@ function extractMetadata($: cheerio.CheerioAPI): {
 
   return { title, description };
 }
-
-// ============================================================================
-// VA-FOCUSED CARD GENERATORS
-// ============================================================================
-
-function calculateOverallConfidence(cards: any[]): number {
-  const scores = cards.map((c) => c.confidence_score || 0);
-  if (scores.length === 0) return 0;
-  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-}
-
-function calculateTotalLength(content: ExtractedContent): number {
-  let length = content.website.fullText.length;
-  content.files.forEach((file) => {
-    file.sections.forEach((section) => {
-      length += section.content.length;
-    });
-  });
-  return length;
-}
-
-// ============================================================================
-// CARD GENERATION AND SAVING
-// ============================================================================
-
-// ============================================================================
-// IMPROVED CARD GENERATION WITH AI ANALYSIS
-// ============================================================================
 
 async function generateAndSaveCards(
   openai: OpenAI,
@@ -681,19 +1174,24 @@ async function generateAndSaveCards(
     );
   }
 
-  // Extract content ONCE - use it for ALL cards
   const extractedContent = await intelligentContentExtraction(
     websiteUrl,
-    files
+    files,
+    intakeData?.contentLinks
   );
 
-  // Build analysis context for deep insights
+  const enhancedContext = buildEnhancedContext(intakeData, extractedContent);
+
   const analysisContext: AnalysisContext = {
     websiteUrl,
     websiteContent: extractedContent.website,
     files: extractedContent.files,
+    contentLinks: extractedContent.contentLinks,
+    enhancedContext,
     intakeData,
   };
+  
+  console.log(`[generateAndSaveCards] ContentLinks extracted: ${extractedContent.contentLinks?.length || 0} URLs with content`);
 
   console.log("[generateAndSaveCards] AnalysisContext intakeData:", {
     hasIntakeData: !!analysisContext.intakeData,
@@ -704,7 +1202,6 @@ async function generateAndSaveCards(
     brandVoiceStyle: analysisContext.intakeData?.brandVoiceStyle,
   });
 
-  // PHASE 1: Mine deep insights from all content sources
   console.log("Mining deep insights...");
   console.log(
     `Content available - Website: ${
@@ -726,7 +1223,6 @@ async function generateAndSaveCards(
     );
   }
 
-  // PHASE 2: Generate enhanced cards using deep insights
   console.log("Generating enhanced cards with deep insights...");
   const [
     brandVoiceCard,
@@ -742,7 +1238,75 @@ async function generateAndSaveCards(
     generateGHLCard(openai, miningResult.insights, analysisContext),
   ]);
 
-  // Transform new card structures to match expected format
+  // Enrich cards with intake data to avoid missing metadata that triggers false "missingElements"
+  const normalizedForbiddenWords = safeSplit(intakeData?.forbiddenWords, /,|\n|;/);
+  const normalizedDisclaimers = safeSplit(intakeData?.disclaimers, /\n{1,}|;|,/);
+  const normalizedPipelineStages = safeSplit(intakeData?.pipelineStages, /→|->|,|\n/);
+
+  if (complianceCard) {
+    complianceCard.metadata = {
+      ...(complianceCard as any).metadata,
+      forbidden_words:
+        (complianceCard as any).metadata?.forbidden_words?.length
+          ? (complianceCard as any).metadata.forbidden_words
+          : normalizedForbiddenWords,
+      disclaimers:
+        (complianceCard as any).metadata?.disclaimers?.length
+          ? (complianceCard as any).metadata.disclaimers
+          : normalizedDisclaimers,
+    };
+  }
+
+  if (ghlCard) {
+    const existingWorkflows =
+      (ghlCard as any).metadata?.workflows || (ghlCard as any).metadata?.pipelines;
+    const pipelineList =
+      Array.isArray(existingWorkflows) && existingWorkflows.length > 0
+        ? existingWorkflows
+        : normalizedPipelineStages.map((stage, idx) => ({
+            name: `Stage ${idx + 1}`,
+            description: stage,
+          }));
+
+    ghlCard.metadata = {
+      ...(ghlCard as any).metadata,
+      pipelines: pipelineList,
+      workflows: pipelineList,
+    };
+  }
+
+  const cardsForScoring = [
+    { ref: brandVoiceCard, type: "BRAND_VOICE_CARD" },
+    { ref: positioningCard, type: "POSITIONING_CARD" },
+    { ref: styleRulesCard, type: "STYLE_RULES" },
+    { ref: complianceCard, type: "COMPLIANCE_RULES" },
+    { ref: ghlCard, type: "GHL_IMPLEMENTATION_NOTES" },
+  ];
+
+  cardsForScoring.forEach(({ ref, type }) => {
+    const validationResult = validateCard(ref, type);
+    const sources =
+      (ref as any)?.source_attribution || (ref as any)?.metadata?.sources || [];
+    const computedConfidence = calculateCardConfidence(
+      ref,
+      enhancedContext,
+      sources
+    );
+
+    (ref as any).confidence_score = computedConfidence;
+    (ref as any).metadata = {
+      ...(ref as any).metadata,
+      confidence_score: computedConfidence,
+      validation: validationResult,
+    };
+
+    if (!validationResult.isValid) {
+      console.warn(`[${type}] Card validation failed`, validationResult);
+    } else if (validationResult.warnings.length > 0) {
+      console.warn(`[${type}] Card validation warnings`, validationResult.warnings);
+    }
+  });
+
   const cardDefinitions = [
     {
       type: "BRAND_VOICE_CARD",
@@ -827,13 +1391,11 @@ async function generateAndSaveCards(
     )
   );
 
-  // Map saved cards with their confidence scores
   const result = savedCards.map((savedCard, index) => ({
     ...savedCard,
     confidence_score: cardDefinitions[index].data.confidence_score || 0,
   }));
 
-  // Invalidate enhancement analysis cache since cards have changed
   try {
     await prisma.enhancementAnalysis.deleteMany({
       where: { brainId },
@@ -841,570 +1403,16 @@ async function generateAndSaveCards(
     console.log("[Generate-Cards] Invalidated enhancement analysis cache");
   } catch (error) {
     console.error("[Generate-Cards] Error invalidating cache:", error);
-    // Don't fail the request if cache invalidation fails
   }
 
   return result;
 }
 
-// ============================================================================
-// NEW: AI-POWERED STYLE RULES ANALYSIS
-// ============================================================================
-
-async function analyzeStyleRules(
-  openai: OpenAI,
-  content: ExtractedContent,
-  intakeData: any
-): Promise<any> {
-  try {
-    // Extract formatting patterns from files
-    const formattingPatterns = extractFormattingPatterns(content);
-
-    // AI analysis of style preferences
-    const styleAnalysis = await analyzeStylePatterns(
-      openai,
-      content,
-      formattingPatterns,
-      intakeData
-    );
-
-    return {
-      title: "Style Rules & Guidelines",
-      description:
-        styleAnalysis.description || "Style guidelines based on your content.",
-      metadata: styleAnalysis.metadata || {},
-      confidence_score: calculateStyleConfidence(
-        formattingPatterns,
-        styleAnalysis
-      ),
-      source_attribution: styleAnalysis.sources || [],
-    };
-  } catch (error) {
-    console.error("Error analyzing style rules:", error);
-    return {
-      title: "Style Rules & Guidelines",
-      description: generateStyleRulesFallback(intakeData),
-      metadata: {},
-      confidence_score: 30,
-      source_attribution: [],
-    };
-  }
-}
-
-function extractFormattingPatterns(content: ExtractedContent): any {
-  const patterns = {
-    heading_styles: [] as string[],
-    list_usage: { bullet: 0, numbered: 0 },
-    paragraph_length: [] as number[],
-    formatting_markers: [] as string[],
-    structure_types: [] as string[],
-  };
-
-  // Analyze files for formatting patterns
-  content.files.forEach((file) => {
-    file.sections.forEach((section) => {
-      const lines = section.content.split("\n");
-
-      // Detect heading styles
-      lines.forEach((line) => {
-        if (line.match(/^#{1,6}\s/)) patterns.heading_styles.push("markdown");
-        if (line.match(/^[A-Z][A-Z\s]{2,}$/))
-          patterns.heading_styles.push("all_caps");
-        if (line.match(/^\d+\.\s/)) patterns.list_usage.numbered++;
-        if (line.match(/^[\s]*[-*•]\s/)) patterns.list_usage.bullet++;
-      });
-
-      // Measure paragraph lengths
-      const paragraphs = section.content
-        .split("\n\n")
-        .filter((p) => p.trim().length > 0);
-      paragraphs.forEach((p) => {
-        patterns.paragraph_length.push(p.split(" ").length);
-      });
-
-      // Detect formatting markers
-      if (section.content.includes("**"))
-        patterns.formatting_markers.push("bold_markdown");
-      if (section.content.includes("_"))
-        patterns.formatting_markers.push("italic_markdown");
-      if (section.content.match(/\[.+\]\(.+\)/))
-        patterns.formatting_markers.push("links");
-    });
-  });
-
-  return patterns;
-}
-
-async function analyzeStylePatterns(
-  openai: OpenAI,
-  content: ExtractedContent,
-  patterns: any,
-  intakeData: any
-): Promise<any> {
-  const systemPrompt = `You are a content style analyst. Analyze the brand's style preferences and create specific, actionable rules.
-
-Rules should cover:
-1. Formatting conventions (headings, lists, emphasis)
-2. Paragraph structure (length, rhythm, white space)
-3. Visual presentation (how content should look)
-4. Forbidden phrases and preferred alternatives
-5. Examples of good vs. bad style from their content
-
-Return JSON with:
-- description: Comprehensive style guide (markdown formatted)
-- metadata: { rules: [...], examples: [...], forbidden: [...], preferred: [...] }
-- sources: Attribution for each rule`;
-
-  // Prepare content samples
-  const styleSamples = content.files
-    .filter((f) => f.type === "style_guide" || f.type === "brand_guide")
-    .flatMap((f) => f.sections.slice(0, 3))
-    .map((s) => ({ title: s.title, content: s.content.substring(0, 1000) }));
-
-  try {
-    const result = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: JSON.stringify(
-            {
-              formattingPatterns: patterns,
-              intakeData: {
-                topicsToAvoid: intakeData?.topicsToAvoid || "",
-                exampleContentLinks: intakeData?.exampleContentLinks || "",
-                brandVoiceStyle: intakeData?.brandVoiceStyle || "",
-              },
-              styleSamples: styleSamples.slice(0, 5),
-              websiteExcerpts: {
-                hero: content.website.hero.substring(0, 500),
-                about: content.website.about.substring(0, 500),
-              },
-            },
-            null,
-            2
-          ),
-        },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.3,
-      max_tokens: 3000,
-    });
-
-    return JSON.parse(result.choices[0].message.content || "{}");
-  } catch (error) {
-    console.error("Error analyzing style patterns:", error);
-    return { metadata: {}, sources: [] };
-  }
-}
-
-// ============================================================================
-// NEW: AI-POWERED COMPLIANCE ANALYSIS
-// ============================================================================
-
-async function analyzeComplianceRules(
-  openai: OpenAI,
-  content: ExtractedContent,
-  intakeData: any
-): Promise<any> {
-  try {
-    // Detect compliance signals in content
-    const complianceSignals = detectComplianceSignals(content);
-
-    // AI analysis of compliance requirements
-    const complianceAnalysis = await analyzeComplianceRequirements(
-      openai,
-      content,
-      complianceSignals,
-      intakeData
-    );
-
-    return {
-      title: "Compliance & Legal Guidelines",
-      description: complianceAnalysis.description || "Compliance guidelines.",
-      metadata: complianceAnalysis.metadata || {},
-      confidence_score: calculateComplianceConfidence(complianceSignals),
-      source_attribution: complianceAnalysis.sources || [],
-    };
-  } catch (error) {
-    console.error("Error analyzing compliance:", error);
-    return {
-      title: "Compliance & Legal Guidelines",
-      description: generateComplianceRulesFallback(intakeData),
-      metadata: {},
-      confidence_score: 30,
-      source_attribution: [],
-    };
-  }
-}
-
-function detectComplianceSignals(content: ExtractedContent): any {
-  const signals = {
-    disclaimers_found: [] as string[],
-    legal_terms: [] as string[],
-    regulatory_keywords: [] as string[],
-    risk_level: "low" as "low" | "medium" | "high",
-  };
-
-  const legalKeywords = [
-    "disclaimer",
-    "terms",
-    "conditions",
-    "privacy",
-    "gdpr",
-    "hipaa",
-    "compliance",
-    "regulation",
-    "legal",
-    "liability",
-    "warranty",
-  ];
-
-  const regulatoryKeywords = [
-    "fda",
-    "sec",
-    "finra",
-    "medical",
-    "healthcare",
-    "financial",
-    "pharmaceutical",
-    "clinical",
-    "certified",
-    "licensed",
-  ];
-
-  // Scan all content
-  const allText = [
-    content.website.fullText,
-    ...content.files.flatMap((f) => f.sections.map((s) => s.content)),
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  // Detect legal terms
-  legalKeywords.forEach((keyword) => {
-    if (allText.includes(keyword)) {
-      signals.legal_terms.push(keyword);
-    }
-  });
-
-  // Detect regulatory keywords
-  regulatoryKeywords.forEach((keyword) => {
-    if (allText.includes(keyword)) {
-      signals.regulatory_keywords.push(keyword);
-    }
-  });
-
-  // Extract actual disclaimers
-  content.files.forEach((file) => {
-    file.sections.forEach((section) => {
-      if (
-        section.title.toLowerCase().includes("disclaimer") ||
-        section.title.toLowerCase().includes("legal")
-      ) {
-        signals.disclaimers_found.push(section.content.substring(0, 500));
-      }
-    });
-  });
-
-  // Calculate risk level
-  if (
-    signals.regulatory_keywords.length > 3 ||
-    signals.disclaimers_found.length > 2
-  ) {
-    signals.risk_level = "high";
-  } else if (signals.legal_terms.length > 5) {
-    signals.risk_level = "medium";
-  }
-
-  return signals;
-}
-
-async function analyzeComplianceRequirements(
-  openai: OpenAI,
-  content: ExtractedContent,
-  signals: any,
-  intakeData: any
-): Promise<any> {
-  const systemPrompt = `You are a compliance and legal content analyst. Create specific compliance rules.
-
-Analyze:
-1. Required disclaimers and when to use them
-2. Forbidden claims or language (especially for regulated industries)
-3. Legal terminology that must be used correctly
-4. Risk mitigation strategies in content
-5. Industry-specific compliance requirements
-
-Return JSON with:
-- description: Comprehensive compliance guide
-- metadata: { required_disclaimers: [...], forbidden_claims: [...], legal_terms: {...}, risk_areas: [...] }
-- sources: Attribution for each requirement`;
-
-  try {
-    const result = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: JSON.stringify(
-            {
-              complianceSignals: signals,
-              intakeData: {
-                businessType: intakeData?.businessType || "",
-                topicsToAvoid: intakeData?.topicsToAvoid || "",
-              },
-              existingDisclaimers: signals.disclaimers_found,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.2,
-      max_tokens: 3000,
-    });
-
-    return JSON.parse(result.choices[0].message.content || "{}");
-  } catch (error) {
-    console.error("Error analyzing compliance requirements:", error);
-    return { metadata: {}, sources: [] };
-  }
-}
-
-// ============================================================================
-// NEW: AI-POWERED GHL IMPLEMENTATION ANALYSIS
-// ============================================================================
-
-async function analyzeGHLImplementation(
-  openai: OpenAI,
-  content: ExtractedContent,
-  intakeData: any
-): Promise<any> {
-  try {
-    // Extract CRM-relevant patterns
-    const crmPatterns = extractCRMPatterns(content);
-
-    // AI analysis of implementation strategy
-    const ghlStrategy = await analyzeGHLStrategy(
-      openai,
-      content,
-      crmPatterns,
-      intakeData
-    );
-
-    return {
-      title: "GoHighLevel Implementation Notes",
-      description: ghlStrategy.description || "GHL implementation strategy.",
-      metadata: ghlStrategy.metadata || {},
-      confidence_score: calculateGHLConfidence(crmPatterns),
-      source_attribution: ghlStrategy.sources || [],
-    };
-  } catch (error) {
-    console.error("Error analyzing GHL implementation:", error);
-    return {
-      title: "GoHighLevel Implementation Notes",
-      description: generateGHLNotesFallback(intakeData),
-      metadata: {},
-      confidence_score: 30,
-      source_attribution: [],
-    };
-  }
-}
-
-function extractCRMPatterns(content: ExtractedContent): any {
-  const patterns = {
-    customer_journey_stages: [] as string[],
-    touchpoints: [] as string[],
-    automation_opportunities: [] as string[],
-    communication_channels: [] as string[],
-  };
-
-  const journeyKeywords = [
-    "lead",
-    "prospect",
-    "customer",
-    "onboarding",
-    "nurture",
-    "conversion",
-  ];
-  const touchpointKeywords = [
-    "email",
-    "sms",
-    "call",
-    "meeting",
-    "follow-up",
-    "reminder",
-  ];
-  const automationKeywords = [
-    "workflow",
-    "sequence",
-    "trigger",
-    "automated",
-    "scheduled",
-  ];
-
-  const allText = content.website.fullText.toLowerCase();
-
-  journeyKeywords.forEach((kw) => {
-    if (allText.includes(kw)) patterns.customer_journey_stages.push(kw);
-  });
-
-  touchpointKeywords.forEach((kw) => {
-    if (allText.includes(kw)) patterns.touchpoints.push(kw);
-  });
-
-  automationKeywords.forEach((kw) => {
-    if (allText.includes(kw)) patterns.automation_opportunities.push(kw);
-  });
-
-  return patterns;
-}
-
-async function analyzeGHLStrategy(
-  openai: OpenAI,
-  content: ExtractedContent,
-  patterns: any,
-  intakeData: any
-): Promise<any> {
-  const systemPrompt = `You are a CRM implementation strategist. Create GHL-specific implementation notes.
-
-Focus on:
-1. Workflow automation opportunities based on their business model
-2. Customer journey mapping for GHL pipelines
-3. Communication sequences and templates
-4. Integration points with their existing tools
-5. Specific GHL features they should leverage
-
-Return JSON with:
-- description: Implementation strategy guide
-- metadata: { workflows: [...], pipelines: [...], automations: [...], templates: [...] }
-- sources: Attribution for each recommendation`;
-
-  try {
-    const result = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: JSON.stringify(
-            {
-              crmPatterns: patterns,
-              intakeData: {
-                primaryCRM: intakeData?.primaryCRM || "",
-                customerJourney: intakeData?.customerJourney || "",
-                supportEmail: intakeData?.supportEmail || "",
-                bookingLink: intakeData?.bookingLink || "",
-                coreOfferSummary: intakeData?.coreOfferSummary || "",
-              },
-              businessModel: {
-                services: content.website.services.substring(0, 1000),
-                customerJourney:
-                  intakeData?.customerJourney ||
-                  patterns.customer_journey_stages.join(" → "),
-              },
-            },
-            null,
-            2
-          ),
-        },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.3,
-      max_tokens: 3000,
-    });
-
-    return JSON.parse(result.choices[0].message.content || "{}");
-  } catch (error) {
-    console.error("Error analyzing GHL strategy:", error);
-    return { metadata: {}, sources: [] };
-  }
-}
-
-// ============================================================================
-// CONFIDENCE SCORING
-// ============================================================================
-
-function calculateStyleConfidence(patterns: any, analysis: any): number {
-  let score = 40; // Base score
-
-  if (patterns.heading_styles.length > 0) score += 15;
-  if (patterns.paragraph_length.length > 5) score += 15;
-  if (patterns.formatting_markers.length > 0) score += 10;
-  if (analysis.metadata?.rules?.length > 3) score += 20;
-
-  return Math.min(score, 100);
-}
-
-function calculateComplianceConfidence(signals: any): number {
-  let score = 30; // Base score
-
-  if (signals.disclaimers_found.length > 0) score += 25;
-  if (signals.legal_terms.length > 3) score += 20;
-  if (signals.regulatory_keywords.length > 0) score += 15;
-  if (signals.risk_level === "high") score += 10;
-
-  return Math.min(score, 100);
-}
-
-function calculateGHLConfidence(patterns: any): number {
-  let score = 35; // Base score
-
-  if (patterns.customer_journey_stages.length > 2) score += 20;
-  if (patterns.touchpoints.length > 2) score += 20;
-  if (patterns.automation_opportunities.length > 0) score += 15;
-  if (patterns.communication_channels.length > 1) score += 10;
-
-  return Math.min(score, 100);
-}
-
-// ============================================================================
-// FALLBACK FUNCTIONS (existing simple versions)
-// ============================================================================
-
-function generateStyleRulesFallback(intakeData: any): string {
-  const rules: string[] = [];
-  if (intakeData?.topicsToAvoid)
-    rules.push(`Topics to Avoid: ${intakeData.topicsToAvoid}`);
-  if (intakeData?.brandVoiceStyle)
-    rules.push(`Brand Voice Style: ${intakeData.brandVoiceStyle}`);
-  return rules.length > 0
-    ? rules.join("\n\n")
-    : "Style rules based on your preferences.";
-}
-
-function generateComplianceRulesFallback(intakeData: any): string {
-  const rules: string[] = [];
-  if (intakeData?.businessType)
-    rules.push(`Business Type: ${intakeData.businessType}`);
-  if (intakeData?.topicsToAvoid)
-    rules.push(`Topics to Avoid: ${intakeData.topicsToAvoid}`);
-  return rules.length > 0 ? rules.join("\n\n") : "Compliance guidelines.";
-}
-
-function generateGHLNotesFallback(intakeData: any): string {
-  const notes: string[] = [];
-  if (intakeData?.primaryCRM) notes.push(`CRM: ${intakeData.primaryCRM}`);
-  if (intakeData?.customerJourney)
-    notes.push(`Customer Journey: ${intakeData.customerJourney}`);
-  if (intakeData?.bookingLink)
-    notes.push(`Booking Link: ${intakeData.bookingLink}`);
-  if (intakeData?.supportEmail)
-    notes.push(`Support Email: ${intakeData.supportEmail}`);
-  return notes.length > 0 ? notes.join("\n\n") : "GHL implementation notes.";
-}
-
-// ============================================================================
 // API ROUTE HANDLER
-// ============================================================================
 
 export async function POST(request: Request) {
   console.log("[Generate-Cards] API endpoint called");
   try {
-    // Authentication
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("accessToken")?.value;
 
@@ -1425,7 +1433,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get profileId from query params
     const { searchParams } = new URL(request.url);
     const profileId = searchParams.get("profileId");
 
@@ -1436,7 +1443,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify access to organization
     const userOrganizations = await prisma.userOrganization.findMany({
       where: {
         userId: decoded.userId,
@@ -1457,7 +1463,6 @@ export async function POST(request: Request) {
 
     const userOrganizationIds = userOrganizations.map((uo) => uo.id);
 
-    // Fetch business brain
     const businessBrain = await prisma.businessBrain.findFirst({
       where: {
         id: profileId,
@@ -1472,7 +1477,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Log retrieved data
     console.log("[Generate-Cards] Retrieved businessBrain:", {
       id: businessBrain.id,
       hasIntakeData: !!businessBrain.intakeData,
@@ -1486,7 +1490,7 @@ export async function POST(request: Request) {
           : "not an object",
     });
 
-    // Ensure intakeData is properly parsed (Prisma JSON fields might be strings)
+
     let parsedIntakeData = businessBrain.intakeData;
     if (typeof parsedIntakeData === "string") {
       try {
@@ -1497,7 +1501,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Initialize OpenAI
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
         { success: false, error: "OpenAI API key not configured." },
@@ -1509,7 +1512,6 @@ export async function POST(request: Request) {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    // Generate and save cards
     console.log("[Generate-Cards] Starting card generation...");
     console.log(
       "[Generate-Cards] Using parsed intakeData with keys:",

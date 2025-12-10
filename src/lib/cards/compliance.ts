@@ -4,162 +4,151 @@ import { DeepInsight, AnalysisContext } from "../analysis/types";
 export interface ComplianceCard {
   title: string;
   description: string;
-  metadata: {
-    required_disclaimers: string[];
-    forbidden_claims: string[];
-    legal_terms: Record<string, string>;
-    risk_areas: string[];
-    confidence_score: number;
-  };
+  metadata: Record<string, any> & { confidence_score: number };
   confidence_score: number;
-  source_attribution: string[];
+  source_attribution: Array<string | { source?: string; insight?: string }>;
 }
 
-/**
- * Generate enhanced Compliance card using deep insights
- */
 export async function generateComplianceCard(
   openai: OpenAI,
   insights: DeepInsight[],
   context: AnalysisContext
 ): Promise<ComplianceCard> {
   try {
-    // Filter compliance insights
-    const complianceInsights = insights.filter(i => i.category === "compliance");
+    const complianceInsights = insights.filter((i) => i.category === "compliance");
+    const enhanced = context.enhancedContext;
 
-    const systemPrompt = `You are a compliance and legal content analyst. Create specific compliance rules.
+    const complianceMarkers = context.files.flatMap(
+      (f: any) => f.complianceMarkers || []
+    );
 
-REQUIREMENTS:
-1. Analyze:
-   - Required disclaimers and when to use them
-   - Forbidden claims or language (especially for regulated industries)
-   - Legal terminology that must be used correctly
-   - Risk mitigation strategies in content
-   - Industry-specific compliance requirements
+    const compliancePrompt = `You are a compliance and legal content analyst. Create strict compliance rules.
 
-2. Extract EXACT disclaimers from content (don't paraphrase)
-
-3. Identify forbidden claims with evidence
-
-4. Map legal terms to their definitions
-
-5. List risk areas with specific examples
-
-6. CRITICAL: Use intake data disclaimers and forbiddenWords. Do not return empty arrays.
-
-Return JSON with this EXACT structure:
-{
-  "description": "Compliance guide description",
-  "metadata": {
-    "required_disclaimers": ["disclaimer1", "disclaimer2"],
-    "forbidden_claims": ["claim1", "claim2"],
-    "legal_terms": {
-      "term1": "definition1",
-      "term2": "definition2"
-    },
-    "risk_areas": ["risk1", "risk2"],
-    "confidence_score": 70
+INPUTS:
+${JSON.stringify(
+  {
+    isRegulated: enhanced?.compliance.isRegulated,
+    industryType: enhanced?.compliance.industryType,
+    forbiddenWords: enhanced?.compliance.forbiddenWords,
+    requiredDisclaimers: enhanced?.compliance.requiredDisclaimers,
+    complianceMarkers,
+    businessType: context.intakeData?.businessType,
   },
-  "source_attribution": ["source1"]
-}
+  null,
+  2
+)}
 
-IMPORTANT: Populate ALL fields. Use intake data disclaimers and forbiddenWords if content is limited.`;
+TASK: Create compliance guidelines with these REQUIRED sections:
+
+## 1. Regulatory Context
+INDUSTRY: [industry name]
+REGULATIONS: [FTC, FDA, SEC, etc.]
+RISK LEVEL: [LOW/MEDIUM/HIGH]
+Explain why this risk level.
+
+## 2. Forbidden Language (Critical Restrictions)
+List all forbidden words/phrases with explanations:
+❌ "guaranteed" - WHY: Violates FTC earnings disclosure rules
+❌ "cure" - WHY: FDA medical claims violation
+Include at least 10-15 specific restrictions.
+
+## 3. Required Disclaimers
+Provide exact disclaimer text that must appear on:
+- All sales pages
+- Testimonials
+- Income claims
+- Email signatures
+Include where and how to display.
+
+## 4. Safe Phrasing Alternatives
+For each forbidden phrase, provide 3-5 safe alternatives:
+INSTEAD OF "guaranteed," USE:
+✅ "Our goal is to..."
+✅ "Designed to help you..."
+
+## 5. Testimonial & Proof Guidelines
+Rules for:
+- How to present testimonials legally
+- Required disclaimers for case studies
+- Photo/screenshot requirements
+- Dating and attribution
+
+## 6. Risk Areas & Red Flags
+List high-risk content areas that need review:
+⚠️ Income claims - [specific rules]
+⚠️ Health claims - [specific rules]
+
+OUTPUT FORMAT: Return JSON with metadata for each restriction and alternative.`;
 
     const result = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: compliancePrompt },
         {
           role: "user",
-          content: `Analyze this compliance data and generate compliance rules.
+          content: `Use the mined insights and samples below to generate the card.
 
-INSIGHTS (${complianceInsights.length} total):
+INSIGHTS (${complianceInsights.length}):
 ${JSON.stringify(complianceInsights.slice(0, 20), null, 2)}
 
 WEBSITE CONTENT:
 ${context.websiteContent.fullText.substring(0, 2000)}
 
-INTAKE DATA:
-${JSON.stringify({
-  isRegulated: context.intakeData?.isRegulated,
-  regulatedIndustryType: context.intakeData?.regulatedIndustryType,
-  disclaimers: context.intakeData?.disclaimers || "",
-  forbiddenWords: context.intakeData?.forbiddenWords || "",
-}, null, 2)}
-
-Generate the compliance card JSON now.`,
+EXAMPLE CONTENT LINKS (from contentLinks field):
+${enhanced?.brandVoice.exampleLinkContent && enhanced.brandVoice.exampleLinkContent.length > 0
+  ? enhanced.brandVoice.exampleLinkContent
+      .map(
+        (link: any) => `URL: ${link.url}
+Title: ${link.metadata?.title || "N/A"}
+Full Text: ${link.fullText || ""}`
+      )
+      .join("\n\n---\n\n")
+  : "No example content links provided"}
+`,
         },
       ],
       response_format: { type: "json_object" },
-      temperature: 0.2,
-      max_tokens: 3000,
+      temperature: 0.25,
+      max_tokens: 7000,
     });
 
     const rawResponse = result.choices[0].message.content || "{}";
     let parsed: any = {};
-    
+
     try {
       parsed = JSON.parse(rawResponse);
     } catch (parseError) {
       console.error("Error parsing compliance card response:", parseError);
-      console.error("Raw response (first 500 chars):", rawResponse.substring(0, 500));
-    }
-    
-    console.log("[Compliance] LLM Response Structure:", {
-      hasMetadata: !!parsed.metadata,
-      hasDisclaimers: !!parsed.metadata?.required_disclaimers,
-      disclaimersCount: parsed.metadata?.required_disclaimers?.length || 0,
-      hasForbiddenClaims: !!parsed.metadata?.forbidden_claims,
-      metadataKeys: parsed.metadata ? Object.keys(parsed.metadata) : [],
-    });
-    
-    if (!parsed.metadata || parsed.metadata.required_disclaimers?.length === 0) {
-      console.warn("Compliance card: No disclaimers found in response, generating fallback");
-      // Generate fallback from intake data
-      parsed.metadata = parsed.metadata || {};
-      const disclaimers = context.intakeData?.disclaimers 
-        ? context.intakeData.disclaimers.split('\n').filter(Boolean)
-        : [];
-      const forbiddenWords = context.intakeData?.forbiddenWords
-        ? context.intakeData.forbiddenWords.split(',').map((w: string) => w.trim()).filter(Boolean)
-        : [];
-      parsed.metadata.required_disclaimers = disclaimers.length > 0 ? disclaimers : ["Results may vary. Individual results not guaranteed."];
-      parsed.metadata.forbidden_claims = forbiddenWords;
-      parsed.metadata.legal_terms = {};
-      parsed.metadata.risk_areas = [];
-      console.log("[Compliance] Generated fallback from intake data");
     }
 
-    const confidenceScores = complianceInsights.map(i => i.confidence);
-    const avgConfidence = confidenceScores.length > 0
-      ? Math.round(confidenceScores.reduce((a, b) => a + b, 0) / confidenceScores.length)
-      : 30;
+    const fallbackConfidence =
+      complianceInsights.length > 0
+        ? Math.round(
+            complianceInsights.reduce((a, b) => a + (b.confidence || 0), 0) /
+              complianceInsights.length
+          )
+        : 30;
+
+    const confidence = parsed.confidence_score || fallbackConfidence;
 
     return {
-      title: "Compliance & Legal Guidelines",
+      title: parsed.title || "Compliance & Legal Guidelines",
       description: parsed.description || "Compliance guidelines.",
       metadata: {
-        required_disclaimers: parsed.metadata?.required_disclaimers || [],
-        forbidden_claims: parsed.metadata?.forbidden_claims || [],
-        legal_terms: parsed.metadata?.legal_terms || {},
-        risk_areas: parsed.metadata?.risk_areas || [],
-        confidence_score: parsed.metadata?.confidence_score || avgConfidence,
+        ...(parsed.metadata || {}),
+        confidence_score: confidence,
       },
-      confidence_score: avgConfidence,
-      source_attribution: parsed.source_attribution || complianceInsights.map(i => i.source_locations.join(", ")),
+      confidence_score: confidence,
+      source_attribution:
+        parsed.source_attribution ||
+        complianceInsights.map((i) => i.source_locations.join(", ")),
     };
   } catch (error) {
     console.error("Error generating compliance card:", error);
     return {
       title: "Compliance & Legal Guidelines",
       description: "Compliance guidelines.",
-      metadata: {
-        required_disclaimers: [],
-        forbidden_claims: [],
-        legal_terms: {},
-        risk_areas: [],
-        confidence_score: 30,
-      },
+      metadata: { confidence_score: 30 },
       confidence_score: 30,
       source_attribution: [],
     };

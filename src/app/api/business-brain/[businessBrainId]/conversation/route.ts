@@ -28,6 +28,21 @@ export async function GET(
       );
     }
 
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        globalRole: true,
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "User not found." },
+        { status: 404 }
+      );
+    }
+
     const { businessBrainId } = await params;
 
     const { searchParams } = new URL(request.url);
@@ -42,23 +57,14 @@ export async function GET(
       select: { id: true },
     });
 
-    if (userOrganizations.length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "User does not belong to any active organization.",
-        },
-        { status: 403 }
-      );
-    }
-
     const userOrganizationIds = userOrganizations.map((uo) => uo.id);
+    const isSuperadmin = user.globalRole === "SUPERADMIN";
 
     // Verify access to business brain
     const businessBrain = await prisma.businessBrain.findFirst({
       where: {
         id: businessBrainId,
-        userOrganizationId: { in: userOrganizationIds },
+        ...(isSuperadmin ? {} : { userOrganizationId: { in: userOrganizationIds } }),
       },
     });
 
@@ -77,7 +83,7 @@ export async function GET(
       const conversations = await prisma.businessConversation.findMany({
         where: {
           brainId: businessBrainId,
-          userOrganizationId: { in: userOrganizationIds },
+          ...(isSuperadmin ? {} : { userOrganizationId: { in: userOrganizationIds } }),
         },
         include: {
           _count: {
@@ -110,7 +116,7 @@ export async function GET(
         where: {
           id: conversationId,
           brainId: businessBrainId,
-          userOrganizationId: { in: userOrganizationIds },
+          ...(isSuperadmin ? {} : { userOrganizationId: { in: userOrganizationIds } }),
         },
         include: {
           messages: {
@@ -179,6 +185,21 @@ export async function POST(
 
     const { businessBrainId } = await params;
 
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        globalRole: true,
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "User not found." },
+        { status: 404 }
+      );
+    }
+
     const userOrganizations = await prisma.userOrganization.findMany({
       where: {
         userId: decoded.userId,
@@ -187,22 +208,13 @@ export async function POST(
       select: { id: true },
     });
 
-    if (userOrganizations.length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "User does not belong to any active organization.",
-        },
-        { status: 403 }
-      );
-    }
-
     const userOrganizationIds = userOrganizations.map((uo) => uo.id);
+    const isSuperadmin = user.globalRole === "SUPERADMIN";
 
     const businessBrain = await prisma.businessBrain.findFirst({
       where: {
         id: businessBrainId,
-        userOrganizationId: { in: userOrganizationIds },
+        ...(isSuperadmin ? {} : { userOrganizationId: { in: userOrganizationIds } }),
       },
     });
 
@@ -216,10 +228,23 @@ export async function POST(
       );
     }
 
+    if (!isSuperadmin && userOrganizations.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "User does not belong to any active organization.",
+        },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
     const title = body.title || "New Conversation";
 
-    const userOrganizationId = userOrganizationIds[0];
+    // For superadmins, attach the conversation to the brain's organization so access works consistently
+    const userOrganizationId = isSuperadmin
+      ? businessBrain.userOrganizationId
+      : userOrganizationIds[0];
 
     const conversation = await prisma.businessConversation.create({
       data: {

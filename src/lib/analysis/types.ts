@@ -1,10 +1,10 @@
 // Deep Insight Types for Business Profile Analysis
 
-export type InsightCategory = 
-  | "language_pattern" 
-  | "structure" 
-  | "belief" 
-  | "relationship" 
+export type InsightCategory =
+  | "language_pattern"
+  | "structure"
+  | "belief"
+  | "relationship"
   | "proof"
   | "formatting"
   | "compliance"
@@ -34,13 +34,116 @@ export interface AnalysisContext {
     fullText: string;
     metadata: { title: string; description: string };
   };
-  files: Array<{
-    name: string;
-    type: "brand_guide" | "style_guide" | "other";
-    sections: { title: string; content: string; importance: number }[];
-    keyPhrases: string[];
+  files: DocumentAnalysis[];
+  contentLinks?: Array<{
+    url: string;
+    hero: string;
+    about: string;
+    services: string;
+    testimonials: string[];
+    fullText: string;
+    metadata: { title: string; description: string };
   }>;
+  enhancedContext?: EnhancedContext;
   intakeData: any;
+}
+
+export interface DocumentAnalysis {
+  name: string;
+  type: "brand_guide" | "style_guide" | "other";
+  sections: { title: string; content: string; importance: number }[];
+  keyPhrases: string[];
+  formattingPatterns?: FormattingPatterns;
+  complianceMarkers?: ComplianceMarkers;
+  voiceSamples?: Array<{
+    type: "testimonial" | "sales_copy" | "explanation" | "other";
+    text: string;
+    context: string;
+  }>;
+}
+
+export interface FormattingPatterns {
+  headingStyles: string[];
+  listUsage: {
+    bulletPoints: number;
+    numberedLists: number;
+    examples: string[];
+  };
+  paragraphStructure: {
+    avgLength: number;
+    avgSentenceLength: number;
+    examples: string[];
+  };
+  emphasisPatterns: {
+    bold: string[];
+    italic: string[];
+    allCaps: string[];
+  };
+  ctaPatterns: string[];
+}
+
+export interface ComplianceMarkers {
+  disclaimers: string[];
+  legalTerms: string[];
+  warningLanguage: string[];
+}
+
+export interface EnhancedContext {
+  brandVoice: {
+    stylePreference: string;
+    riskLevel: string;
+    goodExamples: string[];
+    avoidExamples: string[];
+    exampleLinks: string[]; // Raw URLs for reference
+    exampleLinkContent?: Array<{
+      url: string;
+      hero: string;
+      about: string;
+      fullText: string;
+      metadata: { title: string; description: string };
+    }>; // Extracted content from URLs
+  };
+  positioning: {
+    corePitch: string;
+    targetAudience: string;
+    mainObjection: string;
+    coreOffer: string;
+    businessStage: string;
+    uniqueContext: string;
+  };
+  styleRules: {
+    voiceStyle: string;
+    goodExamples: string[];
+    avoidExamples: string[];
+    websiteSamples: {
+      hero: string;
+      about: string;
+      services: string;
+    };
+    documentSamples: Array<{
+      source: string;
+      content: string;
+      formatting: string;
+    }>;
+  };
+  compliance: {
+    isRegulated: boolean;
+    industryType: string;
+    forbiddenWords: string[];
+    requiredDisclaimers: string[];
+    proofAssets: string;
+    riskLevel: string;
+  };
+  ghlImplementation: {
+    crmPlatform: string;
+    customerJourney: string;
+    pipelineStages: string;
+    bookingLink: string;
+    supportEmail: string;
+    emailSignoff: string;
+    coreOffer: string;
+    goal90Day: string;
+  };
 }
 
 export interface MiningResult {

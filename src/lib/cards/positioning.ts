@@ -4,291 +4,177 @@ import { DeepInsight, AnalysisContext } from "../analysis/types";
 export interface PositioningCard {
   title: string;
   description: string;
-  metadata: {
-    framework_details: {
-      value_proposition: string;
-      target_audience: string;
-      market_position: string;
-      differentiation: string;
-    };
-    who: {
-      demographics: string;
-      psychographics: string;
-      journey_stage: string;
-      evidence: string[];
-    };
-    what: {
-      deliverables: string[];
-      pricing_indicators: string;
-      service_model: string;
-    };
-    why: {
-      unique_approach: string;
-      methodology: string;
-      competitive_advantage: string;
-      evidence: string[];
-    };
-    how: {
-      proof_strategy: string;
-      risk_reversal: string;
-      decision_criteria: string;
-    };
-    confidence_score: number;
-  };
+  metadata: Record<string, any> & { confidence_score: number };
   confidence_score: number;
-  source_attribution: string[];
+  source_attribution: Array<string | { source?: string; insight?: string }>;
 }
 
-/**
- * Generate enhanced Positioning card using deep insights
- */
 export async function generatePositioningCard(
   openai: OpenAI,
   insights: DeepInsight[],
   context: AnalysisContext
 ): Promise<PositioningCard> {
   try {
-    // Filter insights relevant to positioning
     const positioningInsights = insights.filter(
-      i => i.category === "belief" || 
-           i.category === "proof" ||
-           i.category === "relationship"
+      (i) =>
+        i.category === "belief" ||
+        i.category === "proof" ||
+        i.category === "relationship"
     );
 
-    const systemPrompt = `You are a market positioning strategist. Create a comprehensive positioning framework.
+    const enhanced = context.enhancedContext;
 
-CRITICAL REQUIREMENTS:
-1. NO generic statements - everything must be evidenced with exact quotes
-2. Extract SPECIFIC details:
-   - WHO: exact demographics, psychographics, journey stage (with evidence)
-   - WHAT: specific deliverables, pricing indicators, service model
-   - WHY: unique approach/methodology, what competitors CAN'T/WON'T do
-   - HOW: proof strategy, risk reversal, decision criteria
+    const positioningPrompt = `You are a strategic positioning analyst. Create a positioning guide that defines how this business competes.
 
-3. For each claim, provide:
-   - Specific statement (not "targets small businesses" but "targets tech startups with 5-20 employees, Series A funding, struggling with customer support scaling")
-   - Evidence (exact quotes from content)
-   - Confidence level
-
-4. Framework details must be specific and actionable.
-
-5. CRITICAL: Even if insights are limited, you MUST generate content from the intake data provided. Do not return empty strings or empty arrays.
-
-Return JSON with this EXACT structure:
-{
-  "description": "Brief description",
-  "metadata": {
-    "framework_details": {
-      "value_proposition": "Specific value prop",
-      "target_audience": "Specific audience",
-      "market_position": "Market position",
-      "differentiation": "How they differentiate"
-    },
-    "who": {
-      "demographics": "Specific demographics",
-      "psychographics": "Psychographics",
-      "journey_stage": "Journey stage",
-      "evidence": ["quote1", "quote2"]
-    },
-    "what": {
-      "deliverables": ["deliverable1", "deliverable2"],
-      "pricing_indicators": "Pricing info",
-      "service_model": "Service model"
-    },
-    "why": {
-      "unique_approach": "Unique approach",
-      "methodology": "Methodology",
-      "competitive_advantage": "Competitive advantage",
-      "evidence": ["quote1", "quote2"]
-    },
-    "how": {
-      "proof_strategy": "Proof strategy",
-      "risk_reversal": "Risk reversal",
-      "decision_criteria": "Decision criteria"
-    },
-    "confidence_score": 75
+INPUTS:
+${JSON.stringify(
+  {
+    corePitch: enhanced?.positioning.corePitch,
+    targetAudience: enhanced?.positioning.targetAudience,
+    mainObjection: enhanced?.positioning.mainObjection,
+    coreOffer: enhanced?.positioning.coreOffer,
+    businessStage: enhanced?.positioning.businessStage,
+    websiteAbout: context.websiteContent.about,
+    testimonials: context.websiteContent.testimonials,
+    exampleLinkContent: enhanced?.brandVoice.exampleLinkContent || [],
   },
-  "source_attribution": ["source1"]
-}
+  null,
+  2
+)}
 
-IMPORTANT: Populate ALL fields with actual data. Use intake data ICPs, offers, and competitors if content is limited.`;
+TASK: Create a positioning guide with these REQUIRED sections:
 
-    const contentSamples = {
-      website: context.websiteContent.fullText.substring(0, 10000),
-      hero: context.websiteContent.hero.substring(0, 5000),
-      services: context.websiteContent.services.substring(0, 5000),
-      testimonials: context.websiteContent.testimonials,
-    };
+## 1. Core Positioning Statement (1-2 sentences)
+The elevator pitch that captures who they serve and what makes them unique.
+
+## 2. Target Audience Definition
+PRIMARY: [detailed description with pain points]
+SECONDARY: [if applicable]
+Include demographic AND psychographic details.
+
+## 3. Unique Value Proposition
+What makes them different from competitors? List 4-5 specific differentiators.
+
+## 4. Primary Problem Solved
+PROBLEM: [customer pain point in their words]
+SOLUTION: [how this business solves it]
+Use actual language from their content.
+
+## 5. Market Position & Competitive Landscape
+How they position vs:
+- Courses/DIY solutions
+- Competing agencies/services
+- Alternative solutions
+Include 3-4 specific comparison points.
+
+## 6. Proof Points & Credibility
+List all available proof:
+- Client results (with numbers)
+- Testimonials (summarize key themes)
+- Social proof (features, awards, etc.)
+- Business credibility (their own revenue, experience)
+
+OUTPUT FORMAT: Return JSON with:
+{
+  "title": "Market Positioning Guide",
+  "description": "[Full markdown guide with all 6 sections]",
+  "metadata": {
+    "positioning_statement": "...",
+    "target_audience": {
+      "primary": "...",
+      "secondary": "..."
+    },
+    "differentiators": ["...", "...", ...],
+    "problem_solution": {
+      "problem": "...",
+      "solution": "..."
+    },
+    "proof_points": ["...", "...", ...]
+  },
+  "confidence_score": 90,
+  "source_attribution": [...]
+}`;
 
     const result = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: positioningPrompt },
         {
           role: "user",
-          content: `Analyze this positioning data and generate comprehensive framework.
+          content: `Use the mined insights and samples below to generate the card.
 
-INSIGHTS (${positioningInsights.length} total):
+INSIGHTS (${positioningInsights.length}):
 ${JSON.stringify(positioningInsights.slice(0, 30), null, 2)}
 
-CONTENT SAMPLES:
-Website: ${contentSamples.website.substring(0, 2000)}
-Hero: ${contentSamples.hero.substring(0, 500)}
-Services: ${contentSamples.services.substring(0, 500)}
-Testimonials: ${contentSamples.testimonials.join('\n\n')}
+WEBSITE ABOUT:
+${context.websiteContent.about.substring(0, 2000)}
 
-INTAKE DATA:
-${JSON.stringify({
-  offers: context.intakeData?.offers || "",
-  outcomePromise: context.intakeData?.outcomePromise || "",
-  icps: context.intakeData?.icps || [],
-  topCompetitor: context.intakeData?.topCompetitor || "",
-  competitors: context.intakeData?.competitors || "",
-  pricing: context.intakeData?.pricing || "",
-}, null, 2)}
+HERO:
+${context.websiteContent.hero.substring(0, 800)}
 
-Generate the positioning card JSON now.`,
+SERVICES:
+${context.websiteContent.services.substring(0, 800)}
+
+TESTIMONIALS:
+${context.websiteContent.testimonials.join("\n\n")}
+
+EXAMPLE CONTENT LINKS (from contentLinks field):
+${enhanced?.brandVoice.exampleLinkContent && enhanced.brandVoice.exampleLinkContent.length > 0
+  ? enhanced.brandVoice.exampleLinkContent
+      .map(
+        (link: any) => `URL: ${link.url}
+Title: ${link.metadata?.title || "N/A"}
+Hero: ${link.hero || ""}
+About: ${link.about || ""}
+Full Text: ${link.fullText || ""}`
+      )
+      .join("\n\n---\n\n")
+  : "No example content links provided"}
+`,
         },
       ],
       response_format: { type: "json_object" },
-      temperature: 0.4,
-      max_tokens: 4000,
+      temperature: 0.35,
+      max_tokens: 8000,
     });
 
     const rawResponse = result.choices[0].message.content || "{}";
     let parsed: any = {};
-    
+
     try {
       parsed = JSON.parse(rawResponse);
     } catch (parseError) {
       console.error("Error parsing positioning card response:", parseError);
-      console.error("Raw response (first 500 chars):", rawResponse.substring(0, 500));
-    }
-    
-    console.log("[Positioning] LLM Response Structure:", {
-      hasMetadata: !!parsed.metadata,
-      hasFrameworkDetails: !!parsed.metadata?.framework_details,
-      hasWho: !!parsed.metadata?.who,
-      metadataKeys: parsed.metadata ? Object.keys(parsed.metadata) : [],
-    });
-    
-    if (!parsed.metadata || !parsed.metadata.framework_details) {
-      console.warn("Positioning card: Missing framework_details in response");
-      // Generate fallback from intake data
-      if (context.intakeData?.icps && context.intakeData.icps.length > 0) {
-        const firstIcp = context.intakeData.icps[0];
-        parsed.metadata = parsed.metadata || {};
-        parsed.metadata.framework_details = {
-          value_proposition: context.intakeData.outcomePromise || "",
-          target_audience: firstIcp.segment || "",
-          market_position: context.intakeData.topCompetitor ? `Competing with ${context.intakeData.topCompetitor}` : "",
-          differentiation: context.intakeData.competitors || "",
-        };
-        parsed.metadata.who = {
-          demographics: firstIcp.segment || "",
-          psychographics: "",
-          journey_stage: "",
-          evidence: [],
-        };
-        parsed.metadata.what = {
-          deliverables: context.intakeData.offers ? context.intakeData.offers.split('\n').filter(Boolean) : [],
-          pricing_indicators: context.intakeData.pricing || "",
-          service_model: "",
-        };
-        parsed.metadata.why = {
-          unique_approach: "",
-          methodology: "",
-          competitive_advantage: context.intakeData.competitors || "",
-          evidence: [],
-        };
-        parsed.metadata.how = {
-          proof_strategy: "",
-          risk_reversal: "",
-          decision_criteria: "",
-        };
-        console.log("[Positioning] Generated fallback from intake data");
-      }
     }
 
-    // Calculate confidence
-    const confidenceScores = positioningInsights.map(i => i.confidence);
-    const avgConfidence = confidenceScores.length > 0
-      ? Math.round(confidenceScores.reduce((a, b) => a + b, 0) / confidenceScores.length)
-      : 50;
+    const fallbackConfidence =
+      positioningInsights.length > 0
+        ? Math.round(
+            positioningInsights.reduce((a, b) => a + (b.confidence || 0), 0) /
+              positioningInsights.length
+          )
+        : 50;
+
+    const confidence = parsed.confidence_score || fallbackConfidence;
 
     return {
-      title: "Market Position & Competitive Strategy",
-      description: parsed.description || "Market positioning based on your business information.",
+      title: parsed.title || "Market Positioning Guide",
+      description: parsed.description || "Positioning guidance based on your content.",
       metadata: {
-        framework_details: parsed.metadata?.framework_details || {
-          value_proposition: "",
-          target_audience: "",
-          market_position: "",
-          differentiation: "",
-        },
-        who: parsed.metadata?.who || {
-          demographics: "",
-          psychographics: "",
-          journey_stage: "",
-          evidence: [],
-        },
-        what: parsed.metadata?.what || {
-          deliverables: [],
-          pricing_indicators: "",
-          service_model: "",
-        },
-        why: parsed.metadata?.why || {
-          unique_approach: "",
-          methodology: "",
-          competitive_advantage: "",
-          evidence: [],
-        },
-        how: parsed.metadata?.how || {
-          proof_strategy: "",
-          risk_reversal: "",
-          decision_criteria: "",
-        },
-        confidence_score: parsed.metadata?.confidence_score || avgConfidence,
+        ...(parsed.metadata || {}),
+        confidence_score: confidence,
       },
-      confidence_score: avgConfidence,
-      source_attribution: parsed.source_attribution || positioningInsights.map(i => i.source_locations.join(", ")),
+      confidence_score: confidence,
+      source_attribution:
+        parsed.source_attribution ||
+        positioningInsights.map((i) => i.source_locations.join(", ")),
     };
   } catch (error) {
     console.error("Error generating positioning card:", error);
     return {
-      title: "Market Position & Competitive Strategy",
-      description: "Market positioning based on your intake form data.",
-      metadata: {
-        framework_details: {
-          value_proposition: "",
-          target_audience: "",
-          market_position: "",
-          differentiation: "",
-        },
-        who: {
-          demographics: "",
-          psychographics: "",
-          journey_stage: "",
-          evidence: [],
-        },
-        what: {
-          deliverables: [],
-          pricing_indicators: "",
-          service_model: "",
-        },
-        why: {
-          unique_approach: "",
-          methodology: "",
-          competitive_advantage: "",
-          evidence: [],
-        },
-        how: {
-          proof_strategy: "",
-          risk_reversal: "",
-          decision_criteria: "",
-        },
-        confidence_score: 30,
-      },
+      title: "Market Positioning Guide",
+      description: "Positioning guidance.",
+      metadata: { confidence_score: 30 },
       confidence_score: 30,
       source_attribution: [],
     };
