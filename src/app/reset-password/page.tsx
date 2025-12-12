@@ -5,6 +5,18 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/solid'
 import { ChevronLeft } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 function ResetPasswordForm() {
     const searchParams = useSearchParams()
@@ -97,16 +109,10 @@ function ResetPasswordForm() {
 
     if (isSuccess) {
         return (
-            <div
-                className="min-h-screen flex items-center justify-center px-4 transition-colors duration-150 bg-white dark:bg-[#121212]"
-            >
-                <div
-                    className="w-full max-w-md rounded-2xl px-8 pt-8 pb-10 border shadow-lg transition-colors duration-150 border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a]"
-                >
-                    <div className="text-center">
-                        <div
-                            className="mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4 bg-green-100 dark:bg-green-900/30"
-                        >
+            <div className="min-h-screen flex items-center justify-center px-4 transition-colors duration-150 bg-[var(--background)] text-[var(--text-primary)]">
+                <Card className="w-full max-w-md">
+                    <CardHeader>
+                        <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4 bg-green-100 dark:bg-green-900/30">
                             <svg
                                 className="h-6 w-6 text-green-600 dark:text-green-400"
                                 fill="none"
@@ -121,166 +127,135 @@ function ResetPasswordForm() {
                                 />
                             </svg>
                         </div>
-                        <h2
-                            className="text-2xl font-semibold mb-2 transition-colors duration-150 text-[#18416B] dark:text-[#FAC133]"
-                        >
-                            Password reset successful!
-                        </h2>
-                        <p
-                            className="text-sm mb-6 transition-colors duration-150 text-[#1a1a1a] dark:text-[#e0e0e0]"
-                        >
+                        <CardTitle className="text-center">Password reset successful!</CardTitle>
+                        <CardDescription className="text-center">
                             Your password has been reset. Redirecting to sign in...
-                        </p>
+                        </CardDescription>
+                    </CardHeader>
+                    <CardFooter className="justify-center">
                         <Link
                             href="/signin"
-                            className="inline-block text-sm font-medium transition-all duration-150 text-[#18416B] dark:text-[#FAC133] hover:text-[#245884] dark:hover:text-[#FAC133]/80"
+                            className="text-sm font-medium transition-all duration-150 text-[var(--primary)] hover:text-[var(--accent)]"
                         >
                             Go to sign in →
                         </Link>
-                    </div>
-                </div>
+                    </CardFooter>
+                </Card>
             </div>
         )
     }
 
     return (
-        <div
-            className="min-h-screen flex items-center justify-center px-4 transition-colors duration-150 bg-white dark:bg-[#121212]"
-        >
-            <form
-                onSubmit={handleSubmit}
-                className="w-full max-w-md rounded-2xl px-8 pt-8 pb-10 border shadow-lg transition-all duration-150 border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a]"
-            >
-                <div className="mb-8">
-                    <h2
-                        className="text-2xl font-semibold mb-2 transition-colors duration-150 text-[#18416B] dark:text-[#FAC133]"
-                    >
-                        Set new password
-                    </h2>
-                    <p
-                        className="text-sm transition-colors duration-150 text-[#1a1a1a] dark:text-[#e0e0e0]"
-                    >
-                        Please enter your new password below.
-                    </p>
+        <div className="min-h-screen flex items-center justify-center px-4 transition-colors duration-150 bg-[var(--background)] text-[var(--text-primary)]">
+            <Card className="w-full max-w-md">
+                <CardHeader>
+                    <CardTitle className="text-3xl font-semibold">Set new password</CardTitle>
+                    <CardDescription>Please enter your new password below.</CardDescription>
                     {errorMessage && (
-                        <div
-                            className="mt-4 p-3 border rounded-md transition-colors duration-150 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20"
-                        >
-                            <p className="text-sm text-red-700 dark:text-red-300">
-                                {errorMessage}
-                            </p>
-                        </div>
+                        <Alert variant="destructive" className="mt-4">
+                            <AlertDescription>{errorMessage}</AlertDescription>
+                        </Alert>
                     )}
-                </div>
-
-                <div className="mb-4 relative">
-                    <label
-                        htmlFor="password"
-                        className="block text-sm font-medium mb-1 transition-colors duration-150 text-gray-700 dark:text-gray-300"
-                    >
-                        New Password
-                    </label>
-                    <input
-                        id="password"
-                        name="password"
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={(e) => handlePasswordChange(e.target.value)}
-                        autoComplete="new-password"
-                        required
-                        disabled={!token}
-                        className="w-full px-3 py-2 border rounded-md transition-all duration-200 focus:outline-none border-gray-300 dark:border-gray-600 focus:border-[#18416B] dark:focus:border-[#FAC133] focus:ring-[3px] focus:ring-[#18416B]/10 dark:focus:ring-[#FAC133]/10 bg-white dark:bg-[#121212] text-[#1a1a1a] dark:text-[#e0e0e0] placeholder:text-gray-400 dark:placeholder:text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                    <button
-                        type="button"
-                        onClick={() => setShowPassword((prev) => !prev)}
-                        className="absolute right-3 top-[35px] transition-colors duration-150 disabled:opacity-50 text-gray-500 dark:text-gray-400 hover:text-[#FAC133] disabled:hover:text-gray-500 dark:disabled:hover:text-gray-400"
-                        disabled={!token}
-                    >
-                        {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
-                    </button>
-
-                    {password.length > 0 && (
-                        <p
-                            className={`mt-2 text-sm transition-colors duration-150 ${passwordStrength.valid ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
-                        >
-                            {passwordStrength.message}
-                        </p>
-                    )}
-                </div>
-
-                <div className="mb-6 relative">
-                    <label
-                        htmlFor="confirmPassword"
-                        className="block text-sm font-medium mb-1 transition-colors duration-150 text-gray-700 dark:text-gray-300"
-                    >
-                        Confirm New Password
-                    </label>
-                    <input
-                        id="confirmPassword"
-                        name="confirmPassword"
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        autoComplete="new-password"
-                        required
-                        disabled={!token}
-                        className="w-full px-3 py-2 border rounded-md transition-all duration-200 focus:outline-none border-gray-300 dark:border-gray-600 focus:border-[#18416B] dark:focus:border-[#FAC133] focus:ring-[3px] focus:ring-[#18416B]/10 dark:focus:ring-[#FAC133]/10 bg-white dark:bg-[#121212] text-[#1a1a1a] dark:text-[#e0e0e0] placeholder:text-gray-400 dark:placeholder:text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                    <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword((prev) => !prev)}
-                        className="absolute right-3 top-[35px] transition-colors duration-150 disabled:opacity-50 text-gray-500 dark:text-gray-400 hover:text-[#FAC133] disabled:hover:text-gray-500 dark:disabled:hover:text-gray-400"
-                        disabled={!token}
-                    >
-                        {showConfirmPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
-                    </button>
-                </div>
-
-                <div className="mb-6">
-                    <button
-                        type="submit"
-                        disabled={isSubmitting || !passwordStrength.valid || !token}
-                        className="w-full bg-[#FAC133] hover:brightness-110 text-[#18416B] dark:text-[#1a1a1a] font-semibold py-2.5 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FAC133]/40 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md flex items-center justify-center gap-2"
-                    >
-                        {isSubmitting ? (
-                            <div className="flex items-center gap-2">
-                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                    <circle
-                                        className="opacity-25"
-                                        cx="12"
-                                        cy="12"
-                                        r="10"
-                                        stroke="currentColor"
-                                        strokeWidth="4"
-                                        fill="none"
+                </CardHeader>
+                <form onSubmit={handleSubmit}>
+                    <CardContent>
+                        <div className="flex flex-col gap-6">
+                            <div className="grid gap-2">
+                                <Label htmlFor="password">New Password</Label>
+                                <div className="relative">
+                                    <Input
+                                        id="password"
+                                        name="password"
+                                        type={showPassword ? 'text' : 'password'}
+                                        placeholder="••••••••"
+                                        value={password}
+                                        onChange={(e) => handlePasswordChange(e.target.value)}
+                                        autoComplete="new-password"
+                                        required
+                                        disabled={!token}
                                     />
-                                    <path
-                                        className="opacity-75"
-                                        fill="currentColor"
-                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                    />
-                                </svg>
-                                <span>Resetting...</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword((prev) => !prev)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-150 text-[var(--text-muted)] hover:text-[var(--accent)] disabled:opacity-50"
+                                        disabled={!token}
+                                    >
+                                        {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                                    </button>
+                                </div>
+                                {password.length > 0 && (
+                                    <p className={`text-sm transition-colors duration-150 ${passwordStrength.valid ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                        {passwordStrength.message}
+                                    </p>
+                                )}
                             </div>
-                        ) : (
-                            'Reset password'
-                        )}
-                    </button>
-                </div>
 
-                <div className="flex justify-center">
-                    <Link
-                        href="/signin"
-                        className="w-full flex items-center justify-center gap-1 text-sm font-medium rounded-xl py-2.5 px-4 transition-all duration-150 border border-[#18416B] dark:border-[#FAC133] text-[#18416B] dark:text-[#FAC133] hover:text-[#245884] dark:hover:text-[#FAC133]/80"
-                    >
-                        <ChevronLeft className="w-4 h-4" />
-                        Back to sign in
-                    </Link>
-                </div>
-            </form>
+                            <div className="grid gap-2">
+                                <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                                <div className="relative">
+                                    <Input
+                                        id="confirmPassword"
+                                        name="confirmPassword"
+                                        type={showConfirmPassword ? 'text' : 'password'}
+                                        placeholder="••••••••"
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        autoComplete="new-password"
+                                        required
+                                        disabled={!token}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPassword((prev) => !prev)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-150 text-[var(--text-muted)] hover:text-[var(--accent)] disabled:opacity-50"
+                                        disabled={!token}
+                                    >
+                                        {showConfirmPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </CardContent>
+                    <CardFooter className="flex flex-col gap-4 pt-6">
+                        <Button
+                            type="submit"
+                            disabled={isSubmitting || !passwordStrength.valid || !token}
+                            className="w-full"
+                        >
+                            {isSubmitting ? (
+                                <div className="flex items-center gap-2">
+                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                        <circle
+                                            className="opacity-25"
+                                            cx="12"
+                                            cy="12"
+                                            r="10"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                            fill="none"
+                                        />
+                                        <path
+                                            className="opacity-75"
+                                            fill="currentColor"
+                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                        />
+                                    </svg>
+                                    <span>Resetting...</span>
+                                </div>
+                            ) : (
+                                'Reset password'
+                            )}
+                        </Button>
+                        <Link
+                            href="/signin"
+                            className="w-full flex items-center justify-center gap-1 text-sm font-medium rounded-xl py-2.5 px-4 transition-all duration-150 border border-[color:var(--accent-strong)] text-[color:var(--accent-strong)] hover:bg-transparent"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                            Back to sign in
+                        </Link>
+                    </CardFooter>
+                </form>
+            </Card>
         </div>
     )
 }
@@ -288,12 +263,10 @@ function ResetPasswordForm() {
 export default function ResetPasswordPage() {
     return (
         <Suspense fallback={
-            <div
-                className="min-h-screen flex items-center justify-center px-4 transition-colors duration-150 bg-white dark:bg-[#121212]"
-            >
+            <div className="min-h-screen flex items-center justify-center px-4 transition-colors duration-150 bg-[var(--background)] text-[var(--text-primary)]">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#FAC133] mx-auto mb-4"></div>
-                    <p className="text-[#1a1a1a] dark:text-[#e0e0e0]">Loading...</p>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--accent-strong)] mx-auto mb-4"></div>
+                    <p className="text-[var(--text-primary)]">Loading...</p>
                 </div>
             </div>
         }>
