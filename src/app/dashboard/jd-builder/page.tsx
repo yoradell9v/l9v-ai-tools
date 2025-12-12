@@ -2226,7 +2226,16 @@ export default function JdBuilderPage() {
                                                                         <div className="w-2 h-2 rounded-full bg-primary"></div>
                                                                         Week 1
                                                                     </h5>
-                                                                    {typeof implementationPlan.onboarding_roadmap.week_1 === 'object' ? (
+                                                                    {Array.isArray(implementationPlan.onboarding_roadmap.week_1) ? (
+                                                                        <ul className="space-y-1 ml-4">
+                                                                            {implementationPlan.onboarding_roadmap.week_1.map((item: string, idx: number) => (
+                                                                                <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
+                                                                                    <span className="text-primary mt-0.5">•</span>
+                                                                                    <span>{item}</span>
+                                                                                </li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    ) : typeof implementationPlan.onboarding_roadmap.week_1 === 'object' && implementationPlan.onboarding_roadmap.week_1 !== null ? (
                                                                         Object.entries(implementationPlan.onboarding_roadmap.week_1).map(([key, value]: [string, any]) => (
                                                                             <div key={key} className="ml-4 mb-3">
                                                                                 <p className="text-xs font-medium text-muted-foreground mb-1">{key}</p>
@@ -2245,14 +2254,7 @@ export default function JdBuilderPage() {
                                                                             </div>
                                                                         ))
                                                                     ) : (
-                                                                        <ul className="space-y-1 ml-4">
-                                                                            {Array.isArray(implementationPlan.onboarding_roadmap.week_1) && implementationPlan.onboarding_roadmap.week_1.map((item: string, idx: number) => (
-                                                                                <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
-                                                                                    <span className="text-primary mt-0.5">•</span>
-                                                                                    <span>{item}</span>
-                                                                                </li>
-                                                                            ))}
-                                                                        </ul>
+                                                                        <p className="text-xs text-muted-foreground ml-4">{String(implementationPlan.onboarding_roadmap.week_1)}</p>
                                                                     )}
                                                                 </div>
                                                             )}
@@ -2262,7 +2264,16 @@ export default function JdBuilderPage() {
                                                                         <div className="w-2 h-2 rounded-full bg-primary"></div>
                                                                         Week 2
                                                                     </h5>
-                                                                    {typeof implementationPlan.onboarding_roadmap.week_2 === 'object' ? (
+                                                                    {Array.isArray(implementationPlan.onboarding_roadmap.week_2) ? (
+                                                                        <ul className="space-y-1 ml-4">
+                                                                            {implementationPlan.onboarding_roadmap.week_2.map((item: string, idx: number) => (
+                                                                                <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
+                                                                                    <span className="text-primary mt-0.5">•</span>
+                                                                                    <span>{item}</span>
+                                                                                </li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    ) : typeof implementationPlan.onboarding_roadmap.week_2 === 'object' && implementationPlan.onboarding_roadmap.week_2 !== null ? (
                                                                         Object.entries(implementationPlan.onboarding_roadmap.week_2).map(([key, value]: [string, any]) => (
                                                                             <div key={key} className="ml-4 mb-3">
                                                                                 <p className="text-xs font-medium text-muted-foreground mb-1">{key}</p>
@@ -2281,14 +2292,7 @@ export default function JdBuilderPage() {
                                                                             </div>
                                                                         ))
                                                                     ) : (
-                                                                        <ul className="space-y-1 ml-4">
-                                                                            {Array.isArray(implementationPlan.onboarding_roadmap.week_2) && implementationPlan.onboarding_roadmap.week_2.map((item: string, idx: number) => (
-                                                                                <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
-                                                                                    <span className="text-primary mt-0.5">•</span>
-                                                                                    <span>{item}</span>
-                                                                                </li>
-                                                                            ))}
-                                                                        </ul>
+                                                                        <p className="text-xs text-muted-foreground ml-4">{String(implementationPlan.onboarding_roadmap.week_2)}</p>
                                                                     )}
                                                                 </div>
                                                             )}
@@ -2298,7 +2302,16 @@ export default function JdBuilderPage() {
                                                                         <div className="w-2 h-2 rounded-full bg-primary"></div>
                                                                         Weeks 3-4
                                                                     </h5>
-                                                                    {typeof implementationPlan.onboarding_roadmap.week_3_4 === 'object' ? (
+                                                                    {Array.isArray(implementationPlan.onboarding_roadmap.week_3_4) ? (
+                                                                        <ul className="space-y-1 ml-4">
+                                                                            {implementationPlan.onboarding_roadmap.week_3_4.map((item: string, idx: number) => (
+                                                                                <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
+                                                                                    <span className="text-primary mt-0.5">•</span>
+                                                                                    <span>{item}</span>
+                                                                                </li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    ) : typeof implementationPlan.onboarding_roadmap.week_3_4 === 'object' && implementationPlan.onboarding_roadmap.week_3_4 !== null ? (
                                                                         Object.entries(implementationPlan.onboarding_roadmap.week_3_4).map(([key, value]: [string, any]) => (
                                                                             <div key={key} className="ml-4 mb-3">
                                                                                 <p className="text-xs font-medium text-muted-foreground mb-1">{key}</p>
@@ -2317,14 +2330,7 @@ export default function JdBuilderPage() {
                                                                             </div>
                                                                         ))
                                                                     ) : (
-                                                                        <ul className="space-y-1 ml-4">
-                                                                            {Array.isArray(implementationPlan.onboarding_roadmap.week_3_4) && implementationPlan.onboarding_roadmap.week_3_4.map((item: string, idx: number) => (
-                                                                                <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
-                                                                                    <span className="text-primary mt-0.5">•</span>
-                                                                                    <span>{item}</span>
-                                                                                </li>
-                                                                            ))}
-                                                                        </ul>
+                                                                        <p className="text-xs text-muted-foreground ml-4">{String(implementationPlan.onboarding_roadmap.week_3_4)}</p>
                                                                     )}
                                                                 </div>
                                                             )}
