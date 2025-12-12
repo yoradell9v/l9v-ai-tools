@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import path from "path";
 import * as cheerio from "cheerio";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export const runtime = "nodejs";
 
@@ -45,6 +47,85 @@ function validateSopFile(file: File) {
 
 function normalizeWhitespace(text: string) {
   return text.replace(/\s+/g, " ").trim();
+}
+
+// Extract text from PDF buffer using Mozilla's pdfjs-dist
+// This replaces pdf-parse which had initialization issues
+async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
+  try {
+    // Import pdfjs-dist legacy build for Node.js compatibility
+    // The legacy build works with Node.js 18+ (Promise.withResolvers requires Node 22+)
+    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    
+    // Configure worker for Node.js environment
+    // The legacy build requires workerSrc to be set, but in Node.js we run in main thread
+    // We'll set it to satisfy the check, but disable worker usage completely
+    if (typeof window === 'undefined') {
+      // Set a placeholder - the legacy build checks for this but won't actually use it
+      // when useWorkerFetch is false
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/legacy/build/pdf.worker.mjs';
+    }
+    
+    console.log("Loading PDF document from buffer, size:", buffer.length);
+    
+    // Create a loading task with the PDF buffer
+    // Include memory optimization options for large PDFs
+    // CRITICAL: useWorkerFetch: false tells pdfjs to run in main thread (no worker)
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(buffer),
+      useSystemFonts: true, // Better font handling in Node.js
+      verbosity: 0, // Suppress warnings
+      useWorkerFetch: false, // CRITICAL: Disables worker, runs in main thread
+      isEvalSupported: false, // Disable eval for security
+      maxImageSize: 1024 * 1024, // 1MB max per image (prevents memory issues)
+    });
+    
+    // Load the PDF document
+    const pdf = await loadingTask.promise;
+    const numPages = pdf.numPages;
+    
+    console.log(`PDF loaded successfully, pages: ${numPages}`);
+    
+    // Extract text from all pages
+    let fullText = '';
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      
+      // Extract text from text items
+      // Each item has a 'str' property containing the text
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(' ');
+      
+      fullText += pageText;
+      
+      // Add newline between pages (except after last page)
+      if (pageNum < numPages) {
+        fullText += '\n';
+      }
+    }
+    
+    if (!fullText || fullText.trim().length === 0) {
+      throw new Error("PDF parsing returned no text content");
+    }
+    
+    console.log(`PDF text extracted successfully, length: ${fullText.length}`);
+    return fullText.trim();
+  } catch (error: any) {
+    console.error("PDF extraction error:", error);
+    
+    // Provide more specific error messages
+    if (error.name === "PasswordException") {
+      throw new Error("PDF is password-protected and cannot be parsed");
+    } else if (error.name === "InvalidPDFException") {
+      throw new Error("Invalid or corrupted PDF file");
+    } else if (error.message) {
+      throw new Error(`Failed to parse PDF: ${error.message}`);
+    } else {
+      throw new Error("Failed to parse PDF: Unknown error");
+    }
+  }
 }
 
 async function extractWebsiteContent(url: string) {
@@ -352,13 +433,9 @@ async function extractTextFromSop(file: File) {
 
   try {
     if (extension === ".pdf" || mimeType === "application/pdf") {
-      const pdfModule: any = await import("pdf-parse");
-      const pdfParse = pdfModule.default || pdfModule;
-      const result = await pdfParse(buffer);
-      if (!result || !result.text) {
-        throw new Error("PDF parsing returned no text content");
-      }
-      return normalizeWhitespace(result.text);
+      console.log("Extracting text from PDF using pdfjs-dist...");
+      const text = await extractTextFromPdfBuffer(buffer);
+      return normalizeWhitespace(text);
     }
 
     if (
@@ -1819,27 +1896,89 @@ function generateMonitoringPlan(validation: any) {
 
 //Main Function
 
-async function extractTextFromS3Url(url: string, filename: string, mimeType?: string): Promise<string> {
+async function generateGetPresignedUrl(s3Key: string): Promise<string> {
+  const s3Client = new S3Client({
+    region: process.env.AWS_REGION!,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+  });
+
+  const command = new GetObjectCommand({
+    Bucket: process.env.AWS_BUCKET_NAME!,
+    Key: s3Key,
+  });
+
+  const presignedUrl = await getSignedUrl(s3Client, command, {
+    expiresIn: 300, // 5 minutes
+  });
+
+  return presignedUrl;
+}
+
+async function extractTextFromS3Url(url: string, filename: string, mimeType?: string, s3Key?: string): Promise<string> {
   try {
-    // Fetch file from S3 URL
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch file from S3: ${response.statusText}`);
+    // Debug: Log the incoming URL
+    console.log("extractTextFromS3Url called with:", {
+      url,
+      filename,
+      mimeType,
+      s3Key,
+      urlType: typeof url,
+      urlLength: url?.length,
+      urlStartsWith: url?.substring(0, 20),
+    });
+
+    // Validate URL format - must be HTTP/HTTPS
+    if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+      console.error("Invalid URL format - not an HTTP/HTTPS URL:", url);
+      throw new Error(`Invalid URL format. Expected HTTP/HTTPS URL, got: ${url}`);
     }
 
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const extension = getFileExtension(filename);
-
-    // Reuse the existing extraction logic
-    if (extension === ".pdf" || mimeType === "application/pdf") {
-      const pdfModule: any = await import("pdf-parse");
-      const pdfParse = pdfModule.default || pdfModule;
-      const result = await pdfParse(buffer);
-      if (!result || !result.text) {
-        throw new Error("PDF parsing returned no text content");
+    // If we have an S3 key, generate a GET presigned URL
+    let fetchUrl = url;
+    if (s3Key) {
+      try {
+        console.log("Generating GET presigned URL for S3 key:", s3Key);
+        fetchUrl = await generateGetPresignedUrl(s3Key);
+        console.log("Generated presigned URL (first 50 chars):", fetchUrl?.substring(0, 50));
+      } catch (presignError) {
+        console.warn("Failed to generate GET presigned URL, falling back to provided URL:", presignError);
       }
-      return normalizeWhitespace(result.text);
+    }
+
+    console.log("Fetching from URL (first 100 chars):", fetchUrl?.substring(0, 100));
+
+    // Fetch file from S3 URL
+    const response = await fetch(fetchUrl, {
+      credentials: "omit",
+    });
+
+    if (!response.ok) {
+      console.error("Fetch failed:", {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+      });
+      throw new Error(`Failed to fetch file from S3: ${response.status} ${response.statusText}`);
+    }
+
+    console.log("Fetch successful, converting to buffer...");
+    const arrayBuffer = await response.arrayBuffer();
+    console.log("ArrayBuffer size:", arrayBuffer.byteLength);
+    const buffer = Buffer.from(arrayBuffer);
+    console.log("Buffer created, size:", buffer.length, "type:", Buffer.isBuffer(buffer));
+    const extension = getFileExtension(filename);
+    console.log("File extension:", extension, "MIME type:", mimeType);
+
+    // Parse directly using the same logic as extractTextFromSop
+    // but without creating a File object (which doesn't exist in Node.js)
+
+    if (extension === ".pdf" || mimeType === "application/pdf") {
+      console.log("Extracting text from PDF using pdfjs-dist...");
+      const text = await extractTextFromPdfBuffer(buffer);
+      return normalizeWhitespace(text);
     }
 
     if (
@@ -1878,12 +2017,7 @@ async function extractTextFromS3Url(url: string, filename: string, mimeType?: st
   } catch (error) {
     console.error("SOP extraction error from S3:", error);
     if (error instanceof Error) {
-      if (error.message.includes("Failed to parse")) {
-        throw error;
-      }
-      throw new Error(
-        `Failed to parse the SOP file from S3: ${error.message}`
-      );
+      throw new Error(`Failed to parse the SOP file from S3: ${error.message}`);
     }
     throw new Error(
       "Failed to parse the SOP file from S3. Please ensure it's a valid PDF, DOC, DOCX, or TXT document."
@@ -1900,6 +2034,7 @@ export async function POST(request: Request) {
     let sopFileUrl: string | null = null;
     let sopFileName: string | null = null;
     let sopFileType: string | null = null;
+    let sopFileKey: string | null = null;
 
     // Parse request
     if (contentType.includes("multipart/form-data")) {
@@ -1934,10 +2069,18 @@ export async function POST(request: Request) {
       sopFileUrl = body?.sopFileUrl || null;
       sopFileName = body?.sopFileName || null;
       sopFileType = body?.sopFileType || null;
+      sopFileKey = body?.sopFileKey || null;
       console.log("Received JSON body.", intake_json);
       console.log("Intake Data: ", intake_json);
       if (sopFileUrl) {
         console.log("SOP file URL provided:", sopFileUrl);
+        console.log("SOP file URL type:", typeof sopFileUrl);
+        console.log("SOP file URL length:", sopFileUrl?.length);
+        console.log("SOP file URL starts with:", sopFileUrl?.substring(0, 50));
+        console.log("Is valid HTTP/HTTPS URL?", sopFileUrl?.startsWith("http://") || sopFileUrl?.startsWith("https://"));
+        if (sopFileKey) {
+          console.log("SOP file S3 key provided:", sopFileKey);
+        }
       }
     }
 
@@ -2054,9 +2197,15 @@ export async function POST(request: Request) {
             sendProgress("Processing SOP file from S3...");
             console.log(
               "Processing SOP file from S3:",
-              sopFileName,
-              sopFileType,
-              sopFileUrl
+              {
+                fileName: sopFileName,
+                fileType: sopFileType,
+                fileUrl: sopFileUrl,
+                fileUrlType: typeof sopFileUrl,
+                fileUrlLength: sopFileUrl?.length,
+                fileUrlPreview: sopFileUrl?.substring(0, 100),
+                s3Key: sopFileKey,
+              }
             );
 
             // Validate file extension and type
@@ -2079,7 +2228,7 @@ export async function POST(request: Request) {
 
             try {
               console.log("Extracting text from SOP from S3...");
-              sopText = await extractTextFromS3Url(sopFileUrl, sopFileName, sopFileType || undefined);
+              sopText = await extractTextFromS3Url(sopFileUrl, sopFileName, sopFileType || undefined, sopFileKey || undefined);
               console.log(
                 "Successfully extracted text, length:",
                 sopText?.length

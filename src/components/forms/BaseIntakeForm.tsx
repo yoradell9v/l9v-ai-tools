@@ -294,6 +294,15 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
             }
 
             const { presignedUrl, fileUrl, key } = await presignedResponse.json();
+            
+            // Debug: Log the fileUrl received from the API
+            console.log("Received fileUrl from presigned URL API:", {
+                fileUrl,
+                fileUrlType: typeof fileUrl,
+                fileUrlLength: fileUrl?.length,
+                fileUrlStartsWith: fileUrl?.substring(0, 50),
+                isHttpUrl: fileUrl?.startsWith("http://") || fileUrl?.startsWith("https://"),
+            });
 
             // Upload file directly to S3
             // Note: credentials must be 'omit' for S3 presigned URLs to work with CORS wildcard

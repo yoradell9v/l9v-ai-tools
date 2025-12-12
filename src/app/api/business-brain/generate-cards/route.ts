@@ -138,7 +138,6 @@ function buildEnhancedContext(
     intakeData.isRegulated
   );
 
-  // Extract content from contentLinks (already processed URLs with full content)
   const contentLinkSamples = extractedContent?.contentLinks?.slice(0, 5).map((link) => ({
     url: link.url,
     hero: link.hero?.substring(0, 500) || "",
@@ -283,7 +282,6 @@ function calculateCardConfidence(
   const normalizedSources = (sources || []).map((s: any) => {
     if (typeof s === "string") return s;
     if (s && typeof s === "object") {
-      // common shape: { source, insight }
       if ((s as any).source) return String((s as any).source);
       return JSON.stringify(s);
     }
@@ -304,18 +302,11 @@ function calculateCardConfidence(
   if (descriptionLength > 3000) confidence += 10;
   else if (descriptionLength > 2000) confidence += 5;
 
-  // slight boost if compliance risk high but data provided
   if (context?.compliance?.isRegulated) confidence += 5;
 
   return Math.min(confidence, 100);
 }
 
-// STAGE 1: INTELLIGENT CONTENT EXTRACTION
-
-/**
- * Extract URLs from contentLinks field
- * Supports comma, newline, or semicolon separated URLs
- */
 function extractUrlsFromContentLinks(contentLinks: string | undefined): string[] {
   if (!contentLinks || typeof contentLinks !== "string") {
     return [];
@@ -324,7 +315,6 @@ function extractUrlsFromContentLinks(contentLinks: string | undefined): string[]
   const urls = safeSplit(contentLinks, /,|\n|;/)
     .map((url) => url.trim())
     .filter((url) => {
-      // Basic URL validation
       try {
         const parsed = new URL(url);
         return parsed.protocol === "http:" || parsed.protocol === "https:";
@@ -336,10 +326,6 @@ function extractUrlsFromContentLinks(contentLinks: string | undefined): string[]
   return urls;
 }
 
-/**
- * Extract content from a single content link URL
- * Uses the same extraction logic as the main website
- */
 async function extractContentLinkSemanticContent(url: string): Promise<{
   url: string;
   hero: string;
@@ -350,7 +336,6 @@ async function extractContentLinkSemanticContent(url: string): Promise<{
   metadata: { title: string; description: string };
 }> {
   try {
-    // Add timeout to prevent hanging (30 seconds)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
@@ -420,17 +405,14 @@ async function intelligentContentExtraction(
   );
   console.log("Processed Files:", processedFiles);
 
-  // Extract and process contentLinks URLs
   const contentLinkUrls = extractUrlsFromContentLinks(contentLinks);
   console.log(`[ContentLinks] Found ${contentLinkUrls.length} URLs to process`);
   
-  // Limit to first 10 URLs to avoid performance issues
   const urlsToProcess = contentLinkUrls.slice(0, 10);
   if (contentLinkUrls.length > 10) {
     console.log(`[ContentLinks] Limiting to first 10 URLs (${contentLinkUrls.length} total provided)`);
   }
 
-  // Process URLs with concurrency limit (process 3 at a time to avoid overwhelming)
   const processedContentLinks: Array<{
     url: string;
     hero: string;
@@ -449,7 +431,6 @@ async function intelligentContentExtraction(
     processedContentLinks.push(...batchResults);
   }
 
-  // Filter out failed extractions (empty fullText)
   const validContentLinks = processedContentLinks.filter(
     (content) => content.fullText.trim().length > 0
   );
@@ -547,13 +528,9 @@ async function processFileWithChunking(file: {
   }
 }
 
-// ============================================================================
-// FILE EXTRACTION FUNCTIONS
-// ============================================================================
 
 async function extractFullFileText(url: string, name: string): Promise<string> {
   try {
-    // Check if it's a local file path
     if (url.startsWith("/") || url.startsWith("./") || url.startsWith("../")) {
       const filePath = url.startsWith("/")
         ? join(process.cwd(), "public", url)
@@ -565,7 +542,6 @@ async function extractFullFileText(url: string, name: string): Promise<string> {
       }
     }
 
-    // Fetch remote file
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch file: ${response.statusText}`);
@@ -581,6 +557,71 @@ async function extractFullFileText(url: string, name: string): Promise<string> {
   }
 }
 
+async function extractTextFromPdfBuffer(buffer: Buffer, filename: string): Promise<string> {
+  try {
+    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    
+    if (typeof window === 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/legacy/build/pdf.worker.mjs';
+    }
+    
+    console.log(`[PDF Extraction] Loading PDF document: ${filename}, size: ${buffer.length} bytes`);
+    
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(buffer),
+      useSystemFonts: true,
+      verbosity: 0,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      maxImageSize: 1024 * 1024,
+    });
+    
+    const pdf = await loadingTask.promise;
+    const numPages = pdf.numPages;
+    
+    console.log(`[PDF Extraction] PDF loaded successfully: ${filename}, pages: ${numPages}`);
+    
+    let fullText = '';
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      try {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+        
+        fullText += pageText;
+        
+        if (pageNum < numPages) {
+          fullText += '\n';
+        }
+      } catch (pageError: any) {
+        console.warn(`[PDF Extraction] Error extracting page ${pageNum} from ${filename}:`, pageError.message);
+      }
+    }
+    
+    if (!fullText || fullText.trim().length === 0) {
+      throw new Error("PDF parsing returned no text content");
+    }
+    
+    console.log(`[PDF Extraction] Successfully extracted text from ${filename}, length: ${fullText.length} characters`);
+    return fullText.trim();
+  } catch (error: any) {
+    console.error(`[PDF Extraction] Error extracting text from PDF ${filename}:`, error);
+    
+    if (error.name === "PasswordException") {
+      throw new Error(`PDF ${filename} is password-protected and cannot be parsed`);
+    } else if (error.name === "InvalidPDFException") {
+      throw new Error(`Invalid or corrupted PDF file: ${filename}`);
+    } else if (error.message) {
+      throw new Error(`Failed to parse PDF ${filename}: ${error.message}`);
+    } else {
+      throw new Error(`Failed to parse PDF ${filename}: Unknown error`);
+    }
+  }
+}
+
 async function extractTextFromBuffer(
   buffer: Buffer,
   filename: string
@@ -590,82 +631,71 @@ async function extractTextFromBuffer(
   try {
     if (extension === ".pdf") {
       try {
-        const pdfModule: any = await import("pdf-parse");
-        // Handle different export formats for pdf-parse
-        let pdfParse: any;
-
-        // Try different ways to access the function
-        if (typeof pdfModule === "function") {
-          pdfParse = pdfModule;
-        } else if (pdfModule.default) {
-          pdfParse =
-            typeof pdfModule.default === "function"
-              ? pdfModule.default
-              : pdfModule.default.default;
-        } else if (pdfModule.pdfParse) {
-          pdfParse = pdfModule.pdfParse;
-        } else if (pdfModule.PDFParse) {
-          // Try capitalized version (newer pdf-parse versions)
-          pdfParse = pdfModule.PDFParse;
-        } else {
-          // Last resort: try accessing the module directly
-          pdfParse = pdfModule;
-        }
-
-        if (typeof pdfParse !== "function") {
-          console.error(
-            `pdf-parse is not a function for ${filename}. Module keys:`,
-            Object.keys(pdfModule || {})
-          );
-          // Try using PDFParse class if available
-          if (pdfModule.PDFParse && typeof pdfModule.PDFParse === "function") {
-            const pdfParser = new pdfModule.PDFParse(buffer);
-            const result = await pdfParser.parse();
-            if (!result || !result.text) {
-              console.warn(
-                `PDF ${filename} parsed but returned no text content`
-              );
-              return "";
-            }
-            return normalizeWhitespace(result.text);
-          }
-          return "";
-        }
-
-        const result = await pdfParse(buffer);
-        if (!result || !result.text) {
-          console.warn(`PDF ${filename} parsed but returned no text content`);
-          return "";
-        }
-        return normalizeWhitespace(result.text);
-      } catch (pdfError) {
-        console.error(`Error parsing PDF ${filename}:`, pdfError);
+        const text = await extractTextFromPdfBuffer(buffer, filename);
+        return normalizeWhitespace(text);
+      } catch (pdfError: any) {
+        console.error(`[File Extraction] Error parsing PDF ${filename}:`, pdfError.message);
         return "";
       }
     }
 
     if (extension === ".docx") {
-      const mammoth = await import("mammoth");
-      const result = await mammoth.extractRawText({ buffer });
-      return normalizeWhitespace(result?.value || "");
+      try {
+        const mammoth = await import("mammoth");
+        const result = await mammoth.extractRawText({ buffer });
+        if (!result || !result.value) {
+          console.warn(`[File Extraction] DOCX ${filename} parsed but returned no text content`);
+          return "";
+        }
+        const text = normalizeWhitespace(result.value);
+        console.log(`[File Extraction] Successfully extracted text from DOCX ${filename}, length: ${text.length} characters`);
+        return text;
+      } catch (docxError: any) {
+        console.error(`[File Extraction] Error parsing DOCX ${filename}:`, docxError.message);
+        return "";
+      }
     }
 
     if (extension === ".doc") {
-      const WordExtractor = (await import("word-extractor")).default;
-      const extractor = new WordExtractor();
-      const doc = await extractor.extract(buffer);
-      const text =
-        typeof doc?.getBody === "function" ? doc.getBody() : String(doc ?? "");
-      return normalizeWhitespace(text);
+      try {
+        const WordExtractor = (await import("word-extractor")).default;
+        const extractor = new WordExtractor();
+        const doc = await extractor.extract(buffer);
+        const text =
+          typeof doc?.getBody === "function" ? doc.getBody() : String(doc ?? "");
+        if (!text || text.trim().length === 0) {
+          console.warn(`[File Extraction] DOC ${filename} parsed but returned no text content`);
+          return "";
+        }
+        const normalizedText = normalizeWhitespace(text);
+        console.log(`[File Extraction] Successfully extracted text from DOC ${filename}, length: ${normalizedText.length} characters`);
+        return normalizedText;
+      } catch (docError: any) {
+        console.error(`[File Extraction] Error parsing DOC ${filename}:`, docError.message);
+        return "";
+      }
     }
 
     if (extension === ".txt") {
-      return normalizeWhitespace(buffer.toString("utf-8"));
+      try {
+        const text = buffer.toString("utf-8");
+        if (!text || text.trim().length === 0) {
+          console.warn(`[File Extraction] TXT ${filename} is empty`);
+          return "";
+        }
+        const normalizedText = normalizeWhitespace(text);
+        console.log(`[File Extraction] Successfully extracted text from TXT ${filename}, length: ${normalizedText.length} characters`);
+        return normalizedText;
+      } catch (txtError: any) {
+        console.error(`[File Extraction] Error parsing TXT ${filename}:`, txtError.message);
+        return "";
+      }
     }
 
+    console.warn(`[File Extraction] Unsupported file type for ${filename}: ${extension || "unknown"}`);
     return "";
-  } catch (error) {
-    console.error(`Error parsing ${filename}:`, error);
+  } catch (error: any) {
+    console.error(`[File Extraction] Unexpected error parsing ${filename}:`, error.message || error);
     return "";
   }
 }
@@ -1005,9 +1035,6 @@ function extractVoiceSamples(
   }));
 }
 
-// ============================================================================
-// HTML PARSING FUNCTIONS (Using Cheerio)
-// ============================================================================
 
 function extractHeroSection($: cheerio.CheerioAPI): string {
   
@@ -1031,7 +1058,6 @@ function extractHeroSection($: cheerio.CheerioAPI): string {
     }
   }
 
-  // If no hero found, try getting h1 text
   const h1 = $("h1").first();
   if (h1.length > 0) {
     return h1.text().trim().substring(0, 500);
@@ -1238,7 +1264,6 @@ async function generateAndSaveCards(
     generateGHLCard(openai, miningResult.insights, analysisContext),
   ]);
 
-  // Enrich cards with intake data to avoid missing metadata that triggers false "missingElements"
   const normalizedForbiddenWords = safeSplit(intakeData?.forbiddenWords, /,|\n|;/);
   const normalizedDisclaimers = safeSplit(intakeData?.disclaimers, /\n{1,}|;|,/);
   const normalizedPipelineStages = safeSplit(intakeData?.pipelineStages, /→|->|,|\n/);
@@ -1407,8 +1432,6 @@ async function generateAndSaveCards(
 
   return result;
 }
-
-// API ROUTE HANDLER
 
 export async function POST(request: Request) {
   console.log("[Generate-Cards] API endpoint called");

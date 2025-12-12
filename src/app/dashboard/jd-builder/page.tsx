@@ -2743,10 +2743,28 @@ export default function JdBuilderPage() {
                                             // Handle SOP file upload (field id is 'sopFile')
                                             // files.sopFile is an array of { url, name, key, type } objects from S3
                                             if (files.sopFile && Array.isArray(files.sopFile) && files.sopFile.length > 0) {
-                                                // Use the first file's URL (assuming single file upload)
-                                                requestBody.sopFileUrl = files.sopFile[0].url;
-                                                requestBody.sopFileName = files.sopFile[0].name;
-                                                requestBody.sopFileType = files.sopFile[0].type;
+                                                const sopFile = files.sopFile[0];
+                                                console.log("SOP file data being sent:", {
+                                                    url: sopFile.url,
+                                                    urlType: typeof sopFile.url,
+                                                    urlLength: sopFile.url?.length,
+                                                    urlStartsWith: sopFile.url?.substring(0, 50),
+                                                    name: sopFile.name,
+                                                    key: sopFile.key,
+                                                    type: sopFile.type,
+                                                });
+                                                
+                                                // Validate URL format
+                                                if (!sopFile.url || (!sopFile.url.startsWith("http://") && !sopFile.url.startsWith("https://"))) {
+                                                    console.error("Invalid SOP file URL format:", sopFile.url);
+                                                    throw new Error(`Invalid SOP file URL format. Expected HTTP/HTTPS URL, got: ${sopFile.url}`);
+                                                }
+                                                
+                                                // Use the first file's data (assuming single file upload)
+                                                requestBody.sopFileUrl = sopFile.url;
+                                                requestBody.sopFileName = sopFile.name;
+                                                requestBody.sopFileType = sopFile.type;
+                                                requestBody.sopFileKey = sopFile.key; // Pass the S3 key for generating GET presigned URL
                                             }
 
                                             const response = await fetch('/api/jd/analyze', {
