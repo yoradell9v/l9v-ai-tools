@@ -70,7 +70,7 @@ export default function Modal({
               className={`relative rounded-lg border ${maxWidthClasses[maxWidth]} w-full max-h-[calc(100vh-2rem)] flex flex-col pointer-events-auto bg-[var(--card-bg)] border-[var(--border-color)] shadow-lg`}
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
-              <div className="flex-1 flex flex-col overflow-hidden p-8">
+              <div className="flex-1 flex flex-col overflow-hidden p-4 sm:p-6">
                 {/* Title */}
                 {title && (
                   <div className="mb-2">

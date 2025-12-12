@@ -234,22 +234,7 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // Prevent deactivating yourself (unless you're a SUPERADMIN deactivating someone else)
-    if (!isSuperAdmin) {
-      const currentUserOrg = await prisma.userOrganization.findFirst({
-        where: {
-          userId: decoded.userId,
-          organizationId: memberToUpdate.organizationId,
-        },
-      });
-
-      if (currentUserOrg && memberToUpdate.id === currentUserOrg.id && action === "deactivate") {
-        return NextResponse.json(
-          { success: false, message: "You cannot deactivate yourself." },
-          { status: 400 }
-        );
-      }
-    }
+    const isSelfAction = memberToUpdate.userId === decoded.userId;
 
     // Update member
     const updatedMember = await prisma.userOrganization.update({
@@ -281,6 +266,7 @@ export async function PATCH(request: Request) {
         joinedAt: updatedMember.createdAt.toISOString(),
         deactivatedAt: updatedMember.deactivatedAt?.toISOString() || null,
       },
+      selfDeactivated: isSelfAction && action === "deactivate",
     });
   } catch (error) {
     console.error("Error updating member:", error);

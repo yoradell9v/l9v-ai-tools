@@ -2,9 +2,6 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
-import { existsSync } from "fs";
 
 export const runtime = "nodejs";
 
@@ -102,43 +99,35 @@ function validateIntakeData(intakeData: any): {
   return { valid: true };
 }
 
-
-async function saveFileToPublic(
-  file: File,
-  fieldName: string,
-  brainId: string
-): Promise<{ url: string; name: string }> {
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
-
-  // Create directory structure: public/uploads/business-brain/{brainId}/
-  const uploadDir = path.join(
-    process.cwd(),
-    "public",
-    "uploads",
-    "business-brain",
-    brainId
-  );
-
-  // Ensure directory exists
-  if (!existsSync(uploadDir)) {
-    await mkdir(uploadDir, { recursive: true });
+// Validate S3 URL format
+function isValidS3Url(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    // Check if it's an S3 URL (s3.amazonaws.com or s3.{region}.amazonaws.com)
+    return (
+      urlObj.hostname.includes("s3") &&
+      urlObj.hostname.includes("amazonaws.com")
+    );
+  } catch {
+    return false;
   }
+}
 
-  // Generate unique filename with timestamp
-  const timestamp = Date.now();
-  const originalName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-  const fileName = `${fieldName}_${timestamp}_${originalName}`;
-  const filePath = path.join(uploadDir, fileName);
-
-  // Write file
-  await writeFile(filePath, buffer);
-
-  // Return public URL path and original filename
-  return {
-    url: `/uploads/business-brain/${brainId}/${fileName}`,
-    name: file.name, // Keep original filename
-  };
+// Validate file URL metadata structure
+function validateFileUrlMetadata(
+  fileUrl: any
+): fileUrl is { url: string; name: string; key: string; type: string } {
+  return (
+    fileUrl &&
+    typeof fileUrl === "object" &&
+    typeof fileUrl.url === "string" &&
+    typeof fileUrl.name === "string" &&
+    typeof fileUrl.key === "string" &&
+    typeof fileUrl.type === "string" &&
+    fileUrl.url.trim().length > 0 &&
+    fileUrl.name.trim().length > 0 &&
+    isValidS3Url(fileUrl.url)
+  );
 }
 
 export async function POST(request: Request) {
@@ -162,18 +151,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const contentType = request.headers.get("content-type") || "";
-    if (!contentType.includes("multipart/form-data")) {
+    // Parse JSON request body
+    let requestBody: any;
+    try {
+      requestBody = await request.json();
+    } catch (parseError) {
+      console.error("[Setup] Failed to parse request body");
       return NextResponse.json(
-        { success: false, error: "Content-Type must be multipart/form-data" },
+        { success: false, error: "Invalid request body. Expected JSON." },
         { status: 400 }
       );
     }
 
-    const formData = await request.formData();
-    const rawIntakeData = formData.get("intake_json");
+    // Extract intake data
+    const rawIntakeData = requestBody.intake_json;
 
-    if (typeof rawIntakeData !== "string") {
+    if (!rawIntakeData || typeof rawIntakeData !== "string") {
       return NextResponse.json(
         { success: false, error: "Missing intake_json payload." },
         { status: 400 }
@@ -226,7 +219,7 @@ export async function POST(request: Request) {
     }
 
     // Determine organization to use
-    const organizationIdParam = formData.get("organizationId");
+    const organizationIdParam = requestBody.organizationId;
     let userOrganizationIdToUse = userOrganizations[0].id;
 
     if (organizationIdParam && typeof organizationIdParam === "string") {
@@ -246,40 +239,67 @@ export async function POST(request: Request) {
       } as any,
     });
 
-    const fileUploads: Array<{ url: string; name: string; type: string; field: string }> = [];
-    // Align file uploads with current form config (proofFiles only)
-    const fileFields = ["proofFiles"];
+    // Process file URLs from request body
+    const fileUploads: Array<{
+      url: string;
+      name: string;
+      type: string;
+      field: string;
+      key?: string;
+    }> = [];
 
-    const filePromises = fileFields.map(async (fieldName) => {
-      const entries = formData.getAll(fieldName) || [];
-      const files = entries.filter((f): f is File => f instanceof File && f.size > 0);
+    const rawFileUrls = requestBody.file_urls;
+    if (rawFileUrls) {
+      let parsedFileUrls: Record<
+        string,
+        Array<{ url: string; name: string; key: string; type: string }>
+      >;
 
-      if (files.length === 0) return null;
+      try {
+        // Parse file_urls JSON string
+        parsedFileUrls =
+          typeof rawFileUrls === "string"
+            ? JSON.parse(rawFileUrls)
+            : rawFileUrls;
+      } catch (parseError) {
+        console.error("[Setup] Failed to parse file_urls");
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Invalid file_urls payload format.",
+          },
+          { status: 400 }
+        );
+      }
 
-      const saved = await Promise.all(
-        files.map(async (file) => {
-          try {
-            const fileResult = await saveFileToPublic(file, fieldName, businessBrain.id);
-            return {
-              url: fileResult.url,
-              name: fileResult.name,
-              type: file.type || "application/octet-stream",
+      // Process each field's file URLs
+      Object.entries(parsedFileUrls).forEach(([fieldName, fileUrlArray]) => {
+        if (!Array.isArray(fileUrlArray)) {
+          console.warn(
+            `[Setup] Invalid file_urls structure for field ${fieldName}`
+          );
+          return;
+        }
+
+        fileUrlArray.forEach((fileUrl) => {
+          // Validate file URL metadata
+          if (validateFileUrlMetadata(fileUrl)) {
+            fileUploads.push({
+              url: fileUrl.url,
+              name: fileUrl.name,
+              type: fileUrl.type,
               field: fieldName,
-            };
-          } catch (fileError) {
-            console.error(`[Setup] Error saving file ${fieldName}`);
-            return null;
+              key: fileUrl.key, // Include S3 key for future cleanup
+            });
+          } else {
+            console.warn(
+              `[Setup] Invalid file URL metadata for field ${fieldName}:`,
+              fileUrl
+            );
           }
-        })
-      );
-
-      return saved.filter((f): f is NonNullable<typeof f> => f !== null);
-    });
-
-    const fileResults = await Promise.all(filePromises);
-    fileResults
-      .filter((group): group is NonNullable<typeof group> => Array.isArray(group))
-      .forEach((group) => fileUploads.push(...group));
+        });
+      });
+    }
 
     const updatedBusinessBrain = await prisma.businessBrain.update({
       where: { id: businessBrain.id },

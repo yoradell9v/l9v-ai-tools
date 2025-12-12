@@ -53,21 +53,44 @@ export function setupFetchInterceptor() {
       return originalFetch(input, init);
     }
 
+    // Check if this is an external URL (not same origin)
+    // External URLs (like S3) should use credentials: "omit" to avoid CORS issues
+    let shouldIncludeCredentials = true; // Default to true for same-origin requests
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      // This is an absolute URL - check if it's same origin
+      try {
+        const urlObj = new URL(url);
+        shouldIncludeCredentials = urlObj.origin === window.location.origin;
+      } catch {
+        // If URL parsing fails, default to including credentials (shouldn't happen)
+        shouldIncludeCredentials = true;
+      }
+    }
+    // Relative URLs (like "/api/...") are same-origin, so shouldIncludeCredentials stays true
+
     // Make the original request
     let response = await originalFetch(input, {
       ...init,
-      credentials: init?.credentials || "include",
+      credentials: init?.credentials !== undefined 
+        ? init.credentials 
+        : shouldIncludeCredentials 
+          ? "include" 
+          : "omit",
     });
 
-    // If unauthorized, try to refresh
-    if (response.status === 401) {
+    // If unauthorized, try to refresh (only for same-origin requests)
+    if (response.status === 401 && shouldIncludeCredentials) {
       const refreshed = await refreshAccessToken();
 
       if (refreshed) {
         // Retry the original request
         response = await originalFetch(input, {
           ...init,
-          credentials: init?.credentials || "include",
+          credentials: init?.credentials !== undefined 
+            ? init.credentials 
+            : shouldIncludeCredentials 
+              ? "include" 
+              : "omit",
         });
       }
     }

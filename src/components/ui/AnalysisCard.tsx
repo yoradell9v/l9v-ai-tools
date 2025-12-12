@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-    Activity,
     Briefcase,
     Calendar,
     CheckCircle2,
@@ -15,8 +14,27 @@ import {
     Sparkles,
     Target,
     Trash2,
+    Loader2,
 } from 'lucide-react';
-import Modal from './Modal';
+import { Button } from './button';
+import { Card, CardContent, CardHeader, CardTitle } from './card';
+import { Badge } from './badge';
+import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from './accordion';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from './alert-dialog';
 
 export interface AnalysisResult {
     preview: {
@@ -68,6 +86,12 @@ export interface SavedAnalysis {
     createdAt: string;
     updatedAt: string;
     refinementCount?: number;
+    createdBy?: {
+        id: string;
+        firstname: string;
+        lastname: string;
+        email: string;
+    };
 }
 
 interface AnalysisCardProps {
@@ -207,7 +231,7 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
     const formatList = (items?: string[], fallback?: string) => {
         if (!items || items.length === 0) {
             return fallback ? (
-                <p className="text-sm text-[var(--text-secondary)]">{fallback}</p>
+                <p className="text-sm text-muted-foreground">{fallback}</p>
             ) : null;
         }
 
@@ -216,9 +240,9 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
                 {items.map((item, idx) => (
                     <li
                         key={`${item}-${idx}`}
-                        className="flex items-start gap-2 text-sm text-[var(--text-primary)]"
+                        className="flex items-start gap-2 text-sm"
                     >
-                        <span className="mt-1 text-[var(--primary)] dark:text-[var(--accent)]">
+                        <span className="mt-1 text-primary">
                             •
                         </span>
                         <span className="flex-1">{item}</span>
@@ -304,665 +328,674 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
         label: string;
         value: React.ReactNode;
     }) => (
-        <div className="flex items-center gap-3 p-3 rounded-lg border border-[var(--border-color)] bg-[var(--hover-bg)]">
-            <div className="p-1.5 rounded-lg flex-shrink-0 bg-[var(--hover-bg)]">
-                <Icon size={16} className="text-[var(--primary)] dark:text-[var(--accent)]" />
+        <Card className="p-3">
+            <div className="flex items-center gap-3">
+                <div className="p-1.5 rounded-lg flex-shrink-0 bg-muted">
+                    <Icon size={16} className="text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                        {label}
+                    </p>
+                    <p className="text-sm font-medium truncate">
+                        {value}
+                    </p>
+                </div>
             </div>
-            <div className="flex-1 min-w-0">
-                <p className="text-xs uppercase tracking-wide text-[var(--text-secondary)]">
-                    {label}
-                </p>
-                <p className="text-sm font-medium truncate text-[var(--text-primary)]">
-                    {value}
-                </p>
-            </div>
-        </div>
+        </Card>
     );
 
     return (
-        <div
-            className="p-4 rounded-lg border transition-all duration-150 group hover:shadow-sm border border-[var(--border-color)] bg-[var(--card-bg)]"
-        >
-            <div className="space-y-4">
-                <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                        <div
-                            className="p-2 rounded-lg flex-shrink-0 bg-[var(--accent)]/20"
-                        >
-                            <FileText
-                                size={18}
-                                className="text-amber-500"
-                            />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                                <h3
-                                    className="font-bold text-sm truncate text-[var(--text-primary)]"
-                                    title={savedAnalysis.title}
-                                >
-                                    {savedAnalysis.title}
-                                </h3>
-                                {savedAnalysis.isFinalized && (
-                                    <span
-                                        className="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 bg-[var(--accent-bg)] text-[var(--accent)]"
-                                    >
-                                        Finalized
-                                    </span>
-                                )}
-                                {savedAnalysis.refinementCount ? (
-                                    <span
-                                        className="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 bg-[var(--hover-bg)] text-[var(--text-secondary)]"
-                                    >
-                                        {savedAnalysis.refinementCount} Refinement{savedAnalysis.refinementCount !== 1 ? 's' : ''}
-                                    </span>
-                                ) : null}
-                            </div>
-                            <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)]">
-                                <span className="flex items-center gap-1">
-                                    <Calendar size={12} />
-                                    {new Date(savedAnalysis.createdAt).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric'
-                                    })}
-                                </span>
-                                {savedAnalysis.finalizedAt && (
-                                    <>
-                                        <span>•</span>
+        <>
+            <Card className="transition-all duration-150 group hover:shadow-sm p-2">
+                <CardContent className="p-2">
+                    <div className="space-y-3">
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                <div className="p-2 rounded-lg flex-shrink-0 bg-amber-500/20">
+                                    <FileText size={18} className="text-amber-500" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                                        <h3
+                                            className="font-bold text-sm truncate"
+                                            title={savedAnalysis.title}
+                                        >
+                                            {savedAnalysis.title}
+                                        </h3>
+                                        {savedAnalysis.isFinalized && (
+                                            <Badge variant="default">
+                                                Finalized
+                                            </Badge>
+                                        )}
+                                        {savedAnalysis.refinementCount ? (
+                                            <Badge variant="secondary">
+                                                {savedAnalysis.refinementCount} Refinement{savedAnalysis.refinementCount !== 1 ? 's' : ''}
+                                            </Badge>
+                                        ) : null}
+                                    </div>
+                                    <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                                         <span className="flex items-center gap-1">
-                                            <Clock size={12} />
-                                            {new Date(savedAnalysis.finalizedAt).toLocaleDateString('en-US', {
+                                            <Calendar size={12} />
+                                            {new Date(savedAnalysis.createdAt).toLocaleDateString('en-US', {
                                                 month: 'short',
-                                                day: 'numeric'
+                                                day: 'numeric',
+                                                year: 'numeric'
                                             })}
                                         </span>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {onEdit && (
-                            <button
-                                onClick={() => onEdit(savedAnalysis)}
-                                className="p-1.5 rounded hover:bg-[var(--hover-bg)] transition-colors text-[var(--text-secondary)]"
-                                title="Edit analysis"
-                            >
-                                <Edit size={16} />
-                            </button>
-                        )}
-                        <button
-                            onClick={() => setIsDownloadModalOpen(true)}
-                            className="p-1.5 rounded hover:bg-[var(--hover-bg)] transition-colors text-[var(--text-secondary)]"
-                            title="Download analysis as PDF"
-                        >
-                            <Download size={16} />
-                        </button>
-                        <button
-                            onClick={() => setIsDeleteModalOpen(true)}
-                            className="p-1.5 rounded hover:bg-red-500/10 transition-colors text-[rgb(239,68,68)]"
-                            title="Delete analysis"
-                        >
-                            <Trash2 size={16} />
-                        </button>
-                        <button
-                            onClick={() => setIsExpanded(!isExpanded)}
-                            className="p-1.5 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 hover:bg-[var(--primary)]/20 dark:hover:bg-[var(--accent)]/30 transition-colors text-[var(--primary)] dark:text-[var(--accent)]"
-                            title={isExpanded ? 'Hide details' : 'View details'}
-                        >
-                            {isExpanded ? (
-                                <ChevronUp size={16} />
-                            ) : (
-                                <ChevronDown size={16} />
-                            )}
-                        </button>
-                    </div>
-                </div>
-
-                {isExpanded && (
-                    <div className="space-y-4 border-t pt-4 border-[var(--border-color)]">
-                        <div className="grid gap-2 md:grid-cols-3">
-                            <StatCard
-                                icon={Sparkles}
-                                label="Service Type"
-                                value={preview.service_type ?? metadata?.service_type ?? 'Unspecified'}
-                            />
-                            <StatCard
-                                icon={CheckCircle2}
-                                label="Confidence"
-                                value={
-                                    preview.service_confidence ??
-                                    metadata?.quality_scores?.overall_confidence ??
-                                    '—'
-                                }
-                            />
-                            <StatCard
-                                icon={Target}
-                                label="Hours/Week"
-                                value={
-                                    preview.core_va_hours ??
-                                    primaryRole?.hours_per_week ??
-                                    savedAnalysis.intakeData.weeklyHours ??
-                                    '—'
-                                }
-                            />
-                        </div>
-
-                        {savedAnalysis.intakeData.companyName && (
-                            <section className="rounded-lg border p-4 space-y-3 border border-[var(--border-color)] bg-[var(--hover-bg)]">
-                                <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-                                    <Briefcase size={16} className="text-[var(--primary)] dark:text-[var(--accent)]" />
-                                    Intake Snapshot
-                                </div>
-                                <div className="grid gap-3 md:grid-cols-2">
-                                    <div>
-                                        <p className="text-xs uppercase tracking-wide mb-1 text-[var(--text-secondary)]">
-                                            Company
-                                        </p>
-                                        <p className="text-sm font-medium text-[var(--text-primary)]">
-                                            {savedAnalysis.intakeData.companyName}
-                                        </p>
-                                        {savedAnalysis.intakeData.website && (
-                                            <a
-                                                href={savedAnalysis.intakeData.website}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="text-xs underline text-[var(--primary)] dark:text-[var(--accent)]"
-                                            >
-                                                {savedAnalysis.intakeData.website}
-                                            </a>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <p className="text-xs uppercase tracking-wide mb-1 text-[var(--text-secondary)]">
-                                            Goal
-                                        </p>
-                                        <p className="text-sm text-[var(--text-primary)]">
-                                            {savedAnalysis.intakeData.businessGoal || '—'}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="grid gap-3 md:grid-cols-2">
-                                    <div>
-                                        <p className="text-xs uppercase tracking-wide mb-1 text-[var(--text-secondary)]">
-                                            Top Tasks
-                                        </p>
-                                        {formatList(
-                                            savedAnalysis.intakeData.tasks?.slice(0, 3),
-                                            'No tasks captured'
-                                        )}
-                                    </div>
-                                    <div>
-                                        <p className="text-xs uppercase tracking-wide mb-1 text-[var(--text-secondary)]">
-                                            Requirements
-                                        </p>
-                                        {formatList(
-                                            savedAnalysis.intakeData.requirements?.filter(Boolean).slice(0, 3),
-                                            'No requirements captured'
-                                        )}
-                                    </div>
-                                </div>
-                            </section>
-                        )}
-
-                        {(summary?.company_stage ||
-                            summary?.primary_bottleneck ||
-                            summary?.workflow_analysis) && (
-                                <section className="rounded-lg border p-4 space-y-3 border border-[var(--border-color)]">
-                                    <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-                                        <FileText size={16} className="text-[var(--primary)] dark:text-[var(--accent)]" />
-                                        What You Told Us
-                                    </div>
-                                    <div className="grid gap-3 md:grid-cols-2">
-                                        <div>
-                                            <p className="text-xs uppercase tracking-wide mb-1 text-[var(--text-secondary)]">
-                                                Company Stage
-                                            </p>
-                                            <p className="text-sm text-[var(--text-primary)]">
-                                                {summary?.company_stage ?? '—'}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs uppercase tracking-wide mb-1 text-[var(--text-secondary)]">
-                                                Primary Bottleneck
-                                            </p>
-                                            <p className="text-sm text-[var(--text-primary)]">
-                                                {summary?.primary_bottleneck ?? '—'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    {summary?.workflow_analysis && (
-                                        <div>
-                                            <p className="text-xs uppercase tracking-wide mb-1 text-[var(--text-secondary)]">
-                                                Workflow Analysis
-                                            </p>
-                                            <p className="text-sm leading-relaxed text-[var(--text-primary)]">
-                                                {summary.workflow_analysis}
-                                            </p>
-                                        </div>
-                                    )}
-                                    {summary?.sop_status && (
-                                        <div className="rounded-lg border p-3 space-y-2 border-[var(--border-color)]">
-                                            <p className="text-xs uppercase tracking-wide text-[var(--text-secondary)]">
-                                                Documentation
-                                            </p>
-                                            <p className="text-sm text-[var(--text-primary)]">
-                                                {summary.sop_status.summary}
-                                            </p>
-                                            <div className="grid gap-3 md:grid-cols-2">
-                                                {summary.sop_status.pain_points?.length > 0 && (
-                                                    <div>
-                                                        <p className="text-xs font-medium mb-1 text-[rgb(239, 68, 68)]">
-                                                            Pain Points
-                                                        </p>
-                                                        {formatList(summary.sop_status.pain_points)}
-                                                    </div>
-                                                )}
-                                                {summary.sop_status.documentation_gaps?.length > 0 && (
-                                                    <div>
-                                                        <p className="text-xs font-medium mb-1 text-[rgb(245, 158, 11)]">
-                                                            Gaps
-                                                        </p>
-                                                        {formatList(summary.sop_status.documentation_gaps)}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </section>
-                            )}
-
-                        <section className="rounded-lg border p-4 space-y-3 border-[var(--border-color)] bg-[var(--hover-bg)]">
-                            <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-                                <Sparkles size={16} className="text-[var(--primary)] dark:text-[var(--accent)]" />
-                                Recommendation Snapshot
-                            </div>
-                            {preview.primary_outcome && (
-                                <div className="rounded-lg border p-3 flex gap-2 border-[var(--primary)] dark:border-[var(--accent)] ">
-                                    <Target size={16} className="mt-0.5 flex-shrink-0 text-[var(--primary)] dark:text-[var(--accent)]" />
-                                    <div>
-                                        <p className="text-xs uppercase tracking-wide mb-1 text-[var(--primary)] dark:text-[var(--accent)] ">
-                                            Primary Outcome
-                                        </p>
-                                        <p className="text-sm leading-relaxed text-[var(--text-primary)]">
-                                            {preview.primary_outcome}
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-                            {preview.service_reasoning && (
-                                <div>
-                                    <p className="text-xs uppercase tracking-wide mb-1 text-[var(--text-secondary)]">
-                                        Why this service
-                                    </p>
-                                    <p className="text-sm leading-relaxed text-[var(--text-primary)]">
-                                        {preview.service_reasoning}
-                                    </p>
-                                </div>
-                            )}
-                            {keyRisks.length > 0 && (
-                                <div>
-                                    <p className="text-xs uppercase tracking-wide mb-1 text-[var(--text-secondary)]">
-                                        Key Risks
-                                    </p>
-                                    {formatList(keyRisks)}
-                                </div>
-                            )}
-                            {questionsForYou.length > 0 && (
-                                <div>
-                                    <p className="text-xs uppercase tracking-wide mb-1 text-[var(--text-secondary)]">
-                                        Open Questions
-                                    </p>
-                                    {formatList(
-                                        questionsForYou.map((q: any) =>
-                                            typeof q === 'string' ? q : q.question
-                                        )
-                                    )}
-                                </div>
-                            )}
-                        </section>
-
-                        {primaryRole && (
-                            <section className="rounded-lg border p-4 space-y-3 border border-[var(--border-color)] bg-[var(--hover-bg)]">
-                                <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-                                    <FileText size={16} className="text-[var(--primary)] dark:text-[var(--accent)]" />
-                                    Core Role Overview
-                                </div>
-                                <div className="flex flex-wrap gap-2 text-xs">
-                                    <span className="px-2 py-0.5 rounded-full border border-[var(--border-color)] text-[var(--text-primary)]">
-                                        {primaryRole.title}
-                                    </span>
-                                    <span className="px-2 py-0.5 rounded-full border border-[var(--border-color)] text-[var(--text-primary)]">
-                                        {primaryRole.hours_per_week || '—'} hrs/week
-                                    </span>
-                                    {primaryRole.client_facing !== undefined && (
-                                        <span className="px-2 py-0.5 rounded-full border border-[var(--border-color)] text-[var(--text-primary)]">
-                                            {primaryRole.client_facing ? 'Client facing' : 'Internal'}
-                                        </span>
-                                    )}
-                                </div>
-                                {primaryRole.purpose && (
-                                    <p className="text-sm leading-relaxed text-[var(--text-primary)]">
-                                        {primaryRole.purpose}
-                                    </p>
-                                )}
-                                {primaryRole.responsibilities.length > 0 && (
-                                    <div>
-                                        <p className="text-xs uppercase tracking-wide mb-1 text-[var(--text-secondary)]">
-                                            Responsibilities
-                                        </p>
-                                        {formatList(primaryRole.responsibilities.slice(0, 5))}
-                                    </div>
-                                )}
-                                {primaryRole.skills.length > 0 && (
-                                    <div>
-                                        <p className="text-xs uppercase tracking-wide mb-2 text-[var(--text-secondary)]">
-                                            Skills
-                                        </p>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {primaryRole.skills.slice(0, 8).map((skill, idx) => (
-                                                <span
-                                                    key={`${skill}-${idx}`}
-                                                    className="px-2 py-0.5 text-xs rounded border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-primary)]"
-                                                >
-                                                    {skill}
+                                        {savedAnalysis.createdBy && (
+                                            <>
+                                                <span>•</span>
+                                                <span className="flex items-center gap-1">
+                                                    Created by {savedAnalysis.createdBy.firstname} {savedAnalysis.createdBy.lastname}
                                                 </span>
-                                            ))}
-                                        </div>
+                                            </>
+                                        )}
+                                        {savedAnalysis.finalizedAt && (
+                                            <>
+                                                <span>•</span>
+                                                <span className="flex items-center gap-1">
+                                                    <Clock size={12} />
+                                                    {new Date(savedAnalysis.finalizedAt).toLocaleDateString('en-US', {
+                                                        month: 'short',
+                                                        day: 'numeric'
+                                                    })}
+                                                </span>
+                                            </>
+                                        )}
                                     </div>
-                                )}
-                            </section>
-                        )}
-
-                        {serviceStructure && (
-                            <section className="rounded-lg border p-4 space-y-3 border-[var(--border-color)] bg-[var(--hover-bg)]">
-                                <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-                                    <Briefcase size={16} className="text-[var(--primary)] dark:text-[var(--accent)]" />
-                                    Service Structure
                                 </div>
-                                {serviceStructure.coordination_model && (
-                                    <p className="text-sm leading-relaxed text-[var(--text-primary)]">
-                                        {serviceStructure.coordination_model}
-                                    </p>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {onEdit && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => onEdit(savedAnalysis)}
+                                        title="Edit analysis"
+                                    >
+                                        <Edit size={16} />
+                                    </Button>
                                 )}
-                                {(serviceStructure.pros?.length ||
-                                    serviceStructure.cons?.length) && (
-                                        <div className="grid gap-2 md:grid-cols-2">
-                                            {serviceStructure.pros?.length > 0 && (
-                                                <div className="rounded-lg border p-3 border-green-500 bg-green-500/10">
-                                                    <p className="text-xs font-medium uppercase tracking-wide mb-1 text-green-600 dark:text-green-400">
-                                                        Pros
-                                                    </p>
-                                                    {formatList(serviceStructure.pros)}
-                                                </div>
-                                            )}
-                                            {serviceStructure.cons?.length > 0 && (
-                                                <div className="rounded-lg border p-3 border-amber-500 bg-amber-500/10">
-                                                    <p className="text-xs font-medium uppercase tracking-wide mb-1 text-amber-600 dark:text-amber-400">
-                                                        Cons
-                                                    </p>
-                                                    {formatList(serviceStructure.cons)}
-                                                </div>
-                                            )}
-                                        </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setIsDownloadModalOpen(true)}
+                                    title="Download analysis as PDF"
+                                >
+                                    <Download size={16} />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setIsDeleteModalOpen(true)}
+                                    title="Delete analysis"
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                >
+                                    <Trash2 size={16} />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setIsExpanded(!isExpanded)}
+                                    title={isExpanded ? 'Hide details' : 'View details'}
+                                    className="bg-primary/10 hover:bg-primary/20 text-primary"
+                                >
+                                    {isExpanded ? (
+                                        <ChevronUp size={16} />
+                                    ) : (
+                                        <ChevronDown size={16} />
                                     )}
-                                {serviceStructure.team_support_areas?.length > 0 && (
-                                    <div className="space-y-3">
-                                        <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                                            Team Support Areas
-                                        </p>
-                                        {serviceStructure.team_support_areas.map(
-                                            (area: any, idx: number) => (
-                                                <div
-                                                    key={`${area.skill_category}-${idx}`}
-                                                    className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 space-y-2"
-                                                >
-                                                    <p className="text-sm font-semibold text-zinc-900 dark:text-white">
-                                                        {area.skill_category} · {area.estimated_hours_monthly} hrs/mo
-                                                    </p>
-                                                    {area.use_cases && (
+                                </Button>
+                            </div>
+                        </div>
+
+                        {isExpanded && (
+                            <div className="space-y-3 border-t pt-4">
+                                <div className="grid gap-2 md:grid-cols-3">
+                                    <StatCard
+                                        icon={Sparkles}
+                                        label="Service Type"
+                                        value={preview.service_type ?? metadata?.service_type ?? 'Unspecified'}
+                                    />
+                                    <StatCard
+                                        icon={CheckCircle2}
+                                        label="Confidence"
+                                        value={
+                                            preview.service_confidence ??
+                                            metadata?.quality_scores?.overall_confidence ??
+                                            '—'
+                                        }
+                                    />
+                                    <StatCard
+                                        icon={Target}
+                                        label="Hours/Week"
+                                        value={
+                                            preview.core_va_hours ??
+                                            primaryRole?.hours_per_week ??
+                                            savedAnalysis.intakeData.weeklyHours ??
+                                            '—'
+                                        }
+                                    />
+                                </div>
+
+                                <Accordion type="multiple" className="w-full">
+                                    {savedAnalysis.intakeData.companyName && (
+                                        <AccordionItem value="intake">
+                                            <AccordionTrigger className="text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <Briefcase size={16} className="text-primary" />
+                                                    Intake Snapshot
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent>
+                                                <div className="space-y-3 pt-2">
+                                                    <div className="grid gap-3 md:grid-cols-2">
                                                         <div>
-                                                            <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                                                                Use Cases
+                                                            <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">
+                                                                Company
                                                             </p>
-                                                            {formatList(area.use_cases)}
+                                                            <p className="text-sm font-medium">
+                                                                {savedAnalysis.intakeData.companyName}
+                                                            </p>
+                                                            {savedAnalysis.intakeData.website && (
+                                                                <a
+                                                                    href={savedAnalysis.intakeData.website}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="text-xs underline text-primary"
+                                                                >
+                                                                    {savedAnalysis.intakeData.website}
+                                                                </a>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </div>
-                                            )
-                                        )}
-                                    </div>
-                                )}
-                            </section>
-                        )}
-
-                        {implementationPlan && (
-                            <section className="rounded-lg border p-4 space-y-3 border-[var(--border-color)] bg-[var(--hover-bg)]">
-                                <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-                                    <Target size={16} className="text-[var(--primary)] dark:text-[var(--accent)]" />
-                                    Implementation Plan
-                                </div>
-                                {implementationPlan.immediate_next_steps?.length > 0 && (
-                                    <div className="space-y-2">
-                                        {implementationPlan.immediate_next_steps.map(
-                                            (step: any, idx: number) => (
-                                                <div
-                                                    key={`${step.step}-${idx}`}
-                                                    className="rounded-lg border p-3 border-[var(--border-color)]"
-                                                >
-                                                    <div className="flex items-center justify-between text-sm font-medium mb-1 text-[var(--text-primary)]">
-                                                        <span>{step.step}</span>
-                                                        <span className="text-xs text-[var(--text-secondary)]">
-                                                            {step.owner}
-                                                        </span>
+                                                        <div>
+                                                            <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">
+                                                                Goal
+                                                            </p>
+                                                            <p className="text-sm">
+                                                                {savedAnalysis.intakeData.businessGoal || '—'}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                    <p className="text-xs mb-1 text-[var(--text-secondary)]">
-                                                        Timeline: {step.timeline}
-                                                    </p>
-                                                    <p className="text-sm mt-2 text-[var(--text-primary)]">
-                                                        {step.output}
-                                                    </p>
-                                                </div>
-                                            )
-                                        )}
-                                    </div>
-                                )}
-                                {/* {implementationPlan.onboarding_roadmap && (
-                                    <div className="space-y-3">
-                                        <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                                            Onboarding Roadmap
-                                        </p>
-                                        {Object.entries(implementationPlan.onboarding_roadmap).map(
-                                            ([week, roles]: [string, any]) => (
-                                                <div
-                                                    key={week}
-                                                    className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 space-y-2"
-                                                >
-                                                    <p className="text-sm font-semibold text-zinc-900 dark:text-white">
-                                                        {week.replace(/_/g, ' ').toUpperCase()}
-                                                    </p>
-                                                    {Object.entries(roles).map(
-                                                        ([roleName, tasks]: [string, string[]]) => (
-                                                            <div key={roleName} className="space-y-1">
-                                                                <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-                                                                    {roleName}
-                                                                </p>
-                                                                {formatList(tasks)}
-                                                            </div>
-                                                        )
-                                                    )}
-                                                </div>
-                                            )
-                                        )}
-                                    </div>
-                                )} */}
-                            </section>
-                        )}
-
-                        {(riskManagement?.risks?.length ||
-                            riskManagement?.assumptions?.length ||
-                            riskManagement?.monitoring_plan) && (
-                                <section className="rounded-lg border p-4 space-y-3 border-[var(--border-color)] bg-[var(--hover-bg)]">
-                                    <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-                                        <ShieldAlert size={16} className="text-[var(--primary)] dark:text-[var(--accent)]" />
-                                        Risk & Monitoring
-                                    </div>
-                                    {riskManagement.risks?.length > 0 && (
-                                        <div>
-                                            <p className="text-xs uppercase tracking-wide mb-1 text-[var(--text-secondary)]">
-                                                Risks
-                                            </p>
-                                            {formatList(
-                                                riskManagement.risks.map(
-                                                    (risk: any) =>
-                                                        `${risk.risk} · Impact: ${risk.impact} · Mitigation: ${risk.mitigation}`
-                                                )
-                                            )}
-                                        </div>
-                                    )}
-                                    {riskManagement.assumptions?.length > 0 && (
-                                        <div>
-                                            <p className="text-xs uppercase tracking-wide mb-1 text-[var(--text-secondary)]">
-                                                Assumptions
-                                            </p>
-                                            {formatList(
-                                                riskManagement.assumptions.map(
-                                                    (assumption: any) =>
-                                                        `${assumption.assumption} (Criticality: ${assumption.criticality})`
-                                                )
-                                            )}
-                                        </div>
-                                    )}
-                                    {riskManagement.monitoring_plan?.quality_checks?.length > 0 && (
-                                        <div>
-                                            <p className="text-xs uppercase tracking-wide mb-1 text-[var(--text-secondary)]">
-                                                Quality Checks
-                                            </p>
-                                            <div className="space-y-2">
-                                                {riskManagement.monitoring_plan.quality_checks.map(
-                                                    (check: any, idx: number) => (
-                                                        <div
-                                                            key={`${check.checkpoint}-${idx}`}
-                                                            className="rounded-lg border p-3 border-[var(--border-color)]"
-                                                        >
-                                                            <p className="text-sm font-medium mb-1 text-[var(--text-primary)]">
-                                                                {check.checkpoint}
+                                                    <div className="grid gap-3 md:grid-cols-2">
+                                                        <div>
+                                                            <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">
+                                                                Top Tasks
                                                             </p>
-                                                            {formatList(check.assess)}
+                                                            {formatList(
+                                                                savedAnalysis.intakeData.tasks?.slice(0, 3),
+                                                                'No tasks captured'
+                                                            )}
                                                         </div>
-                                                    )
+                                                        <div>
+                                                            <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">
+                                                                Requirements
+                                                            </p>
+                                                            {formatList(
+                                                                savedAnalysis.intakeData.requirements?.filter(Boolean).slice(0, 3),
+                                                                'No requirements captured'
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    )}
+
+                                    {(summary?.company_stage ||
+                                        summary?.primary_bottleneck ||
+                                        summary?.workflow_analysis) && (
+                                            <AccordionItem value="summary">
+                                                <AccordionTrigger className="text-sm">
+                                                    <div className="flex items-center gap-2">
+                                                        <FileText size={16} className="text-primary" />
+                                                        What You Told Us
+                                                    </div>
+                                                </AccordionTrigger>
+                                                <AccordionContent>
+                                                    <div className="space-y-3 pt-2">
+                                                        <div className="grid gap-3 md:grid-cols-2">
+                                                            <div>
+                                                                <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">
+                                                                    Company Stage
+                                                                </p>
+                                                                <p className="text-sm">
+                                                                    {summary?.company_stage ?? '—'}
+                                                                </p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">
+                                                                    Primary Bottleneck
+                                                                </p>
+                                                                <p className="text-sm">
+                                                                    {summary?.primary_bottleneck ?? '—'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        {summary?.workflow_analysis && (
+                                                            <div>
+                                                                <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">
+                                                                    Workflow Analysis
+                                                                </p>
+                                                                <p className="text-sm leading-relaxed">
+                                                                    {summary.workflow_analysis}
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                        {summary?.sop_status && (
+                                                            <Card className="p-3">
+                                                                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+                                                                    Documentation
+                                                                </p>
+                                                                <p className="text-sm mb-3">
+                                                                    {summary.sop_status.summary}
+                                                                </p>
+                                                                <div className="grid gap-3 md:grid-cols-2">
+                                                                    {summary.sop_status.pain_points?.length > 0 && (
+                                                                        <div>
+                                                                            <p className="text-xs font-medium mb-1 text-destructive">
+                                                                                Pain Points
+                                                                            </p>
+                                                                            {formatList(summary.sop_status.pain_points)}
+                                                                        </div>
+                                                                    )}
+                                                                    {summary.sop_status.documentation_gaps?.length > 0 && (
+                                                                        <div>
+                                                                            <p className="text-xs font-medium mb-1 text-amber-600 dark:text-amber-400">
+                                                                                Gaps
+                                                                            </p>
+                                                                            {formatList(summary.sop_status.documentation_gaps)}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </Card>
+                                                        )}
+                                                    </div>
+                                                </AccordionContent>
+                                            </AccordionItem>
+                                        )}
+
+                                    <AccordionItem value="recommendation">
+                                        <AccordionTrigger className="text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <Sparkles size={16} className="text-primary" />
+                                                Recommendation Snapshot
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <div className="space-y-3 pt-2">
+                                                {preview.primary_outcome && (
+                                                    <Card className="p-3 border-primary">
+                                                        <div className="flex gap-2">
+                                                            <Target size={16} className="mt-0.5 flex-shrink-0 text-primary" />
+                                                            <div>
+                                                                <p className="text-xs uppercase tracking-wide mb-1 text-primary">
+                                                                    Primary Outcome
+                                                                </p>
+                                                                <p className="text-sm leading-relaxed">
+                                                                    {preview.primary_outcome}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </Card>
+                                                )}
+                                                {preview.service_reasoning && (
+                                                    <div>
+                                                        <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">
+                                                            Why this service
+                                                        </p>
+                                                        <p className="text-sm leading-relaxed">
+                                                            {preview.service_reasoning}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {keyRisks.length > 0 && (
+                                                    <div>
+                                                        <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">
+                                                            Key Risks
+                                                        </p>
+                                                        {formatList(keyRisks)}
+                                                    </div>
+                                                )}
+                                                {questionsForYou.length > 0 && (
+                                                    <div>
+                                                        <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">
+                                                            Open Questions
+                                                        </p>
+                                                        {formatList(
+                                                            questionsForYou.map((q: any) =>
+                                                                typeof q === 'string' ? q : q.question
+                                                            )
+                                                        )}
+                                                    </div>
                                                 )}
                                             </div>
-                                        </div>
-                                    )}
-                                </section>
-                            )}
+                                        </AccordionContent>
+                                    </AccordionItem>
 
-                        {validationReport?.consistency_checks && (
-                            <section className="rounded-lg border p-4 space-y-3 border-[var(--border-color)] bg-[var(--hover-bg)]">
-                                <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-                                    <HelpCircle size={16} className="text-[var(--primary)] dark:text-[var(--accent)]" />
-                                    Validation Snapshot
-                                </div>
-                                {validationReport.consistency_checks.hours_balance?.issues?.length >
-                                    0 && (
-                                        <div className="rounded-lg border p-3 border-amber-500 bg-amber-500/10">
-                                            <p className="text-xs font-medium uppercase tracking-wide mb-1 text-amber-600 dark:text-amber-400">
-                                                Hours Balance
-                                            </p>
-                                            {formatList(
-                                                validationReport.consistency_checks.hours_balance.issues
-                                            )}
-                                        </div>
+
+                                    {primaryRole && (
+                                        <AccordionItem value="role">
+                                            <AccordionTrigger className="text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <FileText size={16} className="text-primary" />
+                                                    Core Role Overview
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent>
+                                                <div className="space-y-3 pt-2">
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <Badge variant="outline">{primaryRole.title}</Badge>
+                                                        <Badge variant="outline">{primaryRole.hours_per_week || '—'} hrs/week</Badge>
+                                                        {primaryRole.client_facing !== undefined && (
+                                                            <Badge variant="outline">
+                                                                {primaryRole.client_facing ? 'Client facing' : 'Internal'}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    {primaryRole.purpose && (
+                                                        <p className="text-sm leading-relaxed">
+                                                            {primaryRole.purpose}
+                                                        </p>
+                                                    )}
+                                                    {primaryRole.responsibilities.length > 0 && (
+                                                        <div>
+                                                            <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">
+                                                                Responsibilities
+                                                            </p>
+                                                            {formatList(primaryRole.responsibilities.slice(0, 5))}
+                                                        </div>
+                                                    )}
+                                                    {primaryRole.skills.length > 0 && (
+                                                        <div>
+                                                            <p className="text-xs uppercase tracking-wide mb-2 text-muted-foreground">
+                                                                Skills
+                                                            </p>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {primaryRole.skills.slice(0, 8).map((skill, idx) => (
+                                                                    <Badge key={`${skill}-${idx}`} variant="secondary">
+                                                                        {skill}
+                                                                    </Badge>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </AccordionContent>
+                                        </AccordionItem>
                                     )}
-                                {validationReport.consistency_checks.tool_alignment?.recommendations?.length >
-                                    0 && (
-                                        <div className="rounded-lg border p-3 border-blue-500 bg-blue-500/10">
-                                            <p className="text-xs font-medium uppercase tracking-wide mb-1 text-blue-600 dark:text-blue-400">
-                                                Tool Alignment
-                                            </p>
-                                            {formatList(
-                                                validationReport.consistency_checks.tool_alignment.recommendations
-                                            )}
-                                        </div>
+
+                                    {serviceStructure && (
+                                        <AccordionItem value="service">
+                                            <AccordionTrigger className="text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <Briefcase size={16} className="text-primary" />
+                                                    Service Structure
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent>
+                                                <div className="space-y-3 pt-2">
+                                                    {serviceStructure.coordination_model && (
+                                                        <p className="text-sm leading-relaxed">
+                                                            {serviceStructure.coordination_model}
+                                                        </p>
+                                                    )}
+                                                    {(serviceStructure.pros?.length ||
+                                                        serviceStructure.cons?.length) && (
+                                                            <div className="grid gap-2 md:grid-cols-2">
+                                                                {serviceStructure.pros?.length > 0 && (
+                                                                    <Card className="p-3 border-green-500 bg-green-500/10">
+                                                                        <p className="text-xs font-medium uppercase tracking-wide mb-1 text-green-600 dark:text-green-400">
+                                                                            Pros
+                                                                        </p>
+                                                                        {formatList(serviceStructure.pros)}
+                                                                    </Card>
+                                                                )}
+                                                                {serviceStructure.cons?.length > 0 && (
+                                                                    <Card className="p-3 border-amber-500 bg-amber-500/10">
+                                                                        <p className="text-xs font-medium uppercase tracking-wide mb-1 text-amber-600 dark:text-amber-400">
+                                                                            Cons
+                                                                        </p>
+                                                                        {formatList(serviceStructure.cons)}
+                                                                    </Card>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    {serviceStructure.team_support_areas?.length > 0 && (
+                                                        <div className="space-y-3">
+                                                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                                                Team Support Areas
+                                                            </p>
+                                                            {serviceStructure.team_support_areas.map(
+                                                                (area: any, idx: number) => (
+                                                                    <Card
+                                                                        key={`${area.skill_category}-${idx}`}
+                                                                        className="p-4"
+                                                                    >
+                                                                        <p className="text-sm font-semibold mb-2">
+                                                                            {area.skill_category} · {area.estimated_hours_monthly} hrs/mo
+                                                                        </p>
+                                                                        {area.use_cases && (
+                                                                            <div>
+                                                                                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                                                                                    Use Cases
+                                                                                </p>
+                                                                                {formatList(area.use_cases)}
+                                                                            </div>
+                                                                        )}
+                                                                    </Card>
+                                                                )
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </AccordionContent>
+                                        </AccordionItem>
                                     )}
-                            </section>
+
+                                    {implementationPlan && (
+                                        <AccordionItem value="implementation">
+                                            <AccordionTrigger className="text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <Target size={16} className="text-primary" />
+                                                    Implementation Plan
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent>
+                                                <div className="space-y-2 pt-2">
+                                                    {implementationPlan.immediate_next_steps?.length > 0 && (
+                                                        <Accordion type="multiple" className="w-full">
+                                                            {implementationPlan.immediate_next_steps.map(
+                                                                (step: any, idx: number) => (
+                                                                    <AccordionItem key={`${step.step}-${idx}`} value={`step-${idx}`} className="border-b">
+                                                                        <AccordionTrigger className="text-xs py-2">
+                                                                            <div className="flex items-center justify-between w-full pr-4">
+                                                                                <span className="font-medium">{step.step}</span>
+                                                                                <Badge variant="secondary" className="ml-2">{step.owner}</Badge>
+                                                                            </div>
+                                                                        </AccordionTrigger>
+                                                                        <AccordionContent className="pb-2">
+                                                                            <div className="space-y-1">
+                                                                                <p className="text-xs text-muted-foreground">
+                                                                                    Timeline: {step.timeline}
+                                                                                </p>
+                                                                                <p className="text-sm">
+                                                                                    {step.output}
+                                                                                </p>
+                                                                            </div>
+                                                                        </AccordionContent>
+                                                                    </AccordionItem>
+                                                                )
+                                                            )}
+                                                        </Accordion>
+                                                    )}
+                                                </div>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    )}
+
+                                    {(riskManagement?.risks?.length ||
+                                        riskManagement?.assumptions?.length ||
+                                        riskManagement?.monitoring_plan) && (
+                                            <AccordionItem value="risk">
+                                                <AccordionTrigger className="text-sm">
+                                                    <div className="flex items-center gap-2">
+                                                        <ShieldAlert size={16} className="text-primary" />
+                                                        Risk & Monitoring
+                                                    </div>
+                                                </AccordionTrigger>
+                                                <AccordionContent>
+                                                    <div className="space-y-3 pt-2">
+                                                        {riskManagement.risks?.length > 0 && (
+                                                            <div>
+                                                                <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">
+                                                                    Risks
+                                                                </p>
+                                                                {formatList(
+                                                                    riskManagement.risks.map(
+                                                                        (risk: any) =>
+                                                                            `${risk.risk} · Impact: ${risk.impact} · Mitigation: ${risk.mitigation}`
+                                                                    )
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {riskManagement.assumptions?.length > 0 && (
+                                                            <div>
+                                                                <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">
+                                                                    Assumptions
+                                                                </p>
+                                                                {formatList(
+                                                                    riskManagement.assumptions.map(
+                                                                        (assumption: any) =>
+                                                                            `${assumption.assumption} (Criticality: ${assumption.criticality})`
+                                                                    )
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {riskManagement.monitoring_plan?.quality_checks?.length > 0 && (
+                                                            <div>
+                                                                <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">
+                                                                    Quality Checks
+                                                                </p>
+                                                                <div className="space-y-2">
+                                                                    {riskManagement.monitoring_plan.quality_checks.map(
+                                                                        (check: any, idx: number) => (
+                                                                            <Card key={`${check.checkpoint}-${idx}`} className="p-3">
+                                                                                <p className="text-sm font-medium mb-1">
+                                                                                    {check.checkpoint}
+                                                                                </p>
+                                                                                {formatList(check.assess)}
+                                                                            </Card>
+                                                                        )
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </AccordionContent>
+                                            </AccordionItem>
+                                        )}
+
+                                    {validationReport?.consistency_checks && (
+                                        <AccordionItem value="validation">
+                                            <AccordionTrigger className="text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <HelpCircle size={16} className="text-primary" />
+                                                    Validation Snapshot
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent>
+                                                <div className="space-y-3 pt-2">
+                                                    {validationReport.consistency_checks.hours_balance?.issues?.length >
+                                                        0 && (
+                                                            <Card className="p-3 border-amber-500 bg-amber-500/10">
+                                                                <p className="text-xs font-medium uppercase tracking-wide mb-1 text-amber-600 dark:text-amber-400">
+                                                                    Hours Balance
+                                                                </p>
+                                                                {formatList(
+                                                                    validationReport.consistency_checks.hours_balance.issues
+                                                                )}
+                                                            </Card>
+                                                        )}
+                                                    {validationReport.consistency_checks.tool_alignment?.recommendations?.length >
+                                                        0 && (
+                                                            <Card className="p-3 border-blue-500 bg-blue-500/10">
+                                                                <p className="text-xs font-medium uppercase tracking-wide mb-1 text-blue-600 dark:text-blue-400">
+                                                                    Tool Alignment
+                                                                </p>
+                                                                {formatList(
+                                                                    validationReport.consistency_checks.tool_alignment.recommendations
+                                                                )}
+                                                            </Card>
+                                                        )}
+                                                </div>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    )}
+                                </Accordion>
+                            </div>
                         )}
+
                     </div>
-                )}
-            </div>
+                </CardContent>
+            </Card>
 
-            <Modal
-                isOpen={isDownloadModalOpen}
-                onClose={() => setIsDownloadModalOpen(false)}
-                onConfirm={handleDownloadConfirm}
-                title="Download Analysis"
-                message="Download this full analysis as a PDF?"
-                confirmVariant="primary"
-                confirmText={
-                    isDownloading ? (
-                        <div className="flex items-center gap-2">
-                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                    fill="none"
-                                />
-                                <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                />
-                            </svg>
-                            <span>Downloading...</span>
-                        </div>
-                    ) : (
-                        'Download'
-                    )
-                }
-                cancelText="Cancel"
-            />
+            <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Download Analysis</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Download this full analysis as a PDF?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDownloadConfirm}
+                            disabled={isDownloading}
+                        >
+                            {isDownloading ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    <span>Downloading...</span>
+                                </>
+                            ) : (
+                                'Download'
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
-            {/* Delete Confirmation Modal */}
-            <Modal
-                isOpen={isDeleteModalOpen}
-                onClose={() => setIsDeleteModalOpen(false)}
-                onConfirm={handleDeleteConfirm}
-                title="Delete Analysis"
-                message="This action cannot be undone. Delete this analysis?"
-                confirmVariant="danger"
-                confirmText={
-                    isDeleting ? (
-                        <div className="flex items-center gap-2">
-                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                    fill="none"
-                                />
-                                <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                />
-                            </svg>
-                            <span>Deleting...</span>
-                        </div>
-                    ) : (
-                        'Delete'
-                    )
-                }
-                cancelText="Cancel"
-            />
-        </div>
+            <AlertDialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Analysis</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. Delete this analysis?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteConfirm}
+                            disabled={isDeleting}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {isDeleting ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    <span>Deleting...</span>
+                                </>
+                            ) : (
+                                'Delete'
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 };
 

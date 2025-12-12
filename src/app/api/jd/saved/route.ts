@@ -31,10 +31,12 @@ export async function GET(request: Request) {
         organization: {
           deactivatedAt: null, // Only active organizations
         },
+        deactivatedAt: null, // Only active user-organization relationships
       },
       select: {
         id: true,
         userId: true,
+        organizationId: true,
       },
     });
 
@@ -48,7 +50,26 @@ export async function GET(request: Request) {
       });
     }
 
-    const userOrganizationIds = userOrganizations.map((uo) => uo.id);
+    // Get all organization IDs the user belongs to
+    const organizationIds = userOrganizations.map((uo) => uo.organizationId);
+
+    // Get ALL userOrganization records for those organizations (all members)
+    const allUserOrganizations = await prisma.userOrganization.findMany({
+      where: {
+        organizationId: {
+          in: organizationIds,
+        },
+        organization: {
+          deactivatedAt: null, // Only active organizations
+        },
+        deactivatedAt: null, // Only active user-organization relationships
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const userOrganizationIds = allUserOrganizations.map((uo) => uo.id);
 
     // Get query parameters for pagination and filtering
     const { searchParams } = new URL(request.url);
@@ -80,6 +101,14 @@ export async function GET(request: Request) {
         userOrganization: {
           select: {
             userId: true,
+            user: {
+              select: {
+                id: true,
+                firstname: true,
+                lastname: true,
+                email: true,
+              },
+            },
           },
         },
       },
@@ -130,6 +159,12 @@ export async function GET(request: Request) {
       createdAt: analysis.createdAt.toISOString(),
       updatedAt: analysis.updatedAt.toISOString(),
       refinementCount: analysis.refinements.length,
+      createdBy: {
+        id: analysis.userOrganization.user.id,
+        firstname: analysis.userOrganization.user.firstname,
+        lastname: analysis.userOrganization.user.lastname,
+        email: analysis.userOrganization.user.email,
+      },
     }));
 
     return NextResponse.json({

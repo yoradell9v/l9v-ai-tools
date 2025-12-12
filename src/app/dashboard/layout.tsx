@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { verifyAccessToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { UserProvider, User } from "@/context/UserContext";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
 
 async function getDashboardData() {
     const cookieStore = await cookies();
@@ -55,7 +57,12 @@ export default async function DashboardLayout({
 
     return (
         <UserProvider initialUser={user}>
-            {children}
+            <SidebarProvider>
+                <AppSidebar />
+                <main className="flex-1">
+                    {children}
+                </main>
+            </SidebarProvider>
         </UserProvider>
     );
 }

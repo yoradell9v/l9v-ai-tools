@@ -8,7 +8,7 @@ import { existsSync } from "fs";
 
 export const runtime = "nodejs";
 
-// File upload helper
+// File upload helper (for backward compatibility with FormData)
 async function saveFileToPublic(
   file: File,
   fieldName: string,
@@ -45,6 +45,37 @@ async function saveFileToPublic(
     url: `/uploads/business-brain/${brainId}/${fileName}`,
     name: file.name, // Keep original filename
   };
+}
+
+// Validate S3 URL format
+function isValidS3Url(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    // Check if it's an S3 URL (s3.amazonaws.com or s3.{region}.amazonaws.com)
+    return (
+      urlObj.hostname.includes("s3") &&
+      urlObj.hostname.includes("amazonaws.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Validate file URL metadata structure
+function validateFileUrlMetadata(
+  fileUrl: any
+): fileUrl is { url: string; name: string; key: string; type: string } {
+  return (
+    fileUrl &&
+    typeof fileUrl === "object" &&
+    typeof fileUrl.url === "string" &&
+    typeof fileUrl.name === "string" &&
+    typeof fileUrl.key === "string" &&
+    typeof fileUrl.type === "string" &&
+    fileUrl.url.trim().length > 0 &&
+    fileUrl.name.trim().length > 0 &&
+    isValidS3Url(fileUrl.url)
+  );
 }
 
 export async function POST(
@@ -137,17 +168,37 @@ export async function POST(
       }
     }
 
-    // Parse multipart form data
+    // Detect request format (FormData for backward compatibility or JSON for S3)
     const contentType = request.headers.get("content-type") || "";
-    if (!contentType.includes("multipart/form-data")) {
+    const isFormData = contentType.includes("multipart/form-data");
+    const isJson = contentType.includes("application/json");
+
+    let rawIntakeUpdates: string | null = null;
+    let formData: FormData | null = null;
+    let requestBody: any = null;
+
+    if (isFormData) {
+      // Backward compatibility: Handle FormData
+      formData = await request.formData();
+      rawIntakeUpdates = (formData.get("intake_json") || formData.get("intake_updates")) as string | null;
+    } else if (isJson) {
+      // New S3 approach: Handle JSON
+      try {
+        requestBody = await request.json();
+        rawIntakeUpdates = requestBody.intake_json || requestBody.intake_updates || null;
+      } catch (parseError) {
+        console.error("[Update] Failed to parse JSON request body");
+        return NextResponse.json(
+          { success: false, error: "Invalid JSON request body." },
+          { status: 400 }
+        );
+      }
+    } else {
       return NextResponse.json(
-        { success: false, error: "Content-Type must be multipart/form-data" },
+        { success: false, error: "Content-Type must be multipart/form-data or application/json" },
         { status: 400 }
       );
     }
-
-    const formData = await request.formData();
-    const rawIntakeUpdates = formData.get("intake_json") || formData.get("intake_updates");
 
     // Parse intake updates (partial updates to intakeData)
     let intakeUpdates: any = {};
@@ -177,53 +228,117 @@ export async function POST(
     console.log(`[Update] Merged intake data: ${Object.keys(updatedIntakeData).length} total fields`);
 
     // Handle file uploads - merge with existing files
-    // Support dynamic field names from enhancement analysis
-    const newFileUploads: Array<{ url: string; name: string; type: string; field?: string }> = [...existingFileUploads];
+    // Support both FormData (backward compatibility) and JSON with S3 URLs (new approach)
+    const newFileUploads: Array<{ url: string; name: string; type: string; field?: string; key?: string }> = [...existingFileUploads];
     
-    // Get all file fields from formData (dynamic based on enhancement recommendations)
-    const fileFields = new Set<string>();
-    for (const [key, value] of formData.entries()) {
-      if (value instanceof File && value.size > 0) {
-        fileFields.add(key);
+    if (isFormData && formData) {
+      // Backward compatibility: Process files from FormData
+      // Get all file fields from formData (dynamic based on enhancement recommendations)
+      const fileFields = new Set<string>();
+      for (const [key, value] of formData.entries()) {
+        if (value instanceof File && value.size > 0) {
+          fileFields.add(key);
+        }
       }
-    }
 
-    // Also check standard file fields
-    const standardFileFields = [
-      "brandGuide",
-      "styleGuide",
-      "proofFiles",
-      "proofDocuments",
-      "proofFiles", // from enhancement modal
-    ];
-    standardFileFields.forEach(field => fileFields.add(field));
+      // Also check standard file fields
+      const standardFileFields = [
+        "brandGuide",
+        "styleGuide",
+        "proofFiles",
+        "proofDocuments",
+      ];
+      standardFileFields.forEach(field => fileFields.add(field));
 
-    for (const fieldName of fileFields) {
-      const file = formData.get(fieldName);
-      if (file instanceof File && file.size > 0) {
+      for (const fieldName of fileFields) {
+        const file = formData.get(fieldName);
+        if (file instanceof File && file.size > 0) {
+          try {
+            const fileResult = await saveFileToPublic(
+              file,
+              fieldName,
+              businessBrainId
+            );
+            // Remove any existing files for this field
+            const filtered = newFileUploads.filter(
+              (f: any) => f?.field !== fieldName
+            );
+            // Replace array with filtered items
+            newFileUploads.splice(0, newFileUploads.length, ...filtered);
+            // Add new file
+            newFileUploads.push({
+              url: fileResult.url,
+              name: fileResult.name,
+              type: file.type || "application/octet-stream",
+              field: fieldName,
+            });
+          } catch (fileError) {
+            console.error(`[Update] Error saving file ${fieldName}:`, fileError);
+            // Continue with other files even if one fails
+          }
+        }
+      }
+    } else if (isJson && requestBody) {
+      // New S3 approach: Process file URLs from JSON
+      const rawFileUrls = requestBody.file_urls;
+      if (rawFileUrls) {
+        let parsedFileUrls: Record<
+          string,
+          Array<{ url: string; name: string; key: string; type: string }>
+        >;
+
         try {
-          const fileResult = await saveFileToPublic(
-            file,
-            fieldName,
-            businessBrainId
+          // Parse file_urls JSON string
+          parsedFileUrls =
+            typeof rawFileUrls === "string"
+              ? JSON.parse(rawFileUrls)
+              : rawFileUrls;
+        } catch (parseError) {
+          console.error("[Update] Failed to parse file_urls");
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Invalid file_urls payload format.",
+            },
+            { status: 400 }
           );
+        }
+
+        // Process each field's file URLs
+        Object.entries(parsedFileUrls).forEach(([fieldName, fileUrlArray]) => {
+          if (!Array.isArray(fileUrlArray)) {
+            console.warn(
+              `[Update] Invalid file_urls structure for field ${fieldName}`
+            );
+            return;
+          }
+
           // Remove any existing files for this field
           const filtered = newFileUploads.filter(
             (f: any) => f?.field !== fieldName
           );
-          newFileUploads.length = 0;
-          newFileUploads.push(...filtered);
-          // Add new file
-          newFileUploads.push({
-            url: fileResult.url,
-            name: fileResult.name,
-            type: file.type || "application/octet-stream",
-            field: fieldName,
+          // Replace array with filtered items
+          newFileUploads.splice(0, newFileUploads.length, ...filtered);
+
+          // Add new file URLs
+          fileUrlArray.forEach((fileUrl) => {
+            // Validate file URL metadata
+            if (validateFileUrlMetadata(fileUrl)) {
+              newFileUploads.push({
+                url: fileUrl.url,
+                name: fileUrl.name,
+                type: fileUrl.type,
+                field: fieldName,
+                key: fileUrl.key, // Include S3 key for future cleanup
+              });
+            } else {
+              console.warn(
+                `[Update] Invalid file URL metadata for field ${fieldName}:`,
+                fileUrl
+              );
+            }
           });
-        } catch (fileError) {
-          console.error(`Error saving file ${fieldName}:`, fileError);
-          // Continue with other files even if one fails
-        }
+        });
       }
     }
 

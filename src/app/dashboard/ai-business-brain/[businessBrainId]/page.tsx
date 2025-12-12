@@ -2,8 +2,27 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Navbar from "@/components/ui/Navbar";
-import Modal from "@/components/ui/Modal";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+} from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { useUser } from "@/context/UserContext";
 import {
     Rocket,
@@ -549,7 +568,7 @@ export default function BusinessBrainDetail() {
                     </p>
                 )}
                 {fieldType === "textarea" && (
-                    <textarea
+                    <Textarea
                         value={enhancementFormData[fieldKey] || ""}
                         onChange={(e) =>
                             setEnhancementFormData((prev) => ({
@@ -558,12 +577,11 @@ export default function BusinessBrainDetail() {
                             }))
                         }
                         placeholder={context.placeholder || ""}
-                        className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)] placeholder-[var(--text-secondary)] resize-none focus:outline-none focus:border-[var(--primary)] min-h-[100px]"
-                        rows={4}
+                        className="min-h-[100px]"
                     />
                 )}
                 {fieldType === "text" && (
-                    <input
+                    <Input
                         type="text"
                         value={enhancementFormData[fieldKey] || ""}
                         onChange={(e) =>
@@ -573,7 +591,6 @@ export default function BusinessBrainDetail() {
                             }))
                         }
                         placeholder={context.placeholder || ""}
-                        className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)] placeholder-[var(--text-secondary)] focus:outline-none focus:border-[var(--primary)]"
                     />
                 )}
                 {fieldType === "file" && (
@@ -1221,6 +1238,111 @@ export default function BusinessBrainDetail() {
         loadConversations();
     }, [isConversationSidebarOpen, user, businessBrainId]);
 
+    // Load enhancement analysis on page load (after business brain data is loaded)
+    useEffect(() => {
+        const loadEnhancementAnalysis = async () => {
+            if (!businessBrainId || !businessBrainData || !cards.length) return;
+            
+            // Only load if we don't already have enhancement analysis
+            if (enhancementAnalysis) return;
+
+            try {
+                const response = await fetch("/api/business-brain/calculate-completion", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ businessBrainId, forceRefresh: false }), // Use cache if available
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && result.enhancementAnalysis) {
+                        setEnhancementAnalysis(result.enhancementAnalysis);
+                        setLastAnalyzedAt(result.lastAnalyzedAt || null);
+                        if (result.completionData) {
+                            setCompletionData(result.completionData);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Error loading enhancement analysis on page load:", error);
+                // Don't show error to user - this is a background load
+            }
+        };
+
+        loadEnhancementAnalysis();
+    }, [businessBrainId, businessBrainData, cards.length, enhancementAnalysis]);
+
+    // Helper function to initialize enhancement form data from analysis
+    const initializeEnhancementFormData = (analysis?: any) => {
+        const analysisToUse = analysis || enhancementAnalysis;
+        if (!analysisToUse || !businessBrainData) return;
+
+        const intakeSource = businessBrainData.intakeData || {};
+
+        // Collect all strategic recommendation target fields to exclude from pre-population
+        const strategicRecFields = new Set<string>();
+        analysisToUse.cardAnalysis.forEach((card: any) => {
+            if (card.strategicRecommendations && Array.isArray(card.strategicRecommendations)) {
+                card.strategicRecommendations.forEach((rec: any) => {
+                    if (rec.targetField && (rec.actionType === "fill_form" || rec.actionType === "upload")) {
+                        strategicRecFields.add(rec.targetField);
+                    }
+                });
+            }
+        });
+
+        const existingData: Record<string, string> = {};
+        Object.keys(intakeSource || {}).forEach((key) => {
+            const value = intakeSource[key];
+            // Exclude strategic recommendation fields from pre-population
+            if (value && typeof value === "string" && value.trim() && !strategicRecFields.has(key)) {
+                existingData[key] = value;
+            }
+        });
+
+        const initialFormData: Record<string, string> = { ...existingData };
+        const initialRefinementAnswers: Record<string, string> = {};
+
+        analysisToUse.cardAnalysis.forEach((card: any) => {
+            if (card.missingContexts && Array.isArray(card.missingContexts)) {
+                card.missingContexts.forEach((context: any) => {
+                    if (context.fieldType !== "file" && context.fieldId) {
+                        // Don't pre-populate strategic recommendation fields
+                        if (!strategicRecFields.has(context.fieldId)) {
+                            const existingValue = (intakeSource || {})[context.fieldId];
+                            if (existingValue && typeof existingValue === "string") {
+                                initialFormData[context.fieldId] = existingValue;
+                            } else if (!initialFormData[context.fieldId]) {
+                                initialFormData[context.fieldId] = "";
+                            }
+                        } else if (!initialFormData[context.fieldId]) {
+                            // Strategic rec fields start empty
+                            initialFormData[context.fieldId] = "";
+                        }
+                    }
+                });
+            }
+            if (card.refinementQuestions && Array.isArray(card.refinementQuestions)) {
+                card.refinementQuestions.forEach((q: any) => {
+                    if (q.id) {
+                        // Check if this refinement question was already answered in intakeData
+                        const existingAnswer = (intakeSource || {})[q.id];
+                        if (existingAnswer && typeof existingAnswer === "string" && existingAnswer.trim().length > 0) {
+                            initialRefinementAnswers[q.id] = existingAnswer;
+                            console.log(`[Enhancement] Pre-populated refinement answer for ${q.id}`);
+                        } else if (!initialRefinementAnswers[q.id]) {
+                            initialRefinementAnswers[q.id] = "";
+                        }
+                    }
+                });
+            }
+        });
+
+        setEnhancementFormData(initialFormData);
+        setEnhancementFiles({});
+        setRefinementAnswers(initialRefinementAnswers);
+    };
+
     const handleSendMessage = async () => {
         if (!inputValue.trim() || isSending || !businessBrainId) return;
 
@@ -1381,15 +1503,38 @@ export default function BusinessBrainDetail() {
                             transition={{ duration: 0.2 }}
                             className="overflow-hidden"
                         >
-                            <div className="mt-3 pt-3 border-t border-[var(--border-color)]">
-                                <div className="prose prose-sm dark:prose-invert max-w-none">
-                                    <div
-                                        className="text-sm text-[var(--text-secondary)]"
-                                        dangerouslySetInnerHTML={{
-                                            __html: card.description.replace(/\n/g, "<br />"),
-                                        }}
-                                    />
-                                </div>
+                            <div className="mt-3 pt-3 border-t border-[var(--border-color)] prose prose-sm dark:prose-invert max-w-none">
+                                <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    components={{
+                                        h1: ({ node, ...props }) => (
+                                            <h1 className="text-xl font-semibold mt-3 mb-2" {...props} />
+                                        ),
+                                        h2: ({ node, ...props }) => (
+                                            <h2 className="text-lg font-semibold mt-3 mb-2" {...props} />
+                                        ),
+                                        h3: ({ node, ...props }) => (
+                                            <h3 className="text-base font-semibold mt-2 mb-2" {...props} />
+                                        ),
+                                        h4: ({ node, ...props }) => (
+                                            <h4 className="text-sm font-semibold mt-2 mb-1" {...props} />
+                                        ),
+                                        p: ({ node, ...props }) => (
+                                            <p className="mb-3 leading-relaxed" {...props} />
+                                        ),
+                                        ul: ({ node, ...props }: any) => (
+                                            <ul className="list-disc pl-5 space-y-1 mb-3" {...props} />
+                                        ),
+                                        ol: ({ node, ...props }: any) => (
+                                            <ol className="list-decimal pl-5 space-y-1 mb-3" {...props} />
+                                        ),
+                                        li: ({ node, ...props }) => (
+                                            <li className="leading-relaxed" {...props} />
+                                        ),
+                                    }}
+                                >
+                                    {card.description || ""}
+                                </ReactMarkdown>
                             </div>
                         </motion.div>
                     )}
@@ -1405,664 +1550,676 @@ export default function BusinessBrainDetail() {
 
     return (
         <>
-            <Navbar />
-            <div className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden ml-[var(--sidebar-width,16rem)] bg-[var(--bg-color)]">
-                {/* Header */}
-                <div className="flex-shrink-0 px-6 py-4 border-b border-[var(--border-color)]">
-                    <button
-                        onClick={() => router.push("/dashboard/ai-business-brain")}
-                        className="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors mb-4"
-                    >
-                        <ArrowLeft size={16} />
-                        <span>Back to Business Brains</span>
-                    </button>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-semibold mb-1 text-[var(--primary)]">
-                                AI Business Brain
-                            </h1>
-                            <p className="text-sm text-[var(--text-secondary)]">
-                                {businessBrainData?.intakeData?.businessName || "Chat with your AI business assistant"}
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setIsDrawerOpen(!isDrawerOpen)}
-                                className="p-2 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] transition-colors"
-                                title="View Cards"
-                            >
-                                <Brain size={20} className="text-[var(--text-primary)]" />
-                            </button>
-                            <button
-                                onClick={async () => {
-                                    setIsEnhanceModalOpen(true);
-                                    setIsLoadingEnhancement(true);
-
-                                    // Clear previous refinement answers
-                                    setRefinementAnswers({});
-
-                                    let latestIntakeData: any = null;
-                                    try {
-                                        // Always fetch the freshest business brain before analysis
-                                        const latestBrainRes = await fetch(`/api/business-brain/${businessBrainId}`);
-                                        if (latestBrainRes.ok) {
-                                            const latest = await latestBrainRes.json();
-                                            if (latest.success && latest.businessBrain) {
-                                                setBusinessBrainData({
-                                                    intakeData: latest.businessBrain.intakeData,
-                                                    fileUploads: latest.businessBrain.fileUploads,
-                                                });
-                                                if (latest.cards) {
-                                                    setCards(latest.cards);
-                                                }
-                                                latestIntakeData = latest.businessBrain.intakeData;
-                                            }
-                                        }
-
-                                        const response = await fetch("/api/business-brain/calculate-completion", {
-                                            method: "POST",
-                                            headers: { "Content-Type": "application/json" },
-                                            body: JSON.stringify({ businessBrainId, forceRefresh: true }),
-                                        });
-                                        if (response.ok) {
-                                            const result = await response.json();
-                                            if (result.success && result.enhancementAnalysis) {
-                                                setEnhancementAnalysis(result.enhancementAnalysis);
-                                                setLastAnalyzedAt(result.lastAnalyzedAt || null);
-                                                if (result.completionData) {
-                                                    setCompletionData(result.completionData);
-                                                }
-
-                                                const intakeSource = latestIntakeData || businessBrainData?.intakeData || {};
-
-                                                // Collect all strategic recommendation target fields to exclude from pre-population
-                                                const strategicRecFields = new Set<string>();
-                                                result.enhancementAnalysis.cardAnalysis.forEach((card: any) => {
-                                                    if (card.strategicRecommendations && Array.isArray(card.strategicRecommendations)) {
-                                                        card.strategicRecommendations.forEach((rec: any) => {
-                                                            if (rec.targetField && (rec.actionType === "fill_form" || rec.actionType === "upload")) {
-                                                                strategicRecFields.add(rec.targetField);
-                                                            }
-                                                        });
-                                                    }
-                                                });
-
-                                                const existingData: Record<string, string> = {};
-                                                Object.keys(intakeSource || {}).forEach((key) => {
-                                                    const value = intakeSource[key];
-                                                    // Exclude strategic recommendation fields from pre-population
-                                                    if (value && typeof value === "string" && value.trim() && !strategicRecFields.has(key)) {
-                                                        existingData[key] = value;
-                                                    }
-                                                });
-
-                                                const initialFormData: Record<string, string> = { ...existingData };
-                                                const initialRefinementAnswers: Record<string, string> = {};
-
-                                                result.enhancementAnalysis.cardAnalysis.forEach((card: any) => {
-                                                    if (card.missingContexts && Array.isArray(card.missingContexts)) {
-                                                        card.missingContexts.forEach((context: any) => {
-                                                            if (context.fieldType !== "file" && context.fieldId) {
-                                                                // Don't pre-populate strategic recommendation fields
-                                                                if (!strategicRecFields.has(context.fieldId)) {
-                                                                    const existingValue = (intakeSource || {})[context.fieldId];
-                                                                    if (existingValue && typeof existingValue === "string") {
-                                                                        initialFormData[context.fieldId] = existingValue;
-                                                                    } else if (!initialFormData[context.fieldId]) {
-                                                                        initialFormData[context.fieldId] = "";
-                                                                    }
-                                                                } else if (!initialFormData[context.fieldId]) {
-                                                                    // Strategic rec fields start empty
-                                                                    initialFormData[context.fieldId] = "";
-                                                                }
-                                                            }
-                                                        });
-                                                    }
-                                                    if (card.refinementQuestions && Array.isArray(card.refinementQuestions)) {
-                                                        card.refinementQuestions.forEach((q: any) => {
-                                                            if (q.id) {
-                                                                // Check if this refinement question was already answered in intakeData
-                                                                const existingAnswer = (intakeSource || {})[q.id];
-                                                                if (existingAnswer && typeof existingAnswer === "string" && existingAnswer.trim().length > 0) {
-                                                                    initialRefinementAnswers[q.id] = existingAnswer;
-                                                                    console.log(`[Enhancement] Pre-populated refinement answer for ${q.id}`);
-                                                                } else if (!initialRefinementAnswers[q.id]) {
-                                                                    initialRefinementAnswers[q.id] = "";
-                                                                }
-                                                            }
-                                                        });
-                                                    }
-                                                });
-                                                setEnhancementFormData(initialFormData);
-                                                setEnhancementFiles({});
-                                                setRefinementAnswers(initialRefinementAnswers);
-                                            }
-                                        }
-                                    } catch (error) {
-                                        console.error("Error loading enhancement analysis:", error);
-                                    } finally {
-                                        setIsLoadingEnhancement(false);
-                                    }
-                                }}
-                                className="px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] transition-colors text-sm font-medium text-[var(--text-primary)] flex items-center gap-2"
-                                title="Enhance Business Brain"
-                            >
-                                <Sparkles size={18} className="text-[var(--primary)]" />
-                                <span>Enhance</span>
-                            </button>
-                        </div>
-                    </div>
+            <div className="h-screen flex flex-col overflow-hidden">
+                <div className="flex items-center gap-2 p-4 border-b flex-shrink-0">
+                    <SidebarTrigger />
                 </div>
-
-                {/* Main Content */}
-                {isLoading ? (
-                    <div className="flex-1 flex items-center justify-center">
-                        <div className="flex flex-col items-center">
-                            <svg
-                                className="animate-spin h-8 w-8 mb-3 text-[var(--accent)]"
-                                viewBox="0 0 24 24"
-                            >
-                                <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                    fill="none"
-                                />
-                                <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                />
-                            </svg>
-                            <p className="text-sm text-[var(--text-secondary)]">Loading...</p>
-                        </div>
-                    </div>
-                ) : error ? (
-                    <div className="flex-1 flex items-center justify-center">
-                        <div className="text-center">
-                            <AlertCircle className="w-16 h-16 mx-auto mb-4 text-red-500" />
-                            <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
-                                Error
-                            </h3>
-                            <p className="text-sm text-[var(--text-secondary)] mb-4">{error}</p>
-                            <button
-                                onClick={() => router.push("/dashboard/ai-business-brain")}
-                                className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--primary)] text-white"
-                            >
-                                Go Back
-                            </button>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="flex-1 flex overflow-hidden">
-                        {/* Conversation History Sidebar */}
-                        <AnimatePresence>
-                            {isConversationSidebarOpen && (
-                                <motion.div
-                                    initial={{ width: 0, opacity: 0 }}
-                                    animate={{ width: 300, opacity: 1 }}
-                                    exit={{ width: 0, opacity: 0 }}
-                                    transition={{ duration: 0.2 }}
-                                    className="flex-shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-color)] overflow-hidden"
-                                >
-                                    <div className="h-full flex flex-col">
-                                        <div className="flex-shrink-0 px-4 py-3 border-b border-[var(--border-color)] flex items-center justify-between">
-                                            <h3 className="font-semibold text-[var(--text-primary)]">
-                                                Conversations
-                                            </h3>
-                                            <button
-                                                onClick={() => setIsConversationSidebarOpen(false)}
-                                                className="p-1 rounded hover:bg-[var(--hover-bg)] transition-colors"
-                                            >
-                                                <X size={18} className="text-[var(--text-secondary)]" />
-                                            </button>
-                                        </div>
-                                        <div className="flex-1 overflow-y-auto">
-                                            <button
-                                                onClick={startNewConversation}
-                                                className="w-full px-4 py-2 m-2 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] transition-colors text-sm font-medium text-[var(--text-primary)] flex items-center gap-2"
-                                            >
-                                                <Plus size={16} />
-                                                <span>New Conversation</span>
-                                            </button>
-                                            {isLoadingConversations ? (
-                                                <div className="flex items-center justify-center py-8">
-                                                    <svg
-                                                        className="animate-spin h-5 w-5 text-[var(--accent)]"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <circle
-                                                            className="opacity-25"
-                                                            cx="12"
-                                                            cy="12"
-                                                            r="10"
-                                                            stroke="currentColor"
-                                                            strokeWidth="4"
-                                                            fill="none"
-                                                        />
-                                                        <path
-                                                            className="opacity-75"
-                                                            fill="currentColor"
-                                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                                        />
-                                                    </svg>
-                                                </div>
-                                            ) : conversations.length === 0 ? (
-                                                <div className="px-4 py-8 text-center">
-                                                    <p className="text-sm text-[var(--text-secondary)]">
-                                                        No conversations yet
-                                                    </p>
-                                                </div>
-                                            ) : (
-                                                <div className="px-2 py-2">
-                                                    {conversations.map((conv) => {
-                                                        const isActive = currentConversationId === conv.id;
-                                                        const lastMessageDate = new Date(conv.lastMessageAt);
-                                                        const now = new Date();
-                                                        const diffMs = now.getTime() - lastMessageDate.getTime();
-                                                        const diffMins = Math.floor(diffMs / 60000);
-                                                        const diffHours = Math.floor(diffMs / 3600000);
-                                                        const diffDays = Math.floor(diffMs / 86400000);
-
-                                                        let timeAgo = "";
-                                                        if (diffMins < 1) timeAgo = "Just now";
-                                                        else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
-                                                        else if (diffHours < 24) timeAgo = `${diffHours}h ago`;
-                                                        else if (diffDays < 7) timeAgo = `${diffDays}d ago`;
-                                                        else timeAgo = lastMessageDate.toLocaleDateString();
-
-                                                        return (
-                                                            <button
-                                                                key={conv.id}
-                                                                onClick={() => loadConversation(conv.id)}
-                                                                className={`w-full px-3 py-2 mb-1 rounded-lg text-left transition-colors ${isActive
-                                                                    ? "bg-[var(--primary)]/10 border border-[var(--primary)]/20"
-                                                                    : "hover:bg-[var(--hover-bg)]"
-                                                                    }`}
-                                                            >
-                                                                <div className="flex items-start justify-between gap-2">
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <p
-                                                                            className={`text-sm font-medium truncate ${isActive
-                                                                                ? "text-[var(--primary)]"
-                                                                                : "text-[var(--text-primary)]"
-                                                                                }`}
-                                                                        >
-                                                                            {conv.title}
-                                                                        </p>
-                                                                        <div className="flex items-center gap-2 mt-1">
-                                                                            <span className="text-xs text-[var(--text-secondary)]">
-                                                                                {conv.messageCount} messages
-                                                                            </span>
-                                                                            <span className="text-xs text-[var(--text-secondary)]">
-                                                                                •
-                                                                            </span>
-                                                                            <span className="text-xs text-[var(--text-secondary)]">
-                                                                                {timeAgo}
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-
-                        {/* Chat Area */}
-                        <div className="flex-1 flex flex-col overflow-hidden">
-                            {/* Messages */}
-                            <div className="flex-1 overflow-y-auto px-6 py-4 relative">
-                                {!isConversationSidebarOpen && (
-                                    <button
-                                        onClick={() => setIsConversationSidebarOpen(true)}
-                                        className="absolute left-2 top-4 p-2 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] transition-colors z-10"
-                                        title="Show Conversation History"
-                                    >
-                                        <ChevronRight size={18} className="text-[var(--text-secondary)]" />
-                                    </button>
-                                )}
-                                {chatMessages.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center h-full text-center">
-                                        <div className="w-16 h-16 rounded-lg bg-[var(--accent)]/20 flex items-center justify-center mb-4">
-                                            <Bot size={48} className="text-[var(--accent)]" />
-                                        </div>
-                                        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
-                                            {getCurrentGreeting()}
-                                        </h3>
-                                        <p className="text-sm text-[var(--text-secondary)] mb-6 max-w-md">
-                                            Ask me anything about your business, or use a slash command to get started.
-                                        </p>
-                                        <div className="grid grid-cols-2 gap-2 max-w-md">
-                                            {slashCommands.slice(0, 4).map((cmd) => (
-                                                <button
-                                                    key={cmd.command}
-                                                    onClick={() => {
-                                                        setInputValue(cmd.command);
-                                                        setShowSlashCommands(false);
-                                                    }}
-                                                    className="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-left transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <cmd.icon size={16} className="text-[var(--primary)]" />
-                                                        <span className="text-xs font-medium text-[var(--text-primary)]">
-                                                            {cmd.command}
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-xs text-[var(--text-secondary)]">
-                                                        {cmd.description}
-                                                    </p>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {chatMessages.map((message) => (
-                                            <div
-                                                key={message.id}
-                                                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"
-                                                    }`}
-                                            >
-                                                <div
-                                                    className={`max-w-[80%] rounded-lg p-4 ${message.role === "user"
-                                                        ? "bg-[var(--primary)] text-white"
-                                                        : "bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-primary)]"
-                                                        }`}
-                                                >
-                                                    <div className={`prose prose-sm max-w-none ${message.role === "user" ? "prose-invert" : ""}`}>
-                                                        <ReactMarkdown
-                                                            remarkPlugins={[remarkGfm]}
-                                                            components={{
-                                                                h1: ({ node, ...props }) => (
-                                                                    <h1 className="text-xl font-bold mb-3 mt-4 first:mt-0" {...props} />
-                                                                ),
-                                                                h2: ({ node, ...props }) => (
-                                                                    <h2 className="text-lg font-semibold mb-2 mt-4 first:mt-0" {...props} />
-                                                                ),
-                                                                h3: ({ node, ...props }) => (
-                                                                    <h3 className="text-base font-semibold mb-2 mt-3 first:mt-0" {...props} />
-                                                                ),
-                                                                p: ({ node, ...props }) => (
-                                                                    <p className="mb-3 leading-relaxed last:mb-0" {...props} />
-                                                                ),
-                                                                strong: ({ node, ...props }) => (
-                                                                    <strong className="font-semibold" {...props} />
-                                                                ),
-                                                                ul: ({ node, ...props }) => (
-                                                                    <ul className="mb-3 ml-4 list-disc space-y-1 last:mb-0" {...props} />
-                                                                ),
-                                                                ol: ({ node, ...props }) => (
-                                                                    <ol className="mb-3 ml-4 list-decimal space-y-1 last:mb-0" {...props} />
-                                                                ),
-                                                                li: ({ node, ...props }) => (
-                                                                    <li className="leading-relaxed" {...props} />
-                                                                ),
-                                                                hr: ({ node, ...props }) => (
-                                                                    <hr className={`my-4 border-0 border-t ${message.role === "user"
-                                                                        ? "border-white/20"
-                                                                        : "border-[var(--border-color)]/30"}`} {...props} />
-                                                                ),
-                                                            }}
-                                                        >
-                                                            {message.content}
-                                                        </ReactMarkdown>
-                                                    </div>
-                                                    {message.citations && message.citations.length > 0 && (
-                                                        <div className={`mt-4 pt-3 border-t ${message.role === "user"
-                                                            ? "border-white/20"
-                                                            : "border-[var(--border-color)]/50"}`}>
-                                                            <p className={`text-xs ${message.role === "user" ? "opacity-80" : "text-[var(--text-secondary)]"}`}>Sources:</p>
-                                                            <ul className={`text-xs mt-1 space-y-1 ${message.role === "user" ? "opacity-80" : "text-[var(--text-secondary)]"}`}>
-                                                                {message.citations.map((cite: any, idx: number) => (
-                                                                    <li key={idx}>
-                                                                        • {typeof cite === "string"
-                                                                            ? cite
-                                                                            : cite.cardType
-                                                                                ? `${cite.cardType.replace(/_/g, " ")} (${cite.confidence || "N/A"}% confidence)`
-                                                                                : JSON.stringify(cite)}
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    )}
-                                                    {message.confidence !== undefined && (
-                                                        <div className={`mt-4 pt-3 border-t ${message.role === "user"
-                                                            ? "border-white/20"
-                                                            : "border-[var(--border-color)]/50"}`}>
-                                                            <p className={`text-xs ${message.role === "user" ? "opacity-80" : "text-[var(--text-secondary)]"}`}>
-                                                                Confidence: {message.confidence}%
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                        {isSending && (
-                                            <div className="flex justify-start">
-                                                <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg p-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce" />
-                                                        <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce delay-75" />
-                                                        <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce delay-150" />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                        <div ref={messagesEndRef} />
-                                    </div>
-                                )}
+                <div className="transition-all duration-300 ease-in-out flex-1 flex flex-col overflow-hidden">
+                    {/* Header */}
+                    <div className="flex-shrink-0 px-6 py-4 border-b border-[var(--border-color)]">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push("/dashboard/ai-business-brain")}
+                            className="mb-4 gap-2"
+                        >
+                            <ArrowLeft size={16} />
+                            <span>Back to Business Brains</span>
+                        </Button>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h1 className="text-2xl font-semibold mb-1 text-[var(--primary)]">
+                                    AI Business Brain
+                                </h1>
+                                <p className="text-sm text-[var(--text-secondary)]">
+                                    {businessBrainData?.intakeData?.businessName || "Chat with your AI business assistant"}
+                                </p>
                             </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => setIsDrawerOpen(!isDrawerOpen)}
+                                    title="View Cards"
+                                >
+                                    <Brain size={20} className="text-[var(--accent-strong)]" />
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => setIsConversationSidebarOpen((prev) => !prev)}
+                                    title="Conversation History"
+                                >
+                                    <History size={18} className="text-[var(--accent-strong)]" />
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={async () => {
+                                        setIsEnhanceModalOpen(true);
 
-                            {/* Input Area */}
-                            <div className="flex-shrink-0 px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-color)]">
-                                <div className="relative">
-                                    {showSlashCommands && (
-                                        <div
-                                            ref={slashCommandsRef}
-                                            className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg shadow-lg max-h-64 overflow-y-auto z-10"
-                                        >
-                                            <div className="p-2 border-b border-[var(--border-color)]">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Search commands..."
-                                                    value={slashCommandFilter}
-                                                    onChange={(e) => setSlashCommandFilter(e.target.value)}
-                                                    className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-color)] text-[var(--text-primary)] text-sm focus:outline-none focus:border-[var(--primary)]"
-                                                    autoFocus
-                                                />
+                                        // If enhancement analysis already exists, just open the modal
+                                        if (enhancementAnalysis) {
+                                            // Still refresh business brain data to ensure we have latest
+                                            try {
+                                                const latestBrainRes = await fetch(`/api/business-brain/${businessBrainId}`);
+                                                if (latestBrainRes.ok) {
+                                                    const latest = await latestBrainRes.json();
+                                                    if (latest.success && latest.businessBrain) {
+                                                        setBusinessBrainData({
+                                                            intakeData: latest.businessBrain.intakeData,
+                                                            fileUploads: latest.businessBrain.fileUploads,
+                                                        });
+                                                        if (latest.cards) {
+                                                            setCards(latest.cards);
+                                                        }
+                                                    }
+                                                }
+                                            } catch (error) {
+                                                console.error("Error refreshing business brain data:", error);
+                                            }
+                                            
+                                            // Initialize form data with existing analysis
+                                            initializeEnhancementFormData();
+                                            return;
+                                        }
+
+                                        // If no enhancement analysis exists, fetch it (using cache if available)
+                                        setIsLoadingEnhancement(true);
+                                        setRefinementAnswers({});
+
+                                        let latestIntakeData: any = null;
+                                        try {
+                                            // Always fetch the freshest business brain before analysis
+                                            const latestBrainRes = await fetch(`/api/business-brain/${businessBrainId}`);
+                                            if (latestBrainRes.ok) {
+                                                const latest = await latestBrainRes.json();
+                                                if (latest.success && latest.businessBrain) {
+                                                    setBusinessBrainData({
+                                                        intakeData: latest.businessBrain.intakeData,
+                                                        fileUploads: latest.businessBrain.fileUploads,
+                                                    });
+                                                    if (latest.cards) {
+                                                        setCards(latest.cards);
+                                                    }
+                                                    latestIntakeData = latest.businessBrain.intakeData;
+                                                }
+                                            }
+
+                                            const response = await fetch("/api/business-brain/calculate-completion", {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ businessBrainId, forceRefresh: false }), // Use cache if available
+                                            });
+                                            if (response.ok) {
+                                                const result = await response.json();
+                                                if (result.success && result.enhancementAnalysis) {
+                                                    setEnhancementAnalysis(result.enhancementAnalysis);
+                                                    setLastAnalyzedAt(result.lastAnalyzedAt || null);
+                                                    if (result.completionData) {
+                                                        setCompletionData(result.completionData);
+                                                    }
+
+                                                    // Initialize form data using the helper function
+                                                    // Pass the fresh result directly since state might not be updated yet
+                                                    initializeEnhancementFormData(result.enhancementAnalysis);
+                                                }
+                                            }
+                                        } catch (error) {
+                                            console.error("Error loading enhancement analysis:", error);
+                                        } finally {
+                                            setIsLoadingEnhancement(false);
+                                        }
+                                    }}
+                                    title="Enhance Business Brain"
+                                    className="gap-2"
+                                >
+                                    <Sparkles size={18} className="text-[var(--accent-strong)]" />
+                                    <span>Enhance</span>
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Main Content */}
+                    {isLoading ? (
+                        <div className="flex-1 flex items-center justify-center">
+                            <div className="flex flex-col items-center">
+                                <svg
+                                    className="animate-spin h-8 w-8 mb-3 text-[var(--accent)]"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <circle
+                                        className="opacity-25"
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                        fill="none"
+                                    />
+                                    <path
+                                        className="opacity-75"
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    />
+                                </svg>
+                                <p className="text-sm text-[var(--text-secondary)]">Loading...</p>
+                            </div>
+                        </div>
+                    ) : error ? (
+                        <div className="flex-1 flex items-center justify-center">
+                            <div className="text-center">
+                                <AlertCircle className="w-16 h-16 mx-auto mb-4 text-red-500" />
+                                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
+                                    Error
+                                </h3>
+                                <p className="text-sm text-[var(--text-secondary)] mb-4">{error}</p>
+                                <Button
+                                    onClick={() => router.push("/dashboard/ai-business-brain")}
+                                    className="gap-2"
+                                >
+                                    Go Back
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex-1 flex overflow-hidden">
+                            {/* Chat Area */}
+                            <div className="flex-1 flex flex-col overflow-hidden">
+                                {/* Messages */}
+                                <div className="flex-1 overflow-y-auto px-6 py-4 relative">
+                                    {chatMessages.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center h-full text-center">
+                                            <div className="w-16 h-16 rounded-lg bg-[var(--accent)]/20 flex items-center justify-center mb-4">
+                                                <Bot size={48} className="text-[var(--accent)]" />
                                             </div>
-                                            <div className="p-2">
-                                                {filteredSlashCommands.map((cmd) => (
+                                            <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
+                                                {getCurrentGreeting()}
+                                            </h3>
+                                            <p className="text-sm text-[var(--text-secondary)] mb-6 max-w-md">
+                                                Ask me anything about your business, or use a slash command to get started.
+                                            </p>
+                                            <div className="grid grid-cols-2 gap-2 max-w-md">
+                                                {slashCommands.slice(0, 4).map((cmd) => (
                                                     <button
                                                         key={cmd.command}
                                                         onClick={() => {
                                                             setInputValue(cmd.command);
                                                             setShowSlashCommands(false);
-                                                            setSlashCommandFilter("");
                                                         }}
-                                                        className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-[var(--hover-bg)] transition-colors text-left"
+                                                        className="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-left transition-colors"
                                                     >
-                                                        <cmd.icon
-                                                            size={18}
-                                                            className="text-[var(--primary)] flex-shrink-0"
-                                                        />
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="text-sm font-medium text-[var(--text-primary)]">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <cmd.icon size={16} className="text-[var(--primary)]" />
+                                                            <span className="text-xs font-medium text-[var(--text-primary)]">
                                                                 {cmd.command}
-                                                            </div>
-                                                            <div className="text-xs text-[var(--text-secondary)]">
-                                                                {cmd.description}
-                                                            </div>
+                                                            </span>
                                                         </div>
+                                                        <p className="text-xs text-[var(--text-secondary)]">
+                                                            {cmd.description}
+                                                        </p>
                                                     </button>
                                                 ))}
                                             </div>
                                         </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {chatMessages.map((message) => (
+                                                <div
+                                                    key={message.id}
+                                                    className={`flex ${message.role === "user" ? "justify-end" : "justify-start"
+                                                        }`}
+                                                >
+                                                    <div
+                                                        className={`max-w-[80%] rounded-lg ${message.role === "user"
+                                                            ? "bg-[var(--primary)] text-white px-4 py-2"
+                                                            : "bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-primary)] p-4"
+                                                            }`}
+                                                    >
+                                                        <div className={`prose prose-sm max-w-none break-words ${message.role === "user" ? "prose-invert" : ""}`}>
+                                                            <ReactMarkdown
+                                                                remarkPlugins={[remarkGfm]}
+                                                                components={{
+                                                                    h1: ({ node, ...props }) => (
+                                                                        <h1 className="text-xl font-bold mb-3 mt-4 first:mt-0" {...props} />
+                                                                    ),
+                                                                    h2: ({ node, ...props }) => (
+                                                                        <h2 className="text-lg font-semibold mb-2 mt-4 first:mt-0" {...props} />
+                                                                    ),
+                                                                    h3: ({ node, ...props }) => (
+                                                                        <h3 className="text-base font-semibold mb-2 mt-3 first:mt-0" {...props} />
+                                                                    ),
+                                                                    p: ({ node, ...props }) => (
+                                                                        <p className="mb-3 leading-relaxed last:mb-0" {...props} />
+                                                                    ),
+                                                                    strong: ({ node, ...props }) => (
+                                                                        <strong className="font-semibold" {...props} />
+                                                                    ),
+                                                                    ul: ({ node, ...props }: any) => (
+                                                                        <ul className="mb-3 ml-4 list-disc space-y-1 last:mb-0" {...props} />
+                                                                    ),
+                                                                    ol: ({ node, ...props }: any) => (
+                                                                        <ol className="mb-3 ml-4 list-decimal space-y-1 last:mb-0" {...props} />
+                                                                    ),
+                                                                    li: ({ node, ...props }) => (
+                                                                        <li className="leading-relaxed" {...props} />
+                                                                    ),
+                                                                    hr: ({ node, ...props }) => (
+                                                                        <hr className={`my-4 border-0 border-t ${message.role === "user"
+                                                                            ? "border-white/20"
+                                                                            : "border-[var(--border-color)]/30"}`} {...props} />
+                                                                    ),
+                                                                    code: (props: any) => {
+                                                                        const { inline, children, ...rest } = props;
+                                                                        if (inline) {
+                                                                            return (
+                                                                                <code
+                                                                                    className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono break-words"
+                                                                                    {...rest}
+                                                                                >
+                                                                                    {children}
+                                                                                </code>
+                                                                            );
+                                                                        }
+                                                                        return (
+                                                                            <code
+                                                                                className="block rounded bg-muted p-3 text-xs font-mono whitespace-pre-wrap break-words overflow-auto"
+                                                                                {...rest}
+                                                                            >
+                                                                                {children}
+                                                                            </code>
+                                                                        );
+                                                                    },
+                                                                    pre: ({ node, className, children, ...props }: any) => (
+                                                                        <pre
+                                                                            className="block rounded bg-muted p-3 text-xs font-mono whitespace-pre-wrap break-words overflow-auto"
+                                                                            {...props}
+                                                                        >
+                                                                            {children}
+                                                                        </pre>
+                                                                    ),
+                                                                }}
+                                                            >
+                                                                {message.content}
+                                                            </ReactMarkdown>
+                                                        </div>
+                                                        {message.citations && message.citations.length > 0 && (
+                                                            <div className={`mt-4 pt-3 border-t ${message.role === "user"
+                                                                ? "border-white/20"
+                                                                : "border-[var(--border-color)]/50"}`}>
+                                                                <p className={`text-xs ${message.role === "user" ? "opacity-80" : "text-[var(--text-secondary)]"}`}>Sources:</p>
+                                                                <ul className={`text-xs mt-1 space-y-1 ${message.role === "user" ? "opacity-80" : "text-[var(--text-secondary)]"}`}>
+                                                                    {message.citations.map((cite: any, idx: number) => (
+                                                                        <li key={idx}>
+                                                                            • {typeof cite === "string"
+                                                                                ? cite
+                                                                                : cite.cardType
+                                                                                    ? `${cite.cardType.replace(/_/g, " ")} (${cite.confidence || "N/A"}% confidence)`
+                                                                                    : JSON.stringify(cite)}
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        )}
+                                                        {message.confidence !== undefined && (
+                                                            <div className={`mt-4 pt-3 border-t ${message.role === "user"
+                                                                ? "border-white/20"
+                                                                : "border-[var(--border-color)]/50"}`}>
+                                                                <p className={`text-xs ${message.role === "user" ? "opacity-80" : "text-[var(--text-secondary)]"}`}>
+                                                                    Confidence: {message.confidence}%
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {isSending && (
+                                                <div className="flex justify-start">
+                                                    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg p-4">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce" />
+                                                            <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce delay-75" />
+                                                            <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce delay-150" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <div ref={messagesEndRef} />
+                                        </div>
                                     )}
-                                    <div className="flex items-end gap-2">
-                                        <textarea
-                                            ref={chatInputRef}
-                                            value={inputValue}
-                                            onChange={(e) => {
-                                                setInputValue(e.target.value);
-                                                if (e.target.value.startsWith("/")) {
-                                                    setShowSlashCommands(true);
-                                                }
-                                            }}
-                                            onKeyDown={(e) => {
-                                                if (e.key === "Enter" && !e.shiftKey) {
-                                                    e.preventDefault();
-                                                    handleSendMessage();
-                                                }
-                                                if (e.key === "Escape") {
-                                                    setShowSlashCommands(false);
-                                                }
-                                            }}
-                                            placeholder="Type a message or use / for commands..."
-                                            className="flex-1 px-4 py-3 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)] placeholder-[var(--text-secondary)] resize-none focus:outline-none focus:border-[var(--primary)] min-h-[52px] max-h-32"
-                                            rows={1}
-                                        />
-                                        <button
-                                            onClick={handleSendMessage}
-                                            disabled={!inputValue.trim() || isSending}
-                                            className="p-3 rounded-lg bg-[var(--primary)] text-white hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                                        >
-                                            <Send size={20} />
-                                        </button>
+                                </div>
+
+                                {/* Input Area */}
+                                <div className="flex-shrink-0 px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-color)]">
+                                    <div className="relative">
+                                        {showSlashCommands && (
+                                            <div
+                                                ref={slashCommandsRef}
+                                                className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg shadow-lg max-h-64 overflow-y-auto z-10"
+                                            >
+                                                <div className="p-2 border-b border-[var(--border-color)]">
+                                                    <Input
+                                                        type="text"
+                                                        placeholder="Search commands..."
+                                                        value={slashCommandFilter}
+                                                        onChange={(e) => setSlashCommandFilter(e.target.value)}
+                                                        className="text-sm"
+                                                        autoFocus
+                                                    />
+                                                </div>
+                                                <div className="p-2">
+                                                    {filteredSlashCommands.map((cmd) => (
+                                                        <Button
+                                                            variant="ghost"
+                                                            key={cmd.command}
+                                                            onClick={() => {
+                                                                setInputValue(cmd.command);
+                                                                setShowSlashCommands(false);
+                                                                setSlashCommandFilter("");
+                                                            }}
+                                                            className="w-full justify-start gap-3 px-2 py-2"
+                                                        >
+                                                            <cmd.icon
+                                                                size={18}
+                                                                className="text-[var(--primary)] flex-shrink-0"
+                                                            />
+                                                            <div className="flex-1 min-w-0 text-left">
+                                                                <div className="text-sm font-medium text-[var(--text-primary)]">
+                                                                    {cmd.command}
+                                                                </div>
+                                                                <div className="text-xs text-[var(--text-secondary)]">
+                                                                    {cmd.description}
+                                                                </div>
+                                                            </div>
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="flex items-end gap-2">
+                                            <Textarea
+                                                ref={chatInputRef}
+                                                value={inputValue}
+                                                onChange={(e) => {
+                                                    setInputValue(e.target.value);
+                                                    if (e.target.value.startsWith("/")) {
+                                                        setShowSlashCommands(true);
+                                                    }
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter" && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        handleSendMessage();
+                                                    }
+                                                    if (e.key === "Escape") {
+                                                        setShowSlashCommands(false);
+                                                    }
+                                                }}
+                                                placeholder="Type a message or use / for commands..."
+                                                className="flex-1 min-h-[52px] max-h-32"
+                                                rows={1}
+                                            />
+                                            <Button
+                                                onClick={handleSendMessage}
+                                                disabled={!inputValue.trim() || isSending}
+                                                className="p-3"
+                                                size="icon"
+                                            >
+                                                <Send size={20} />
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        {/* Cards Drawer */}
-                        <AnimatePresence>
-                            {isDrawerOpen && (
-                                <motion.div
-                                    initial={{ width: 0, opacity: 0 }}
-                                    animate={{ width: 400, opacity: 1 }}
-                                    exit={{ width: 0, opacity: 0 }}
-                                    transition={{ duration: 0.2 }}
-                                    className="flex-shrink-0 border-l border-[var(--border-color)] bg-[var(--bg-color)] overflow-hidden"
-                                >
-                                    <div className="h-full flex flex-col">
-                                        <div className="flex-shrink-0 px-4 py-3 border-b border-[var(--border-color)] flex items-center justify-between">
-                                            <h3 className="font-semibold text-[var(--text-primary)]">
-                                                Business Cards
-                                            </h3>
-                                            <button
-                                                onClick={() => setIsDrawerOpen(false)}
-                                                className="p-1 rounded hover:bg-[var(--hover-bg)] transition-colors"
-                                            >
-                                                <X size={18} className="text-[var(--text-secondary)]" />
-                                            </button>
+                            {/* Conversation History Sidebar (right) */}
+                            <AnimatePresence>
+                                {isConversationSidebarOpen && (
+                                    <motion.div
+                                        initial={{ width: 0, opacity: 0 }}
+                                        animate={{ width: 300, opacity: 1 }}
+                                        exit={{ width: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="flex-shrink-0 border-l border-[var(--border-color)] bg-[var(--bg-color)] overflow-hidden"
+                                    >
+                                        <div className="h-full flex flex-col">
+                                            <div className="flex-shrink-0 px-4 py-3 border-b border-[var(--border-color)] flex items-center justify-between">
+                                                <h3 className="font-semibold text-[var(--text-primary)]">
+                                                    Conversations
+                                                </h3>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => setIsConversationSidebarOpen(false)}
+                                                >
+                                                    <X size={18} className="text-[var(--text-secondary)]" />
+                                                </Button>
+                                            </div>
+                                            <div className="flex-1 overflow-y-auto">
+                                                <Button
+                                                    variant="default"
+                                                    size="sm"
+                                                    onClick={startNewConversation}
+                                                    className="w-[calc(100%-1rem)] mx-2 my-2 justify-center"
+                                                >
+                                                    <Plus size={16} />
+                                                    <span>New Conversation</span>
+                                                </Button>
+                                                {isLoadingConversations ? (
+                                                    <div className="flex items-center justify-center py-8">
+                                                        <svg
+                                                            className="animate-spin h-5 w-5 text-[var(--accent)]"
+                                                            viewBox="0 0 24 24"
+                                                        >
+                                                            <circle
+                                                                className="opacity-25"
+                                                                cx="12"
+                                                                cy="12"
+                                                                r="10"
+                                                                stroke="currentColor"
+                                                                strokeWidth="4"
+                                                                fill="none"
+                                                            />
+                                                            <path
+                                                                className="opacity-75"
+                                                                fill="currentColor"
+                                                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                                            />
+                                                        </svg>
+                                                    </div>
+                                                ) : conversations.length === 0 ? (
+                                                    <div className="px-4 py-8 text-center">
+                                                        <p className="text-sm text-[var(--text-secondary)]">
+                                                            No conversations yet
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="px-2 py-2">
+                                                        {conversations.map((conv) => {
+                                                            const isActive = currentConversationId === conv.id;
+                                                            const lastMessageDate = new Date(conv.lastMessageAt);
+                                                            const now = new Date();
+                                                            const diffMs = now.getTime() - lastMessageDate.getTime();
+                                                            const diffMins = Math.floor(diffMs / 60000);
+                                                            const diffHours = Math.floor(diffMs / 3600000);
+                                                            const diffDays = Math.floor(diffMs / 86400000);
+
+                                                            let timeAgo = "";
+                                                            if (diffMins < 1) timeAgo = "Just now";
+                                                            else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
+                                                            else if (diffHours < 24) timeAgo = `${diffHours}h ago`;
+                                                            else if (diffDays < 7) timeAgo = `${diffDays}d ago`;
+                                                            else timeAgo = lastMessageDate.toLocaleDateString();
+
+                                                            return (
+                                                                <Button
+                                                                    variant={isActive ? "secondary" : "ghost"}
+                                                                    key={conv.id}
+                                                                    onClick={() => loadConversation(conv.id)}
+                                                                    className={`w-full p-5 mb-1 justify-start text-left ${isActive ? "border border-[var(--primary)]/20" : ""}`}
+                                                                >
+                                                                    <div className="flex items-start justify-between gap-2 w-full">
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p
+                                                                                className={`text-sm font-medium truncate ${isActive
+                                                                                    ? "text-[var(--primary)]"
+                                                                                    : "text-[var(--text-primary)]"
+                                                                                    }`}
+                                                                            >
+                                                                                {conv.title}
+                                                                            </p>
+                                                                            <div className="flex items-center gap-2 mt-1 text-xs text-[var(--text-secondary)]">
+                                                                                <span>{conv.messageCount} messages</span>
+                                                                                <span>•</span>
+                                                                                <span>{timeAgo}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </Button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="flex-1 overflow-y-auto px-4 py-4">
-                                            {cards.length === 0 ? (
-                                                <p className="text-sm text-[var(--text-secondary)] text-center">
-                                                    No cards available
-                                                </p>
-                                            ) : (
-                                                cards.map((card) => renderCardDetails(card))
-                                            )}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
+                            {/* Cards Drawer */}
+
+                            {/* Cards Drawer */}
+                            <AnimatePresence>
+                                {isDrawerOpen && (
+                                    <motion.div
+                                        initial={{ width: 0, opacity: 0 }}
+                                        animate={{ width: 400, opacity: 1 }}
+                                        exit={{ width: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="flex-shrink-0 border-l border-[var(--border-color)] bg-[var(--bg-color)] overflow-hidden"
+                                    >
+                                        <div className="h-full flex flex-col">
+                                            <div className="flex-shrink-0 px-4 py-3 border-b border-[var(--border-color)] flex items-center justify-between">
+                                                <h3 className="font-semibold text-[var(--text-primary)]">
+                                                    Business Cards
+                                                </h3>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => setIsDrawerOpen(false)}
+                                                >
+                                                    <X size={18} className="text-[var(--text-secondary)]" />
+                                                </Button>
+                                            </div>
+                                            <div className="flex-1 overflow-y-auto px-4 py-4">
+                                                {cards.length === 0 ? (
+                                                    <p className="text-sm text-[var(--text-secondary)] text-center">
+                                                        No cards available
+                                                    </p>
+                                                ) : (
+                                                    cards.map((card) => renderCardDetails(card))
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                )}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    )}
+                </div>
             </div>
 
-            <Modal
-                isOpen={isEnhanceModalOpen}
-                onClose={() => {
+            <Dialog
+                open={isEnhanceModalOpen}
+                onOpenChange={(open) => {
                     if (!isSavingEnhancement) {
-                        setIsEnhanceModalOpen(false);
-                        setEnhancementFormData({});
-                        setEnhancementFiles({});
+                        setIsEnhanceModalOpen(open);
+                        if (!open) {
+                            setEnhancementFormData({});
+                            setEnhancementFiles({});
+                        }
                     }
                 }}
-                title={
-                    <div className="flex items-center justify-between w-full pr-8">
-                        <span>Enhance Business Brain</span>
-                        <div className="flex items-center gap-3">
-                            {lastAnalyzedAt && (
-                                <span className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
-                                    <Clock size={12} />
-                                    {new Date(lastAnalyzedAt).toLocaleString()}
-                                </span>
-                            )}
-                            <button
-                                onClick={async (e) => {
-                                    e.stopPropagation();
-                                    if (isRefreshingAnalysis) return;
-                                    setIsRefreshingAnalysis(true);
-                                    try {
-                                        // First, fetch latest business brain data to ensure we have fresh cards
-                                        const brainResponse = await fetch(`/api/business-brain/${businessBrainId}`);
-                                        if (brainResponse.ok) {
-                                            const brainResult = await brainResponse.json();
-                                            if (brainResult.success && brainResult.businessBrain) {
-                                                setBusinessBrainData({
-                                                    intakeData: brainResult.businessBrain.intakeData,
-                                                    fileUploads: brainResult.businessBrain.fileUploads,
-                                                });
-                                                if (brainResult.cards) {
-                                                    setCards(brainResult.cards);
+            >
+                <DialogContent className="w-[min(1200px,95vw)] sm:max-w-5xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>
+                            <div className="flex items-center justify-between gap-3">
+                                <span>Enhance Business Brain</span>
+                                <div className="flex items-center gap-3">
+                                    {lastAnalyzedAt && (
+                                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                            <Clock size={12} />
+                                            {new Date(lastAnalyzedAt).toLocaleString()}
+                                        </span>
+                                    )}
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            if (isRefreshingAnalysis) return;
+                                            setIsRefreshingAnalysis(true);
+                                            try {
+                                                const brainResponse = await fetch(`/api/business-brain/${businessBrainId}`);
+                                                if (brainResponse.ok) {
+                                                    const brainResult = await brainResponse.json();
+                                                    if (brainResult.success && brainResult.businessBrain) {
+                                                        setBusinessBrainData({
+                                                            intakeData: brainResult.businessBrain.intakeData,
+                                                            fileUploads: brainResult.businessBrain.fileUploads,
+                                                        });
+                                                        if (brainResult.cards) {
+                                                            setCards(brainResult.cards);
+                                                        }
+                                                    }
                                                 }
-                                            }
-                                        }
 
-                                        // Then refresh the analysis with latest data
-                                        const response = await fetch("/api/business-brain/calculate-completion", {
-                                            method: "POST",
-                                            headers: { "Content-Type": "application/json" },
-                                            body: JSON.stringify({ businessBrainId, forceRefresh: true }),
-                                        });
-                                        if (response.ok) {
-                                            const result = await response.json();
-                                            console.log(`[Refresh] Analysis refreshed - Score: ${result.completionData?.score || 0}%, Avg Confidence: ${result.enhancementAnalysis?.overallAnalysis?.averageConfidence || 0}%`);
-                                            if (result.success && result.enhancementAnalysis) {
-                                                setEnhancementAnalysis(result.enhancementAnalysis);
-                                                setLastAnalyzedAt(result.lastAnalyzedAt || new Date().toISOString());
-                                                if (result.completionData) {
-                                                    setCompletionData(result.completionData);
+                                                const response = await fetch("/api/business-brain/calculate-completion", {
+                                                    method: "POST",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({ businessBrainId, forceRefresh: true }),
+                                                });
+                                                if (response.ok) {
+                                                    const result = await response.json();
+                                                    if (result.success && result.enhancementAnalysis) {
+                                                        setEnhancementAnalysis(result.enhancementAnalysis);
+                                                        setLastAnalyzedAt(result.lastAnalyzedAt || new Date().toISOString());
+                                                        if (result.completionData) {
+                                                            setCompletionData(result.completionData);
+                                                        }
+                                                        // Initialize form data with refreshed analysis
+                                                        initializeEnhancementFormData(result.enhancementAnalysis);
+                                                    }
                                                 }
+                                            } catch (error) {
+                                                console.error("[Refresh] Error refreshing analysis:", error);
+                                            } finally {
+                                                setIsRefreshingAnalysis(false);
                                             }
-                                        }
-                                    } catch (error) {
-                                        console.error("[Refresh] Error refreshing analysis:", error);
-                                    } finally {
-                                        setIsRefreshingAnalysis(false);
-                                    }
-                                }}
-                                disabled={isRefreshingAnalysis}
-                                className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-[var(--border-color)] bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Refresh Analysis"
-                            >
-                                <RefreshCw size={14} className={isRefreshingAnalysis ? "animate-spin" : ""} />
-                                <span>Refresh</span>
-                            </button>
-                        </div>
-                    </div>
-                }
-                message=""
-                body={
+                                        }}
+                                        disabled={isRefreshingAnalysis}
+                                        title="Refresh Analysis"
+                                        className="gap-1"
+                                    >
+                                        <RefreshCw size={14} className={isRefreshingAnalysis ? "animate-spin" : ""} />
+                                        Refresh
+                                    </Button>
+                                </div>
+                            </div>
+                        </DialogTitle>
+                        <DialogDescription>
+                            Review and fill missing fields, answer refinement questions, then regenerate cards.
+                        </DialogDescription>
+                    </DialogHeader>
+
                     <div className="space-y-6">
                         {isLoadingEnhancement ? (
                             <div className="flex items-center justify-center py-8">
-                                <div className="flex flex-col items-center">
+                                <div className="flex flex-col items-center gap-3 text-center">
                                     <svg
-                                        className="animate-spin h-8 w-8 mb-3 text-[var(--accent)]"
+                                        className="animate-spin h-8 w-8 text-[var(--accent)]"
                                         viewBox="0 0 24 24"
                                     >
                                         <circle
@@ -2080,7 +2237,7 @@ export default function BusinessBrainDetail() {
                                             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                                         />
                                     </svg>
-                                    <p className="text-sm text-[var(--text-secondary)]">
+                                    <p className="text-sm text-muted-foreground">
                                         Analyzing your business brain...
                                     </p>
                                 </div>
@@ -2088,79 +2245,85 @@ export default function BusinessBrainDetail() {
                         ) : enhancementAnalysis ? (
                             <>
                                 {/* Overall Analysis */}
-                                <div className="p-4 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)]">
-                                    <h3 className="font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-                                        <BarChart3 size={20} className="text-[var(--primary)]" />
-                                        Overall Analysis
-                                    </h3>
-                                    <div className="grid grid-cols-3 gap-4">
-                                        <div>
-                                            <p className="text-xs text-[var(--text-secondary)] mb-1">
-                                                Average Confidence
-                                            </p>
-                                            <p className="text-2xl font-bold text-[var(--text-primary)]">
-                                                {enhancementAnalysis.overallAnalysis.averageConfidence}%
-                                            </p>
+                                <Card>
+                                    <CardHeader className="pb-3">
+                                        <CardTitle className="flex items-center gap-2 text-base">
+                                            <BarChart3 size={20} className="text-[var(--primary)]" />
+                                            Overall Analysis
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                            <div>
+                                                <p className="text-xs text-muted-foreground mb-1">
+                                                    Average Confidence
+                                                </p>
+                                                <p className="text-2xl font-bold">
+                                                    {enhancementAnalysis.overallAnalysis.averageConfidence}%
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-muted-foreground mb-1">
+                                                    Cards Below 80%
+                                                </p>
+                                                <p className="text-2xl font-bold">
+                                                    {enhancementAnalysis.overallAnalysis.cardsBelow80}/
+                                                    {enhancementAnalysis.overallAnalysis.totalCards}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-muted-foreground mb-1">
+                                                    Total Cards
+                                                </p>
+                                                <p className="text-2xl font-bold">
+                                                    {enhancementAnalysis.overallAnalysis.totalCards}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="text-xs text-[var(--text-secondary)] mb-1">
-                                                Cards Below 80%
-                                            </p>
-                                            <p className="text-2xl font-bold text-[var(--text-primary)]">
-                                                {enhancementAnalysis.overallAnalysis.cardsBelow80}/
-                                                {enhancementAnalysis.overallAnalysis.totalCards}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-[var(--text-secondary)] mb-1">
-                                                Total Cards
-                                            </p>
-                                            <p className="text-2xl font-bold text-[var(--text-primary)]">
-                                                {enhancementAnalysis.overallAnalysis.totalCards}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    {enhancementAnalysis.overallAnalysis.criticalMissingFields.length > 0 && (
-                                        <div className="mt-4 pt-4 border-t border-[var(--border-color)]">
-                                            <p className="text-sm font-medium text-[var(--text-primary)] mb-2">
-                                                Critical Missing Fields:
-                                            </p>
-                                            <ul className="space-y-1">
-                                                {enhancementAnalysis.overallAnalysis.criticalMissingFields.map(
-                                                    (field: string, idx: number) => (
-                                                        <li
-                                                            key={idx}
-                                                            className="text-sm text-[var(--text-secondary)] flex items-center gap-2"
-                                                        >
-                                                            <AlertCircle
-                                                                size={16}
-                                                                className="text-amber-500 flex-shrink-0"
-                                                            />
-                                                            {field}
-                                                        </li>
-                                                    )
-                                                )}
-                                            </ul>
-                                        </div>
-                                    )}
-                                </div>
+                                        {enhancementAnalysis.overallAnalysis.criticalMissingFields.length > 0 && (
+                                            <div className="pt-4 border-t">
+                                                <p className="text-sm font-medium mb-2">
+                                                    Critical Missing Fields:
+                                                </p>
+                                                <ul className="space-y-1">
+                                                    {enhancementAnalysis.overallAnalysis.criticalMissingFields.map(
+                                                        (field: string, idx: number) => (
+                                                            <li
+                                                                key={idx}
+                                                                className="text-sm text-muted-foreground flex items-center gap-2"
+                                                            >
+                                                                <AlertCircle
+                                                                    size={16}
+                                                                    className="text-amber-500 flex-shrink-0"
+                                                                />
+                                                                {field}
+                                                            </li>
+                                                        )
+                                                    )}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
 
                                 {/* Progress Overview */}
-                                <div className="p-4 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)]">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                                            <ClipboardCheck size={20} className="text-[var(--primary)]" />
-                                            Progress Overview
-                                        </h3>
-                                        <span className="text-xs px-2 py-1 rounded-full border border-[var(--border-color)] text-[var(--text-secondary)]">
-                                            Step: {enhancementStep === "filling" ? "Saving new data" : enhancementStep === "regenerating" ? "Regenerating cards" : "Analyzing"}
-                                        </span>
-                                    </div>
-                                    <div className="space-y-3">
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <div className="flex items-center justify-between">
+                                            <CardTitle className="flex items-center gap-2 text-base">
+                                                <ClipboardCheck size={20} className="text-[var(--primary)]" />
+                                                Progress Overview
+                                            </CardTitle>
+                                            <Badge variant="outline">
+                                                Step: {enhancementStep === "filling" ? "Saving new data" : enhancementStep === "regenerating" ? "Regenerating cards" : "Analyzing"}
+                                            </Badge>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="space-y-3">
                                         <div>
                                             <div className="flex items-center justify-between text-sm mb-1">
-                                                <span className="text-[var(--text-secondary)]">Overall completion</span>
-                                                <span className="font-semibold text-[var(--text-primary)]">{overallCompletion}%</span>
+                                                <span className="text-muted-foreground">Overall completion</span>
+                                                <span className="font-semibold">{overallCompletion}%</span>
                                             </div>
                                             <div className="w-full h-2 rounded-full bg-[var(--border-color)]">
                                                 <div
@@ -2169,11 +2332,11 @@ export default function BusinessBrainDetail() {
                                                 />
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                             <div className="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--bg-color)]">
                                                 <div className="flex items-center justify-between text-sm mb-1">
-                                                    <span className="text-[var(--text-secondary)]">Fields completion</span>
-                                                    <span className="font-semibold text-[var(--text-primary)]">{missingFieldData.completion}%</span>
+                                                    <span className="text-muted-foreground">Fields completion</span>
+                                                    <span className="font-semibold">{missingFieldData.completion}%</span>
                                                 </div>
                                                 <div className="w-full h-2 rounded-full bg-[var(--border-color)]">
                                                     <div
@@ -2184,8 +2347,8 @@ export default function BusinessBrainDetail() {
                                             </div>
                                             <div className="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--bg-color)]">
                                                 <div className="flex items-center justify-between text-sm mb-1">
-                                                    <span className="text-[var(--text-secondary)]">Questions completion</span>
-                                                    <span className="font-semibold text-[var(--text-primary)]">{refinementQuestionData.completion}%</span>
+                                                    <span className="text-muted-foreground">Questions completion</span>
+                                                    <span className="font-semibold">{refinementQuestionData.completion}%</span>
                                                 </div>
                                                 <div className="w-full h-2 rounded-full bg-[var(--border-color)]">
                                                     <div
@@ -2195,48 +2358,50 @@ export default function BusinessBrainDetail() {
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </div>
+                                    </CardContent>
+                                </Card>
 
                                 {/* Tabs for actions */}
-                                <div>
-                                    <div className="flex items-center gap-4 mb-4 border-b border-[var(--border-color)]">
-                                        {[
-                                            { key: "missing", label: "Missing Fields" },
-                                            { key: "refinement", label: "Refinement Questions" },
-                                            { key: "strategic", label: "Strategic Recommendations" },
-                                        ].map((tab) => (
-                                            <div
-                                                key={tab.key}
-                                                onClick={() => setEnhancementTab(tab.key as "missing" | "refinement" | "strategic")}
-                                                className={`relative pb-2 text-sm font-medium cursor-pointer transition-colors ${enhancementTab === tab.key
-                                                    ? "text-[var(--primary)] dark:text-[var(--accent)]"
-                                                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                                                    }`}
-                                            >
-                                                {tab.label}
-                                                <span
-                                                    className={`absolute left-0 right-0 -bottom-[1px] h-[2px] ${enhancementTab === tab.key
-                                                        ? "bg-[var(--primary)] dark:bg-[var(--accent)]"
-                                                        : "bg-transparent"
+                                <Card>
+                                    <CardHeader className="pb-1">
+                                        <div className="inline-flex flex-wrap items-center gap-4 border-b border-[var(--border-color)]">
+                                            {[
+                                                { key: "missing", label: "Missing Fields" },
+                                                { key: "refinement", label: "Refinement Questions" },
+                                                { key: "strategic", label: "Strategic Recommendations" },
+                                            ].map((tab) => (
+                                                <button
+                                                    key={tab.key}
+                                                    onClick={() => setEnhancementTab(tab.key as "missing" | "refinement" | "strategic")}
+                                                    className={`relative pb-2 text-sm font-medium transition-colors ${enhancementTab === tab.key
+                                                        ? "text-[var(--primary)] dark:text-[var(--accent)]"
+                                                        : "text-muted-foreground hover:text-[var(--text-primary)]"
                                                         }`}
-                                                />
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div>
+                                                >
+                                                    {tab.label}
+                                                    <span
+                                                        className={`absolute left-0 right-0 -bottom-[1px] h-[2px] ${enhancementTab === tab.key
+                                                            ? "bg-[var(--primary)] dark:bg-[var(--accent)]"
+                                                            : "bg-transparent"
+                                                            }`}
+                                                    />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
                                         {enhancementTab === "missing"
                                             ? renderMissingFieldsSection()
                                             : enhancementTab === "refinement"
                                                 ? renderRefinementQuestionsSection()
                                                 : renderStrategicRecommendationsSection()}
-                                    </div>
-                                </div>
+                                    </CardContent>
+                                </Card>
 
                                 {/* Card-by-Card Analysis */}
                                 {enhancementTab === "missing" && (
-                                    <div>
-                                        <h3 className="font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                                    <div className="space-y-4">
+                                        <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
                                             <ClipboardCheck size={20} className="text-[var(--primary)]" />
                                             Card Analysis
                                         </h3>
@@ -2250,135 +2415,134 @@ export default function BusinessBrainDetail() {
                                                         (ctx: any) => !quickWinFields.has(ctx.fieldId)
                                                     );
                                                 return (
-                                                    <div
-                                                        key={analysis.cardId}
-                                                        className="p-4 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)]"
-                                                    >
-                                                        <div className="flex items-start justify-between mb-3">
-                                                            <div className="flex-1">
-                                                                <h4 className="font-semibold text-[var(--text-primary)] mb-1">
-                                                                    {analysis.cardTitle}
-                                                                </h4>
-                                                                <p className="text-xs text-[var(--text-secondary)]">
-                                                                    {analysis.cardType.replace(/_/g, " ")}
-                                                                </p>
-                                                            </div>
-                                                            <div className="text-right">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-sm text-[var(--text-secondary)]">
-                                                                        Current:
-                                                                    </span>
-                                                                    <span
-                                                                        className={`text-lg font-bold ${analysis.currentConfidence >= 80
-                                                                            ? "text-green-500"
-                                                                            : analysis.currentConfidence >= 60
-                                                                                ? "text-amber-500"
-                                                                                : "text-red-500"
-                                                                            }`}
-                                                                    >
-                                                                        {analysis.currentConfidence}%
-                                                                    </span>
+                                                    <Card key={analysis.cardId}>
+                                                        <CardContent className="pt-4 space-y-3">
+                                                            <div className="flex items-start justify-between">
+                                                                <div className="flex-1">
+                                                                    <h4 className="font-semibold text-[var(--text-primary)] mb-1">
+                                                                        {analysis.cardTitle}
+                                                                    </h4>
+                                                                    <p className="text-xs text-muted-foreground">
+                                                                        {analysis.cardType.replace(/_/g, " ")}
+                                                                    </p>
                                                                 </div>
-                                                                <div className="flex items-center gap-2 mt-1">
-                                                                    <span className="text-sm text-[var(--text-secondary)]">
-                                                                        Target:
-                                                                    </span>
-                                                                    <span className="text-lg font-bold text-[var(--text-primary)]">
-                                                                        {analysis.targetConfidence}%
-                                                                    </span>
+                                                                <div className="text-right">
+                                                                    <div className="flex items-center gap-2 justify-end">
+                                                                        <span className="text-sm text-muted-foreground">
+                                                                            Current:
+                                                                        </span>
+                                                                        <span
+                                                                            className={`text-lg font-bold ${analysis.currentConfidence >= 80
+                                                                                ? "text-green-500"
+                                                                                : analysis.currentConfidence >= 60
+                                                                                    ? "text-amber-500"
+                                                                                    : "text-red-500"
+                                                                                }`}
+                                                                        >
+                                                                            {analysis.currentConfidence}%
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 mt-1 justify-end">
+                                                                        <span className="text-sm text-muted-foreground">
+                                                                            Target:
+                                                                        </span>
+                                                                        <span className="text-lg font-bold text-[var(--text-primary)]">
+                                                                            {analysis.targetConfidence}%
+                                                                        </span>
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
 
-                                                        {analysis.currentConfidence < 80 && (
-                                                            <>
-                                                                {filteredMissing && filteredMissing.length > 0 && (
-                                                                    <div className="mb-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                                                                        <p className="text-sm text-amber-800 dark:text-amber-300 flex items-center gap-2 mb-2">
-                                                                            <FileText size={16} />
-                                                                            Missing context (Please fill out/upload a document to boost analysis)
-                                                                        </p>
-                                                                        <div className="space-y-3">
-                                                                            {filteredMissing.map((ctx: any, i: number) => (
-                                                                                <div key={`${analysis.cardId}-ctx-${i}`} className="p-2 rounded border border-[var(--border-color)] bg-[var(--card-bg)]">
-                                                                                    {renderContextInput(ctx)}
-                                                                                </div>
-                                                                            ))}
+                                                            {analysis.currentConfidence < 80 && (
+                                                                <>
+                                                                    {filteredMissing && filteredMissing.length > 0 && (
+                                                                        <div className="mb-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                                                                            <p className="text-sm text-amber-800 dark:text-amber-300 flex items-center gap-2 mb-2">
+                                                                                <FileText size={16} />
+                                                                                Missing context (Please fill out/upload a document to boost analysis)
+                                                                            </p>
+                                                                            <div className="space-y-3">
+                                                                                {filteredMissing.map((ctx: any, i: number) => (
+                                                                                    <div key={`${analysis.cardId}-ctx-${i}`} className="p-2 rounded border border-[var(--border-color)] bg-[var(--card-bg)]">
+                                                                                        {renderContextInput(ctx)}
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
-                                                                )}
+                                                                    )}
 
-                                                                {analysis.refinementQuestions && analysis.refinementQuestions.length > 0 && (
-                                                                    <div className="mb-3">
-                                                                        <p className="text-sm font-medium text-[var(--text-primary)] mb-2 flex items-center gap-2">
-                                                                            <Sparkles size={16} className="text-[var(--primary)]" />
-                                                                            Refinement Questions ({analysis.refinementQuestions.length}):
-                                                                        </p>
-                                                                        <ul className="space-y-2 ml-6">
-                                                                            {analysis.refinementQuestions.map((q: any, idx: number) => (
-                                                                                <li key={q.id || idx} className="text-sm text-[var(--text-secondary)] list-disc">
-                                                                                    {q.question}
-                                                                                </li>
-                                                                            ))}
-                                                                        </ul>
-                                                                        <p className="text-xs text-[var(--text-secondary)] mt-2 italic">
-                                                                            Answer these in the Refinement Questions tab.
-                                                                        </p>
-                                                                    </div>
-                                                                )}
-
-                                                                {analysis.strategicRecommendations && analysis.strategicRecommendations.length > 0 && (
-                                                                    <div>
-                                                                        <p className="text-sm font-medium text-[var(--text-primary)] mb-2 flex items-center gap-2">
-                                                                            <CheckCircle
-                                                                                size={16}
-                                                                                className="text-green-500"
-                                                                            />
-                                                                            Strategic Recommendations:
-                                                                        </p>
-                                                                        <ul className="space-y-1 ml-6">
-                                                                            {analysis.strategicRecommendations.map(
-                                                                                (rec: any, idx: number) => (
-                                                                                    <li
-                                                                                        key={idx}
-                                                                                        className="text-sm text-[var(--text-secondary)] list-disc"
-                                                                                    >
-                                                                                        {typeof rec === "string" ? rec : rec.recommendation}
+                                                                    {analysis.refinementQuestions && analysis.refinementQuestions.length > 0 && (
+                                                                        <div className="mb-3">
+                                                                            <p className="text-sm font-medium text-[var(--text-primary)] mb-2 flex items-center gap-2">
+                                                                                <Sparkles size={16} className="text-[var(--primary)]" />
+                                                                                Refinement Questions ({analysis.refinementQuestions.length}):
+                                                                            </p>
+                                                                            <ul className="space-y-2 ml-6">
+                                                                                {analysis.refinementQuestions.map((q: any, idx: number) => (
+                                                                                    <li key={q.id || idx} className="text-sm text-muted-foreground list-disc">
+                                                                                        {q.question}
                                                                                     </li>
-                                                                                )
-                                                                            )}
-                                                                        </ul>
-                                                                    </div>
-                                                                )}
+                                                                                ))}
+                                                                            </ul>
+                                                                            <p className="text-xs text-muted-foreground mt-2 italic">
+                                                                                Answer these in the Refinement Questions tab.
+                                                                            </p>
+                                                                        </div>
+                                                                    )}
 
-                                                                <div className="mt-3 pt-3 border-t border-[var(--border-color)]">
-                                                                    <span
-                                                                        className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${analysis.priority === "high"
-                                                                            ? "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
-                                                                            : analysis.priority === "medium"
-                                                                                ? "bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400"
-                                                                                : "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
-                                                                            }`}
-                                                                    >
-                                                                        {analysis.priority === "high"
-                                                                            ? "High Priority"
-                                                                            : analysis.priority === "medium"
-                                                                                ? "Medium Priority"
-                                                                                : "Low Priority"}
+                                                                    {analysis.strategicRecommendations && analysis.strategicRecommendations.length > 0 && (
+                                                                        <div>
+                                                                            <p className="text-sm font-medium text-[var(--text-primary)] mb-2 flex items-center gap-2">
+                                                                                <CheckCircle
+                                                                                    size={16}
+                                                                                    className="text-green-500"
+                                                                                />
+                                                                                Strategic Recommendations:
+                                                                            </p>
+                                                                            <ul className="space-y-1 ml-6">
+                                                                                {analysis.strategicRecommendations.map(
+                                                                                    (rec: any, idx: number) => (
+                                                                                        <li
+                                                                                            key={idx}
+                                                                                            className="text-sm text-muted-foreground list-disc"
+                                                                                        >
+                                                                                            {typeof rec === "string" ? rec : rec.recommendation}
+                                                                                        </li>
+                                                                                    )
+                                                                                )}
+                                                                            </ul>
+                                                                        </div>
+                                                                    )}
+
+                                                                    <div className="mt-3 pt-3 border-t border-[var(--border-color)]">
+                                                                        <span
+                                                                            className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${analysis.priority === "high"
+                                                                                ? "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
+                                                                                : analysis.priority === "medium"
+                                                                                    ? "bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400"
+                                                                                    : "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
+                                                                                }`}
+                                                                        >
+                                                                            {analysis.priority === "high"
+                                                                                ? "High Priority"
+                                                                                : analysis.priority === "medium"
+                                                                                    ? "Medium Priority"
+                                                                                    : "Low Priority"}
+                                                                        </span>
+                                                                    </div>
+                                                                </>
+                                                            )}
+
+                                                            {analysis.currentConfidence >= 80 && (
+                                                                <div className="flex items-center gap-2 text-green-500">
+                                                                    <CheckCircle2 size={16} />
+                                                                    <span className="text-sm font-medium">
+                                                                        This card meets the target confidence level
                                                                     </span>
                                                                 </div>
-                                                            </>
-                                                        )}
-
-                                                        {analysis.currentConfidence >= 80 && (
-                                                            <div className="flex items-center gap-2 text-green-500">
-                                                                <CheckCircle2 size={16} />
-                                                                <span className="text-sm font-medium">
-                                                                    This card meets the target confidence level
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                            )}
+                                                        </CardContent>
+                                                    </Card>
                                                 );
                                             })}
                                         </div>
@@ -2386,190 +2550,239 @@ export default function BusinessBrainDetail() {
                                 )}
                             </>
                         ) : (
-                            <div className="text-center py-8">
-                                <AlertCircle className="w-12 h-12 mx-auto mb-3 text-[var(--text-secondary)]" />
-                                <p className="text-sm text-[var(--text-secondary)]">
-                                    Unable to load enhancement analysis. Please try again.
-                                </p>
-                            </div>
+                            <Card>
+                                <CardContent className="text-center py-8">
+                                    <AlertCircle className="w-12 h-12 mx-auto mb-3 text-[var(--text-secondary)]" />
+                                    <p className="text-sm text-muted-foreground">
+                                        Unable to load enhancement analysis. Please try again.
+                                    </p>
+                                </CardContent>
+                            </Card>
                         )}
                     </div>
-                }
-                confirmText={
-                    isSavingEnhancement ? (
-                        <div className="flex items-center gap-2">
-                            <svg
-                                className="animate-spin h-4 w-4"
-                                viewBox="0 0 24 24"
-                            >
-                                <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                    fill="none"
-                                />
-                                <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                />
-                            </svg>
-                            <span>Saving...</span>
-                        </div>
-                    ) : (
-                        "Save & Regenerate"
-                    )
-                }
-                cancelText="Cancel"
-                maxWidth="4xl"
-                isSubmitting={isSavingEnhancement}
-                onConfirm={async () => {
-                    if (isSavingEnhancement) return;
 
-                    setIsSavingEnhancement(true);
-                    setEnhancementStep("filling");
-
-                    console.log("[Enhancement] Starting save & regenerate flow");
-                    console.log("[Enhancement] Form data fields:", Object.keys(enhancementFormData).length);
-                    console.log("[Enhancement] Refinement answers:", Object.keys(refinementAnswers).length);
-                    console.log("[Enhancement] Files to upload:", Object.keys(enhancementFiles).length);
-
-                    try {
-                        // Step 1: Save the data first
-                        const payload = new FormData();
-                        // Merge refinement answers into intake_json
-                        const mergedData = {
-                            ...enhancementFormData,
-                            ...refinementAnswers,
-                        };
-                        payload.append("intake_json", JSON.stringify(mergedData));
-                        Object.entries(enhancementFiles).forEach(([fieldId, files]) => {
-                            if (files && files.length > 0) {
-                                files.forEach((file) => {
-                                    payload.append(fieldId, file);
-                                });
-                            }
-                        });
-
-                        console.log("[Enhancement] Step 1: Updating business brain data...");
-                        const updateResponse = await fetch(`/api/business-brain/${businessBrainId}/update`, {
-                            method: "POST",
-                            body: payload,
-                        });
-
-                        if (!updateResponse.ok) {
-                            const errorData = await updateResponse.json();
-                            throw new Error(errorData.error || "Failed to update business brain");
-                        }
-
-                        const updateResult = await updateResponse.json();
-                        console.log("[Enhancement] Step 1: Update complete", updateResult.success);
-
-                        // Step 2: Regenerate cards with new data (THIS updates confidence scores)
-                        setEnhancementStep("regenerating");
-                        console.log("[Enhancement] Step 2: Regenerating cards...");
-
-                        const cardsResponse = await fetch(
-                            `/api/business-brain/generate-cards?profileId=${businessBrainId}`,
-                            { method: "POST" }
-                        );
-
-                        if (!cardsResponse.ok) {
-                            const errorData = await cardsResponse.json();
-                            throw new Error(errorData.error || "Failed to regenerate cards");
-                        }
-
-                        const cardsResult = await cardsResponse.json();
-                        if (cardsResult.success && cardsResult.cards) {
-                            console.log(`[Enhancement] Step 2: Cards regenerated with ${cardsResult.cards.length} cards`);
-                            console.log(`[Enhancement] New confidence scores:`, cardsResult.cards.map((c: any) => `${c.title}: ${c.confidence_score || 0}%`).join(", "));
-                            setCards(cardsResult.cards);
-                        } else {
-                            console.warn("[Enhancement] Step 2: Cards regeneration returned no cards");
-                        }
-
-                        // Step 3: Synthesize knowledge with new data
-                        console.log("[Enhancement] Step 3: Synthesizing knowledge...");
-                        const synthesizeResponse = await fetch(
-                            `/api/business-brain/${businessBrainId}/synthesize-knowledge`,
-                            { method: "POST" }
-                        );
-
-                        if (synthesizeResponse.ok) {
-                            console.log("[Enhancement] Step 3: Knowledge synthesis complete");
-                        } else {
-                            console.warn("[Enhancement] Step 3: Knowledge synthesis failed (non-critical)");
-                        }
-
-                        // Step 4: Calculate completion with fresh data (AFTER cards are regenerated)
-                        setEnhancementStep("analyzing");
-                        console.log("[Enhancement] Step 4: Calculating completion with fresh data...");
-
-                        // Small delay to ensure database is updated
-                        await new Promise(resolve => setTimeout(resolve, 500));
-
-                        const completionResponse = await fetch(
-                            "/api/business-brain/calculate-completion",
-                            {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ businessBrainId, forceRefresh: true }),
-                            }
-                        );
-
-                        if (completionResponse.ok) {
-                            const completionResult = await completionResponse.json();
-                            console.log(`[Enhancement] Step 4: Completion calculated - Score: ${completionResult.completionData?.score || 0}%`);
-                            console.log(`[Enhancement] Average confidence: ${completionResult.enhancementAnalysis?.overallAnalysis?.averageConfidence || 0}%`);
-
-                            if (completionResult.success && completionResult.enhancementAnalysis) {
-                                setEnhancementAnalysis(completionResult.enhancementAnalysis);
-                                if (completionResult.completionData) {
-                                    setCompletionData(completionResult.completionData);
+                    <DialogFooter className="flex items-center justify-between gap-3">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                if (!isSavingEnhancement) {
+                                    setIsEnhanceModalOpen(false);
+                                    setEnhancementFormData({});
+                                    setEnhancementFiles({});
                                 }
-                                if (completionResult.lastAnalyzedAt) {
-                                    setLastAnalyzedAt(completionResult.lastAnalyzedAt);
+                            }}
+                            disabled={isSavingEnhancement}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={async () => {
+                                if (isSavingEnhancement) return;
+
+                                setIsSavingEnhancement(true);
+                                setEnhancementStep("filling");
+
+                                try {
+                                    // Upload files to S3 first
+                                    const uploadedFileUrls: Record<string, Array<{ url: string; name: string; key: string; type: string }>> = {};
+                                    
+                                    // Upload all files to S3
+                                    for (const [fieldId, files] of Object.entries(enhancementFiles)) {
+                                        if (files && files.length > 0) {
+                                            uploadedFileUrls[fieldId] = [];
+                                            
+                                            for (const file of files) {
+                                                try {
+                                                    // Get presigned URL
+                                                    const presignedResponse = await fetch("/api/upload/presigned-url", {
+                                                        method: "POST",
+                                                        headers: {
+                                                            "Content-Type": "application/json",
+                                                        },
+                                                        body: JSON.stringify({
+                                                            fileName: file.name,
+                                                            fileType: file.type || "application/octet-stream",
+                                                            fieldId: fieldId,
+                                                            maxSize: 10 * 1024 * 1024, // 10MB default
+                                                            allowedMimeTypes: [
+                                                                "application/pdf",
+                                                                "application/msword",
+                                                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                                                "text/plain",
+                                                            ],
+                                                        }),
+                                                    });
+
+                                                    if (!presignedResponse.ok) {
+                                                        const errorData = await presignedResponse.json();
+                                                        throw new Error(errorData.error || "Failed to get upload URL");
+                                                    }
+
+                                                    const { presignedUrl, fileUrl, key } = await presignedResponse.json();
+
+                                                    // Upload file directly to S3
+                                                    const uploadResponse = await fetch(presignedUrl, {
+                                                        method: "PUT",
+                                                        body: file,
+                                                        headers: {
+                                                            "Content-Type": file.type || "application/octet-stream",
+                                                        },
+                                                        credentials: "omit", // Required for S3 CORS
+                                                    });
+
+                                                    if (!uploadResponse.ok) {
+                                                        const errorBody = await uploadResponse.text();
+                                                        throw new Error(`Failed to upload file to S3: ${uploadResponse.status} - ${errorBody}`);
+                                                    }
+
+                                                    uploadedFileUrls[fieldId].push({
+                                                        url: fileUrl,
+                                                        name: file.name,
+                                                        key: key,
+                                                        type: file.type || "application/octet-stream",
+                                                    });
+                                                } catch (error) {
+                                                    console.error(`Error uploading file ${file.name} for field ${fieldId}:`, error);
+                                                    throw error; // Re-throw to stop the process
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Send JSON payload with S3 URLs instead of FormData with files
+                                    const mergedData = {
+                                        ...enhancementFormData,
+                                        ...refinementAnswers,
+                                    };
+                                    
+                                    const payload = {
+                                        intake_json: JSON.stringify(mergedData),
+                                        file_urls: JSON.stringify(uploadedFileUrls),
+                                    };
+
+                                    const updateResponse = await fetch(`/api/business-brain/${businessBrainId}/update`, {
+                                        method: "POST",
+                                        headers: {
+                                            "Content-Type": "application/json",
+                                        },
+                                        body: JSON.stringify(payload),
+                                    });
+
+                                    if (!updateResponse.ok) {
+                                        const errorData = await updateResponse.json();
+                                        throw new Error(errorData.error || "Failed to update business brain");
+                                    }
+
+                                    setEnhancementStep("regenerating");
+
+                                    const cardsResponse = await fetch(
+                                        `/api/business-brain/generate-cards?profileId=${businessBrainId}`,
+                                        { method: "POST" }
+                                    );
+
+                                    if (!cardsResponse.ok) {
+                                        const errorData = await cardsResponse.json();
+                                        throw new Error(errorData.error || "Failed to regenerate cards");
+                                    }
+
+                                    const cardsResult = await cardsResponse.json();
+                                    if (cardsResult.success && cardsResult.cards) {
+                                        setCards(cardsResult.cards);
+                                    }
+
+                                    const synthesizeResponse = await fetch(
+                                        `/api/business-brain/${businessBrainId}/synthesize-knowledge`,
+                                        { method: "POST" }
+                                    );
+
+                                    if (!synthesizeResponse.ok) {
+                                        console.warn("[Enhancement] Knowledge synthesis failed (non-critical)");
+                                    }
+
+                                    setEnhancementStep("analyzing");
+                                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                                    const completionResponse = await fetch(
+                                        "/api/business-brain/calculate-completion",
+                                        {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ businessBrainId, forceRefresh: true }),
+                                        }
+                                    );
+
+                                    if (completionResponse.ok) {
+                                        const completionResult = await completionResponse.json();
+                                        if (completionResult.success && completionResult.enhancementAnalysis) {
+                                            setEnhancementAnalysis(completionResult.enhancementAnalysis);
+                                            if (completionResult.completionData) {
+                                                setCompletionData(completionResult.completionData);
+                                            }
+                                            if (completionResult.lastAnalyzedAt) {
+                                                setLastAnalyzedAt(completionResult.lastAnalyzedAt);
+                                            }
+                                        }
+                                    } else {
+                                        const errorData = await completionResponse.json();
+                                        throw new Error(errorData.error || "Failed to calculate completion");
+                                    }
+
+                                    const response = await fetch(`/api/business-brain/${businessBrainId}`);
+                                    const result = await response.json();
+                                    if (result.success) {
+                                        setBusinessBrainData({
+                                            intakeData: result.businessBrain.intakeData,
+                                            fileUploads: result.businessBrain.fileUploads,
+                                        });
+                                        if (result.cards) {
+                                            setCards(result.cards);
+                                        }
+                                    }
+
+                                    setEnhancementFormData({});
+                                    setEnhancementFiles({});
+                                    setRefinementAnswers({});
+                                } catch (error) {
+                                    console.error("[Enhancement] Error in save & regenerate flow:", error);
+                                    alert(error instanceof Error ? error.message : "Failed to save enhancement");
+                                } finally {
+                                    setIsSavingEnhancement(false);
+                                    setEnhancementStep("analyzing");
                                 }
-                            }
-                        } else {
-                            console.error("[Enhancement] Step 4: Completion calculation failed");
-                            const errorData = await completionResponse.json();
-                            throw new Error(errorData.error || "Failed to calculate completion");
-                        }
-
-                        // Step 5: Reload business brain data to get latest state
-                        console.log("[Enhancement] Step 5: Reloading business brain data...");
-                        const response = await fetch(`/api/business-brain/${businessBrainId}`);
-                        const result = await response.json();
-                        if (result.success) {
-                            setBusinessBrainData({
-                                intakeData: result.businessBrain.intakeData,
-                                fileUploads: result.businessBrain.fileUploads,
-                            });
-                            if (result.cards) {
-                                setCards(result.cards);
-                            }
-                            console.log("[Enhancement] Step 5: Business brain data reloaded");
-                        }
-
-                        // Clear form data
-                        setEnhancementFormData({});
-                        setEnhancementFiles({});
-                        setRefinementAnswers({});
-
-                        console.log("[Enhancement] Save & regenerate flow complete");
-                    } catch (error) {
-                        console.error("[Enhancement] Error in save & regenerate flow:", error);
-                        alert(error instanceof Error ? error.message : "Failed to save enhancement");
-                    } finally {
-                        setIsSavingEnhancement(false);
-                        setEnhancementStep("analyzing");
-                    }
-                }}
-            />
+                            }}
+                            disabled={isSavingEnhancement}
+                            className="gap-2"
+                        >
+                            {isSavingEnhancement ? (
+                                <>
+                                    <svg
+                                        className="animate-spin h-4 w-4"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <circle
+                                            className="opacity-25"
+                                            cx="12"
+                                            cy="12"
+                                            r="10"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                            fill="none"
+                                        />
+                                        <path
+                                            className="opacity-75"
+                                            fill="currentColor"
+                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                        />
+                                    </svg>
+                                    <span>Saving...</span>
+                                </>
+                            ) : (
+                                "Save & Regenerate"
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

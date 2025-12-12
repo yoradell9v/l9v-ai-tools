@@ -2,10 +2,21 @@
 import { useEffect, useState } from "react";
 import { useUser } from "@/context/UserContext";
 import AnalysisCard, { SavedAnalysis } from "@/components/ui/AnalysisCard";
-import Modal from "@/components/ui/Modal";
 import RefinementForm from "@/components/forms/RefinementForm";
-import { FileText, AlertCircle, Plus } from "lucide-react";
-import Navbar from "@/components/ui/Navbar";
+import { FileText, AlertCircle, Plus, Loader2 } from "lucide-react";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 
 export default function SavedPage() {
     const { user } = useUser();
@@ -92,29 +103,14 @@ export default function SavedPage() {
     if (!user || isLoading) {
         return (
             <>
-                <Navbar />
-                <div
-                    className="transition-all duration-300 ease-in-out min-h-screen ml-64"
-                >
+                <div className="flex items-center gap-2 p-4 border-b">
+                    <SidebarTrigger />
+                </div>
+                <div className="transition-all duration-300 ease-in-out min-h-screen">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                         <div className="flex flex-col items-center justify-center py-16">
-                            <svg className="animate-spin h-8 w-8 mb-3 text-[#FAC133]" viewBox="0 0 24 24">
-                                <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                    fill="none"
-                                />
-                                <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                />
-                            </svg>
-                            <p className="text-sm text-[#1a1a1a] dark:text-[#e0e0e0]">Loading...</p>
+                            <Loader2 className="h-8 w-8 mb-3 animate-spin" />
+                            <p className="text-sm text-muted-foreground">Loading...</p>
                         </div>
                     </div>
                 </div>
@@ -125,36 +121,25 @@ export default function SavedPage() {
     if (error) {
         return (
             <>
-                <Navbar />
-                <div
-                    className="transition-all duration-300 ease-in-out min-h-screen ml-64"
-                >
+                <div className="flex items-center gap-2 p-4 border-b">
+                    <SidebarTrigger />
+                </div>
+                <div className="transition-all duration-300 ease-in-out min-h-screen">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                         <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-                            <div
-                                className="p-4 rounded-xl mb-4 bg-gray-100 dark:bg-gray-800"
-                            >
-                                <AlertCircle
-                                    size={40}
-                                    className="text-red-600 dark:text-red-400"
-                                />
-                            </div>
-                            <h3
-                                className="text-base font-medium mb-1 text-[#18416B] dark:text-[#FAC133]"
-                            >
-                                Error Loading Analyses
-                            </h3>
-                            <p
-                                className="text-sm mb-4 max-w-sm text-[#1a1a1a] dark:text-[#e0e0e0]"
-                            >
-                                {error}
-                            </p>
-                            <button
-                                onClick={() => window.location.reload()}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 active:scale-95 bg-[#FAC133] text-[#18416B] dark:text-[#1a1a1a]"
-                            >
-                                Retry
-                            </button>
+                            <Alert variant="destructive" className="max-w-md">
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertTitle>Error Loading Analyses</AlertTitle>
+                                <AlertDescription className="mb-4">
+                                    {error}
+                                </AlertDescription>
+                                <Button
+                                    onClick={() => window.location.reload()}
+                                    variant="outline"
+                                >
+                                    Retry
+                                </Button>
+                            </Alert>
                         </div>
                     </div>
                 </div>
@@ -165,16 +150,16 @@ export default function SavedPage() {
     if (savedItems.length === 0) {
         return (
             <>
-                <Navbar />
-                <div
-                    className="transition-all duration-300 ease-in-out min-h-screen ml-64"
-                >
+                <div className="flex items-center gap-2 p-4 border-b">
+                    <SidebarTrigger />
+                </div>
+                <div className="transition-all duration-300 ease-in-out min-h-screen">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                         {/* Breadcrumb */}
-                        <div className="flex items-center gap-2 mb-4 text-sm text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center gap-2 mb-4 text-sm text-muted-foreground">
                             <a
                                 href="/dashboard/jd-builder"
-                                className="hover:underline transition-colors text-amber-500  "
+                                className="hover:underline transition-colors text-amber-500"
                             >
                                 JD Builder
                             </a>
@@ -183,31 +168,21 @@ export default function SavedPage() {
                         </div>
 
                         <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-                            <div
-                                className="p-4 rounded-xl mb-4 bg-[var(--accent)]/20"
-                            >
-                                <FileText
-                                    size={40}
-                                    className="text-[var(--accent)]"
-                                />
+                            <div className="p-4 rounded-xl mb-4 bg-muted">
+                                <FileText className="h-10 w-10 text-muted-foreground" />
                             </div>
-                            <h3
-                                className="text-lg font-medium mb-3"
-                            >
+                            <h3 className="text-lg font-medium mb-3">
                                 No saved analyses
                             </h3>
-                            <p
-                                className="text-sm mb-4 max-w-sm text-[#1a1a1a] dark:text-[#e0e0e0]"
-                            >
+                            <p className="text-sm mb-4 max-w-sm text-muted-foreground">
                                 Start by creating your first job description analysis. Your saved analyses will appear here.
                             </p>
-                            <a
-                                href="/dashboard/jd-builder"
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 active:scale-95 bg-[var(--primary)] text-white dark:bg-[var(--accent)]"
-                            >
-                                <Plus size={16} />
-                                <span>Start Analysis</span>
-                            </a>
+                            <Button asChild>
+                                <a href="/dashboard/jd-builder">
+                                    <Plus className="h-4 w-4" />
+                                    <span>Start Analysis</span>
+                                </a>
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -217,18 +192,18 @@ export default function SavedPage() {
 
     return (
         <>
-            <Navbar />
-            <div
-                className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden ml-64"
-            >
-                <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 flex flex-col h-full">
+            <div className="flex items-center gap-2 p-4 border-b">
+                <SidebarTrigger />
+            </div>
+            <div className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden">
+                <div className="w-full p-4 md:p-8 pt-6 flex flex-col h-full">
                     {/* Fixed Header */}
-                    <div className="flex-shrink-0 pt-8 pb-6">
+                    <div className="flex-shrink-0 pt-0">
                         {/* Breadcrumb */}
-                        <div className="flex items-center gap-2 mb-4 text-sm text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center gap-2 mb-4 text-sm text-muted-foreground">
                             <a
                                 href="/dashboard/jd-builder"
-                                className="hover:underline transition-colors text-amber-500  "
+                                className="hover:underline transition-colors text-amber-500"
                             >
                                 JD Builder
                             </a>
@@ -238,34 +213,27 @@ export default function SavedPage() {
 
                         {/* Header */}
                         <div className="flex items-center justify-between">
-                            <div>
-                                <h1
-                                    className="text-2xl font-semibold mb-1 text-[var(--primary)] dark:text-[var(--accent)]"
-                                >
+                            <div className="pb-2">
+                                <h1 className="text-2xl font-semibold mb-1">
                                     Saved Analyses
                                 </h1>
-                                <p
-                                    className="text-sm text-[#1a1a1a] dark:text-[#e0e0e0]"
-                                >
-                                    You have {savedItems.length} saved {savedItems.length === 1 ? "analysis" : "analyses"}
+                                <p className="text-sm text-muted-foreground">
+                                    {savedItems.length} {savedItems.length === 1 ? "analysis" : "analyses"} from your organization
                                 </p>
                             </div>
-                            <a
-                                href="/dashboard/jd-builder"
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 active:scale-95 bg-[var(--primary)] text-white dark:bg-[var(--accent)] "
-                            >
-                                <Plus size={18} />
-                                <span>New Analysis</span>
-                            </a>
+                            <Button asChild>
+                                <a href="/dashboard/jd-builder">
+                                    <Plus className="h-4 w-4" />
+                                    <span>New Analysis</span>
+                                </a>
+                            </Button>
                         </div>
                     </div>
 
                     {/* Scrollable Analyses List */}
-                    <div className="flex-1 overflow-y-auto pb-8">
-                        <div
-                            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a]"
-                        >
-                            <div className="p-4">
+                    <div className="flex-1 overflow-y-auto">
+                        <Card className="p-0">
+                            <CardContent className="p-2">
                                 <div className="space-y-3">
                                     {savedItems.map((item) => (
                                         <AnalysisCard
@@ -278,35 +246,37 @@ export default function SavedPage() {
                                         />
                                     ))}
                                 </div>
-                            </div>
-                        </div>
+                            </CardContent>
+                        </Card>
                     </div>
                 </div>
             </div>
 
-            {/* Refinement Modal */}
+            {/* Refinement Dialog */}
             {user && selectedAnalysis && (
-                <Modal
-                    isOpen={isRefinementModalOpen}
-                    onClose={() => {
+                <Dialog open={isRefinementModalOpen} onOpenChange={(open) => {
+                    if (!open) {
                         setIsRefinementModalOpen(false);
                         setSelectedAnalysis(null);
-                    }}
-                    onConfirm={() => { }}
-                    title="Refine Analysis"
-                    message="Provide feedback on what you'd like to change in your analysis."
-                    body={
-                        <RefinementForm
-                            analysisId={selectedAnalysis.id}
-                            userId={user.id}
-                            serviceType={selectedAnalysis.analysis?.preview?.service_type || selectedAnalysis.analysis?.full_package?.service_structure?.service_type}
-                            onRefinementComplete={handleRefinementComplete}
-                        />
                     }
-                    confirmText=""
-                    cancelText=""
-                    maxWidth="4xl"
-                />
+                }}>
+                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-4 sm:p-6">
+                        <DialogHeader>
+                            <DialogTitle>Refine Analysis</DialogTitle>
+                            <DialogDescription>
+                                Provide feedback on what you'd like to change in your analysis.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="flex-1 overflow-hidden">
+                            <RefinementForm
+                                analysisId={selectedAnalysis.id}
+                                userId={user.id}
+                                serviceType={selectedAnalysis.analysis?.preview?.service_type || selectedAnalysis.analysis?.full_package?.service_structure?.service_type}
+                                onRefinementComplete={handleRefinementComplete}
+                            />
+                        </div>
+                    </DialogContent>
+                </Dialog>
             )}
         </>
     );

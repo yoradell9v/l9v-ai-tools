@@ -885,8 +885,8 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess, o
                                                 </button>
                                             </div>
                                         )}
-                        {sopFileError && (
-                                        <p className="mt-2 text-xs text-red-600 dark:text-red-400">{sopFileError}</p>
+                                        {sopFileError && (
+                                            <p className="mt-2 text-xs text-red-600 dark:text-red-400">{sopFileError}</p>
                                         )}
                                         {formData.existingSOPs === "Yes" && !sopFile && !sopFileError && (
                                             <p className="mt-2 text-xs text-[var(--text-secondary)]">

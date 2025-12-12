@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Navbar from "@/components/ui/Navbar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useUser } from "@/context/UserContext";
 import {
     Building2,
@@ -10,10 +10,10 @@ import {
     Brain,
     FileCheck,
     Mail,
-    Briefcase,
-    Sparkles,
 } from "lucide-react";
-import Loader from "@/components/ui/Loader";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface DashboardStats {
     // SUPERADMIN stats
@@ -38,26 +38,21 @@ interface StatCardProps {
     icon: React.ElementType;
     label: string;
     value: number;
-    color?: string;
 }
 
-const StatCard = ({ icon: Icon, label, value, color = "primary" }: StatCardProps) => {
+const StatCard = ({ icon: Icon, label, value }: StatCardProps) => {
     return (
-        <div className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-                <div className="flex-1">
-                    <p className="text-sm font-medium text-[var(--text-secondary)] mb-1">
-                        {label}
-                    </p>
-                    <p className="text-3xl font-bold text-[var(--primary)] dark:text-[var(--accent)]">
-                        {value.toLocaleString()}
-                    </p>
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{label}</CardTitle>
+                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[color:var(--accent-strong)]/15">
+                    <Icon className="h-4 w-4 text-[color:var(--accent-strong)]" />
                 </div>
-                <div className="p-3 rounded-lg bg-[var(--accent)]/10 dark:bg-[var(--primary-light)]/10">
-                    <Icon size={24} className="text-amber-500 dark:text-[var(--primary-light)]" />
-                </div>
-            </div>
-        </div>
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">{value.toLocaleString()}</div>
+            </CardContent>
+        </Card>
     );
 };
 
@@ -208,38 +203,44 @@ export default function DashboardPage() {
     };
 
     return (
-        <>
-            <Navbar />
-            <div className="transition-all duration-300 ease-in-out ml-64 min-h-screen">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    <div className="mb-8">
-                        <h1 className="text-2xl font-semibold text-[#18416B] dark:text-[#FAC133] mb-2">
-                            Dashboard
-                        </h1>
-                        <p className="text-sm text-[var(--text-secondary)]">
-                            {user?.globalRole === "SUPERADMIN"
-                                ? "Overview of all system statistics"
-                                : stats && stats.organizationMembers !== undefined
-                                    ? "Your organization statistics"
-                                    : "Your personal statistics"}
-                        </p>
-                    </div>
-
-                    {isLoading ? (
-                        <div className="flex items-center justify-center py-16">
-                            <Loader />
-                        </div>
-                    ) : error ? (
-                        <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4">
-                            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {renderStatsCards()}
-                        </div>
-                    )}
+        <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+            <div className="flex items-center justify-between space-y-2">
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+                    <p className="text-muted-foreground">
+                        {user?.globalRole === "SUPERADMIN"
+                            ? "Overview of all system statistics"
+                            : stats && stats.organizationMembers !== undefined
+                                ? "Your organization statistics"
+                                : "Your personal statistics"}
+                    </p>
                 </div>
+                <SidebarTrigger />
             </div>
-        </>
+
+            {isLoading ? (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <Card key={i}>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <Skeleton className="h-4 w-24" />
+                                <Skeleton className="h-4 w-4 rounded" />
+                            </CardHeader>
+                            <CardContent>
+                                <Skeleton className="h-8 w-16" />
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            ) : error ? (
+                <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
+            ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {renderStatsCards()}
+                </div>
+            )}
+        </div>
     );
 }

@@ -1,11 +1,60 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Navbar from "@/components/ui/Navbar";
-import Modal from "@/components/ui/Modal";
-import { Plus, Mail, ChevronDown, Trash2, Users, AlertCircle, PowerOff, CheckCircle2, MoreVertical } from "lucide-react";
-import { motion } from "framer-motion";
-import { Listbox } from "@headlessui/react";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { toast } from "sonner";
+import {
+    Plus,
+    Mail,
+    Trash2,
+    Users,
+    AlertCircle,
+    PowerOff,
+    CheckCircle2,
+    MoreVertical,
+    Loader2,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useUser } from "@/context/UserContext";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Member {
     id: string;
@@ -37,6 +86,7 @@ interface OrganizationData {
 }
 
 export default function TenantMembers() {
+    const { user } = useUser();
     const [organizations, setOrganizations] = useState<OrganizationData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedOrganization, setSelectedOrganization] = useState<OrganizationData | null>(null);
@@ -71,17 +121,6 @@ export default function TenantMembers() {
             setSelectedOrganization(organizations[0]);
         }
     }, [organizations, selectedOrganization]);
-
-    // Close menu when clicking outside
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (openMenuId) {
-                setOpenMenuId(null);
-            }
-        };
-        document.addEventListener("click", handleClickOutside);
-        return () => document.removeEventListener("click", handleClickOutside);
-    }, [openMenuId]);
 
     const fetchMembers = async () => {
         try {
@@ -159,8 +198,9 @@ export default function TenantMembers() {
     };
 
     const handleDeactivateMember = async () => {
-        if (!memberToDeactivate) return;
+        if (!memberToDeactivate) return { success: false, selfDeactivated: false };
 
+        const isSelfDeactivation = memberToDeactivate.userId === user?.id;
         setIsDeactivating(true);
         try {
             const response = await fetch("/api/members", {
@@ -177,24 +217,33 @@ export default function TenantMembers() {
 
             const data = await response.json();
 
-            if (!response.ok) {
-                console.error("Error deactivating member:", data.message);
-                return;
+            if (!response.ok || !data.success) {
+                const message = data.message || "Failed to deactivate member. Please try again.";
+                console.error("Error deactivating member:", message);
+                toast.error(message);
+                return { success: false, selfDeactivated: false };
             }
 
             setShowDeactivateModal(false);
             setMemberToDeactivate(null);
             setOpenMenuId(null);
-            await fetchMembers();
+
+            if (!isSelfDeactivation) {
+                await fetchMembers();
+            }
+
+            return { success: true, selfDeactivated: isSelfDeactivation };
         } catch (error) {
             console.error("Error deactivating member:", error);
+            toast.error("Failed to deactivate member. Please try again.");
+            return { success: false, selfDeactivated: false };
         } finally {
             setIsDeactivating(false);
         }
     };
 
     const handleActivateMember = async () => {
-        if (!memberToActivate) return;
+        if (!memberToActivate) return false;
 
         setIsActivating(true);
         try {
@@ -212,17 +261,22 @@ export default function TenantMembers() {
 
             const data = await response.json();
 
-            if (!response.ok) {
-                console.error("Error activating member:", data.message);
-                return;
+            if (!response.ok || !data.success) {
+                const message = data.message || "Failed to activate member. Please try again.";
+                console.error("Error activating member:", message);
+                toast.error(message);
+                return false;
             }
 
             setShowActivateModal(false);
             setMemberToActivate(null);
             setOpenMenuId(null);
             await fetchMembers();
+            return true;
         } catch (error) {
             console.error("Error activating member:", error);
+            toast.error("Failed to activate member. Please try again.");
+            return false;
         } finally {
             setIsActivating(false);
         }
@@ -276,735 +330,488 @@ export default function TenantMembers() {
         }
     };
 
-    const inviteModalBody = (
-        <div className="space-y-6">
-            <div>
-                <label
-                    htmlFor="invite-email"
-                    className="block text-sm font-medium mb-2 text-[#18416B] dark:text-[#FAC133]"
-                >
-                    Email Address <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                    <Mail
-                        size={16}
-                        className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400"
-                    />
-                    <input
-                        type="email"
-                        id="invite-email"
-                        value={inviteEmail}
-                        onChange={(e) => setInviteEmail(e.target.value)}
-                        placeholder="Enter email address"
-                        className="w-full pl-9 pr-3 py-2 rounded-lg border text-sm transition-all duration-200 focus:outline-none border-gray-300 dark:border-gray-600 focus:border-[#18416B] dark:focus:border-[#FAC133] focus:ring-[3px] focus:ring-[#18416B]/10 dark:focus:ring-[#FAC133]/10 bg-white dark:bg-[#1a1a1a] text-[#1a1a1a] dark:text-[#e0e0e0] placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                    />
-                </div>
-            </div>
+    const renderMembersTable = () => {
+        if (!selectedOrganization) return null;
+        const activeMembers = selectedOrganization.members.filter((m) => !m.deactivatedAt);
+        if (activeMembers.length === 0) {
+            return (
+                <Card>
+                    <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                        No active members yet.
+                    </CardContent>
+                </Card>
+            );
+        }
+        return (
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle>Active Members</CardTitle>
+                    <CardDescription>Manage roles and access</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Email</TableHead>
+                                <TableHead>Role</TableHead>
+                                <TableHead>Joined</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {activeMembers.map((member) => (
+                                <TableRow key={member.id}>
+                                    <TableCell className="font-medium">
+                                        {member.firstname} {member.lastname}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                        {member.email}
+                                    </TableCell>
+                                    <TableCell>
+                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${member.role === "ADMIN"
+                                            ? "bg-amber-100 text-amber-700"
+                                            : "bg-blue-100 text-blue-700"
+                                            }`}>
+                                            {member.role}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                        {new Date(member.joinedAt).toLocaleDateString("en-US", {
+                                            month: "short",
+                                            day: "numeric",
+                                            year: "numeric",
+                                        })}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon">
+                                                    <MoreVertical className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                    className="text-destructive"
+                                                    onClick={() => {
+                                                        setMemberToDeactivate(member);
+                                                        setShowDeactivateModal(true);
+                                                    }}
+                                                >
+                                                    <PowerOff className="h-4 w-4 mr-2" />
+                                                    Deactivate
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+        );
+    };
 
-            <div>
-                <label
-                    htmlFor="invite-role"
-                    className="block text-sm font-medium mb-2 text-[#18416B] dark:text-[#FAC133]"
-                >
-                    Role <span className="text-red-500">*</span>
-                </label>
-                <Listbox value={inviteRole} onChange={setInviteRole}>
-                    {({ open }) => (
-                        <div className="relative">
-                            <Listbox.Button
-                                id="invite-role"
-                                className="relative w-full pl-3 pr-8 py-2 text-left rounded-lg border text-sm transition-all duration-200 focus:outline-none cursor-pointer border-gray-300 dark:border-gray-600 focus:border-[#18416B] dark:focus:border-[#FAC133] focus:ring-[3px] focus:ring-[#18416B]/10 dark:focus:ring-[#FAC133]/10 bg-white dark:bg-[#1a1a1a] text-[#1a1a1a] dark:text-[#e0e0e0]"
-                            >
-                                <span className="block truncate">
-                                    {roleOptions.find((opt) => opt.value === inviteRole)?.label}
-                                </span>
-                                <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                                    <ChevronDown
-                                        size={16}
-                                        className={`transition-transform duration-200 text-gray-500 dark:text-gray-400 ${open ? "rotate-180" : ""}`}
-                                    />
-                                </span>
-                            </Listbox.Button>
-                            <Listbox.Options
-                                className="absolute z-10 mt-1 w-full rounded-lg border shadow-md focus:outline-none overflow-hidden border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a]"
-                            >
-                                {roleOptions.map((option) => (
-                                    <Listbox.Option
-                                        key={option.value}
-                                        value={option.value}
-                                        className="relative cursor-pointer select-none text-sm transition-colors"
-                                    >
-                                        {({ active, selected }) => (
-                                            <div
-                                                className={`
-                                                flex items-center justify-between
-                                                py-2 px-3
-                                                ${active ? "bg-gray-100 dark:bg-gray-800" : ""}
-                                                text-[#1a1a1a] dark:text-[#e0e0e0]
-                                            `}
-                                            >
-                                                <span className={`block truncate ${selected ? "font-medium" : "font-normal"}`}>
-                                                    {option.label}
-                                                </span>
+    const renderDeactivatedTable = () => {
+        if (!selectedOrganization) return null;
+        const deactivatedMembers = selectedOrganization.members.filter((m) => m.deactivatedAt);
+        if (deactivatedMembers.length === 0) {
+            return (
+                <Card>
+                    <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                        No deactivated members.
+                    </CardContent>
+                </Card>
+            );
+        }
+        return (
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle>Deactivated Members</CardTitle>
+                    <CardDescription>Restore access when needed</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Email</TableHead>
+                                <TableHead>Role</TableHead>
+                                <TableHead>Deactivated</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {deactivatedMembers.map((member) => (
+                                <TableRow key={member.id} className="opacity-80">
+                                    <TableCell className="font-medium">
+                                        {member.firstname} {member.lastname}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                        {member.email}
+                                    </TableCell>
+                                    <TableCell>
+                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${member.role === "ADMIN"
+                                            ? "bg-amber-100 text-amber-700"
+                                            : "bg-blue-100 text-blue-700"
+                                            }`}>
+                                            {member.role}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                        {member.deactivatedAt
+                                            ? new Date(member.deactivatedAt).toLocaleDateString("en-US", {
+                                                month: "short",
+                                                day: "numeric",
+                                                year: "numeric",
+                                            })
+                                            : "-"}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon">
+                                                    <MoreVertical className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                    className="text-green-600"
+                                                    onClick={() => {
+                                                        setMemberToActivate(member);
+                                                        setShowActivateModal(true);
+                                                    }}
+                                                >
+                                                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                                                    Activate
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+        );
+    };
 
-                                                {selected && (
-                                                    <span className="text-xs text-[var(--primary)] dark:text-[var(--accent)]">
-                                                        ✓
-                                                    </span>
-                                                )}
-                                            </div>
-                                        )}
-                                    </Listbox.Option>
-
-                                ))}
-                            </Listbox.Options>
-                        </div>
-                    )}
-                </Listbox>
-            </div>
-
-            {inviteError && (
-                <div className="p-2 border rounded text-xs border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
-                    <p className="text-red-700 dark:text-red-300">{inviteError}</p>
-                </div>
-            )}
-        </div>
-    );
+    const renderInvitesTable = () => {
+        if (!selectedOrganization) return null;
+        const invites = selectedOrganization.pendingInvites;
+        if (invites.length === 0) {
+            return (
+                <Card>
+                    <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                        No pending invites.
+                    </CardContent>
+                </Card>
+            );
+        }
+        return (
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle>Pending Invites</CardTitle>
+                    <CardDescription>Manage invitations</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Email</TableHead>
+                                <TableHead>Role</TableHead>
+                                <TableHead>Sent</TableHead>
+                                <TableHead>Expires</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {invites.map((invite) => (
+                                <TableRow key={invite.id}>
+                                    <TableCell className="font-medium">{invite.email}</TableCell>
+                                    <TableCell>
+                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${invite.role === "ADMIN"
+                                            ? "bg-amber-100 text-amber-700"
+                                            : "bg-blue-100 text-blue-700"
+                                            }`}>
+                                            {invite.role}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                        {new Date(invite.createdAt).toLocaleDateString("en-US", {
+                                            month: "short",
+                                            day: "numeric",
+                                            year: "numeric",
+                                        })}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                        {new Date(invite.expiresAt).toLocaleDateString("en-US", {
+                                            month: "short",
+                                            day: "numeric",
+                                            year: "numeric",
+                                        })}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleCancelInvite(invite.id)}
+                                            disabled={cancellingInviteId === invite.id}
+                                            className="text-destructive"
+                                        >
+                                            {cancellingInviteId === invite.id ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                    Cancelling...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Trash2 className="h-4 w-4 mr-2" />
+                                                    Cancel
+                                                </>
+                                            )}
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+        );
+    };
 
     return (
         <>
-            <Navbar />
-            <div
-                className="transition-all duration-300 ease-in-out min-h-screen ml-64"
-            >
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    {/* Header */}
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h1
-                                className="text-2xl font-semibold mb-1 text-[#18416B] dark:text-[#FAC133]"
-                            >
-                                {selectedOrganization ? selectedOrganization.organization.name : "Tenant Members"}
-                            </h1>
-                            <p
-                                className="text-sm text-[#1a1a1a] dark:text-[#e0e0e0]"
-                            >
-                                Manage members of your organization
-                            </p>
-                        </div>
-                        {selectedOrganization && (
-                            <button
-                                onClick={() => setIsInviteModalOpen(true)}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:brightness-110 active:scale-95 bg-[var(--primary)] text-white dark:bg-[var(--accent)]"
-                            >
-                                <Plus size={18} />
-                                <span>Invite Member</span>
-                            </button>
-                        )}
+            <div className="flex items-center gap-2 p-4 border-b">
+                <SidebarTrigger />
+            </div>
+            <div className="min-h-screen p-6 space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-1">
+                        <h1 className="text-2xl font-semibold">
+                            {selectedOrganization ? selectedOrganization.organization.name : "Tenant Members"}
+                        </h1>
+                        <p className="text-sm text-muted-foreground">
+                            Manage members of your organization
+                        </p>
                     </div>
-
-                    {/* Error State */}
-                    {error && (
-                        <div className="mb-6 p-4 rounded-lg border flex items-center gap-3 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
-                            <AlertCircle size={20} className="text-red-600 dark:text-red-400" />
-                            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-                        </div>
-                    )}
-
-                    {/* Tabs */}
-                    {selectedOrganization && !error && (
-                        <div className="mb-4 flex gap-1">
-                            <button
-                                onClick={() => setActiveTab("members")}
-                                className={`
-                                    px-4 py-2 text-sm font-medium transition-all duration-200 relative
-                                    ${activeTab === "members" ? "text-[#18416B] dark:text-[#FAC133]" : "text-gray-600 dark:text-gray-400 opacity-60 hover:opacity-100"}
-                                    `}
-
-                            >
-                                Active Members
-                                {activeTab === "members" && (
-                                    <motion.div
-                                        layoutId="activeTab"
-                                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FAC133]"
-                                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                                    />
-                                )}
-                            </button>
-                            <button
-                                onClick={() => setActiveTab("invites")}
-                                className={`px-4 py-2 text-sm font-medium transition-all duration-200 relative ${activeTab === "invites" ? "text-[#18416B] dark:text-[#FAC133]" : "text-gray-600 dark:text-gray-400 opacity-60 hover:opacity-100"
-                                    }`}
-                            >
-                                Pending Invites
-                                {activeTab === "invites" && (
-                                    <motion.div
-                                        layoutId="activeTab"
-                                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FAC133]"
-                                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                                    />
-                                )}
-                            </button>
-                            <button
-                                onClick={() => setActiveTab("deactivated")}
-                                className={`px-4 py-2 text-sm font-medium transition-all duration-200 relative ${activeTab === "deactivated" ? "text-[#18416B] dark:text-[#FAC133]" : "text-gray-600 dark:text-gray-400 opacity-60 hover:opacity-100"
-                                    }`}
-                            >
-                                Deactivated
-                                {activeTab === "deactivated" && (
-                                    <motion.div
-                                        layoutId="activeTab"
-                                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FAC133]"
-                                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                                    />
-                                )}
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Content */}
-                    {!error && (
-                        <div
-                            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a]"
-                        >
-                            {(() => {
-                                if (isLoading) {
-                                    return (
-                                        <div className="flex flex-col items-center justify-center py-16">
-                                            <svg className="animate-spin h-8 w-8 mb-3 text-[#FAC133]" viewBox="0 0 24 24">
-                                                <circle
-                                                    className="opacity-25"
-                                                    cx="12"
-                                                    cy="12"
-                                                    r="10"
-                                                    stroke="currentColor"
-                                                    strokeWidth="4"
-                                                    fill="none"
-                                                />
-                                                <path
-                                                    className="opacity-75"
-                                                    fill="currentColor"
-                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                                />
-                                            </svg>
-                                            <p className="text-sm text-[#1a1a1a] dark:text-[#e0e0e0]">Loading...</p>
-                                        </div>
-                                    );
-                                }
-
-                                if (!selectedOrganization) {
-                                    return (
-                                        <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-                                            <div
-                                                className="p-4 rounded-xl mb-4 bg-gray-100 dark:bg-gray-800"
-                                            >
-                                                <Users
-                                                    size={40}
-                                                    className="text-gray-500 dark:text-gray-400"
-                                                />
-                                            </div>
-                                            <h3
-                                                className="text-base font-medium mb-1 text-[#18416B] dark:text-[#FAC133]"
-                                            >
-                                                No organizations found
-                                            </h3>
-                                            <p
-                                                className="text-sm mb-4 max-w-sm text-[#1a1a1a] dark:text-[#e0e0e0]"
-                                            >
-                                                You need to be a tenant admin to view and manage members.
-                                            </p>
-                                        </div>
-                                    );
-                                }
-
-                                // Active Members Tab
-                                if (activeTab === "members") {
-                                    const activeMembers = selectedOrganization.members.filter(m => !m.deactivatedAt);
-                                    return (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full">
-                                                <thead>
-                                                    <tr className="border-b border-gray-300 dark:border-gray-600">
-                                                        <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                            Name
-                                                        </th>
-                                                        <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                            Email
-                                                        </th>
-                                                        <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                            Role
-                                                        </th>
-                                                        <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                            Joined
-                                                        </th>
-                                                        <th className="text-right py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                            Actions
-                                                        </th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {activeMembers.length === 0 ? (
-                                                        <tr>
-                                                            <td colSpan={5} className="py-12 text-center">
-                                                                <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                                    No active members yet
-                                                                </p>
-                                                            </td>
-                                                        </tr>
-                                                    ) : (
-                                                        activeMembers.map((member) => (
-                                                            <tr
-                                                                key={member.id}
-                                                                className="border-b hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-gray-300 dark:border-gray-600"
-                                                            >
-                                                                <td className="py-3 px-4">
-                                                                    <p className="text-sm font-medium text-[#1a1a1a] dark:text-[#e0e0e0]">
-                                                                        {member.firstname} {member.lastname}
-                                                                    </p>
-                                                                </td>
-                                                                <td className="py-3 px-4">
-                                                                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                                        {member.email}
-                                                                    </p>
-                                                                </td>
-                                                                <td className="py-3 px-4">
-                                                                    <span
-                                                                        className={`
-  px-2 py-1 text-xs font-medium rounded-full
-  ${member.role === "ADMIN"
-                                                                                ? "bg-amber-100 text-amber-500"
-                                                                                : "bg-blue-200 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                                                                            }
-`}
-                                                                    >
-                                                                        {member.role}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="py-3 px-4">
-                                                                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                                        {new Date(member.joinedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                                    </p>
-                                                                </td>
-                                                                <td className="py-3 px-4 text-right">
-                                                                    <div className="relative flex justify-end">
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                setOpenMenuId(openMenuId === member.id ? null : member.id);
-                                                                            }}
-                                                                            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
-                                                                        >
-                                                                            <MoreVertical size={16} />
-                                                                        </button>
-                                                                        {openMenuId === member.id && (
-                                                                            <>
-                                                                                <div
-                                                                                    className="fixed inset-0 z-10"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        setOpenMenuId(null);
-                                                                                    }}
-                                                                                />
-                                                                                <div
-                                                                                    className="absolute right-0 mt-1 z-20 rounded-lg border shadow-lg overflow-hidden border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a] min-w-[140px]"
-                                                                                    onClick={(e) => e.stopPropagation()}
-                                                                                >
-                                                                                    <button
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            setMemberToDeactivate(member);
-                                                                                            setShowDeactivateModal(true);
-                                                                                            setOpenMenuId(null);
-                                                                                        }}
-                                                                                        className="w-full text-left px-3 py-2 text-xs transition-colors hover:bg-red-500/10 flex items-center gap-2"
-                                                                                        style={{ color: "rgb(239, 68, 68)" }}
-                                                                                    >
-                                                                                        <PowerOff size={14} />
-                                                                                        <span>Deactivate</span>
-                                                                                    </button>
-                                                                                </div>
-                                                                            </>
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    );
-                                }
-
-                                // Deactivated Members Tab
-                                if (activeTab === "deactivated") {
-                                    const deactivatedMembers = selectedOrganization.members.filter(m => m.deactivatedAt);
-                                    return (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full">
-                                                <thead>
-                                                    <tr className="border-b border-gray-300 dark:border-gray-600">
-                                                        <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                            Name
-                                                        </th>
-                                                        <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                            Email
-                                                        </th>
-                                                        <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                            Role
-                                                        </th>
-                                                        <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                            Deactivated
-                                                        </th>
-                                                        <th className="text-right py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                            Actions
-                                                        </th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {deactivatedMembers.length === 0 ? (
-                                                        <tr>
-                                                            <td colSpan={5} className="py-12 text-center">
-                                                                <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                                    No deactivated members
-                                                                </p>
-                                                            </td>
-                                                        </tr>
-                                                    ) : (
-                                                        deactivatedMembers.map((member) => (
-                                                            <tr
-                                                                key={member.id}
-                                                                className="border-b hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-gray-300 dark:border-gray-600 opacity-60"
-                                                            >
-                                                                <td className="py-3 px-4">
-                                                                    <p className="text-sm font-medium text-[#1a1a1a] dark:text-[#e0e0e0]">
-                                                                        {member.firstname} {member.lastname}
-                                                                    </p>
-                                                                </td>
-                                                                <td className="py-3 px-4">
-                                                                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                                        {member.email}
-                                                                    </p>
-                                                                </td>
-                                                                <td className="py-3 px-4">
-                                                                    <span
-                                                                        className={`
-  px-2 py-1 text-xs font-medium rounded-full
-  ${member.role === "ADMIN"
-                                                                                ? "bg-amber-100 text-amber-500"
-                                                                                : "bg-blue-200 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                                                                            }
-`}
-                                                                    >
-                                                                        {member.role}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="py-3 px-4">
-                                                                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                                        {member.deactivatedAt ? new Date(member.deactivatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '-'}
-                                                                    </p>
-                                                                </td>
-                                                                <td className="py-3 px-4 text-right">
-                                                                    <div className="relative flex justify-end">
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                setOpenMenuId(openMenuId === member.id ? null : member.id);
-                                                                            }}
-                                                                            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
-                                                                        >
-                                                                            <MoreVertical size={16} />
-                                                                        </button>
-                                                                        {openMenuId === member.id && (
-                                                                            <>
-                                                                                <div
-                                                                                    className="fixed inset-0 z-10"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        setOpenMenuId(null);
-                                                                                    }}
-                                                                                />
-                                                                                <div
-                                                                                    className="absolute right-0 mt-1 z-20 rounded-lg border shadow-lg overflow-hidden border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a] min-w-[140px]"
-                                                                                    onClick={(e) => e.stopPropagation()}
-                                                                                >
-                                                                                    <button
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            setMemberToActivate(member);
-                                                                                            setShowActivateModal(true);
-                                                                                            setOpenMenuId(null);
-                                                                                        }}
-                                                                                        className="w-full text-left px-3 py-2 text-xs transition-colors hover:bg-green-500/10 flex items-center gap-2"
-                                                                                        style={{ color: "rgb(34, 197, 94)" }}
-                                                                                    >
-                                                                                        <CheckCircle2 size={14} />
-                                                                                        <span>Activate</span>
-                                                                                    </button>
-                                                                                </div>
-                                                                            </>
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    );
-                                }
-
-                                // Pending Invites Tab
-                                return (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full">
-                                            <thead>
-                                                <tr className="border-b border-gray-300 dark:border-gray-600">
-                                                    <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                        Email
-                                                    </th>
-                                                    <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                        Role
-                                                    </th>
-                                                    <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                        Sent
-                                                    </th>
-                                                    <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                        Expires
-                                                    </th>
-                                                    <th className="text-right py-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                                                        Actions
-                                                    </th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {selectedOrganization.pendingInvites.length === 0 ? (
-                                                    <tr>
-                                                        <td colSpan={5} className="py-12 text-center">
-                                                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                                No pending invites
-                                                            </p>
-                                                        </td>
-                                                    </tr>
-                                                ) : (
-                                                    selectedOrganization.pendingInvites.map((invite) => (
-                                                        <tr
-                                                            key={invite.id}
-                                                            className="border-b border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                                                        >
-                                                            <td className="py-3 px-4">
-                                                                <p className="text-sm font-medium text-[#1a1a1a] dark:text-[#e0e0e0]">
-                                                                    {invite.email}
-                                                                </p>
-                                                            </td>
-                                                            <td className="py-3 px-4">
-                                                                <span
-                                                                    className={`px-2 py-1 text-xs font-medium rounded-full ${invite.role === "ADMIN"
-                                                                        ? "bg-[#FAC133]/20 text-[#FAC133]"
-                                                                        : "bg-blue-200 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                                                                        }`}
-                                                                >
-                                                                    {invite.role}
-                                                                </span>
-                                                            </td>
-                                                            <td className="py-3 px-4">
-                                                                <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                                    {new Date(invite.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                                </p>
-                                                            </td>
-                                                            <td className="py-3 px-4">
-                                                                <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                                    {new Date(invite.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                                </p>
-                                                            </td>
-                                                            <td className="py-3 px-4 text-right">
-                                                                <button
-                                                                    onClick={() => handleCancelInvite(invite.id)}
-                                                                    disabled={cancellingInviteId === invite.id}
-                                                                    className="p-1.5 rounded transition-colors hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 text-[rgb(239, 68, 68)]"
-
-                                                                    title="Cancel invitation"
-                                                                >
-                                                                    {cancellingInviteId === invite.id ? (
-                                                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                                                            <circle
-                                                                                className="opacity-25"
-                                                                                cx="12"
-                                                                                cy="12"
-                                                                                r="10"
-                                                                                stroke="currentColor"
-                                                                                strokeWidth="4"
-                                                                                fill="none"
-                                                                            />
-                                                                            <path
-                                                                                className="opacity-75"
-                                                                                fill="currentColor"
-                                                                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                                                            />
-                                                                        </svg>
-                                                                    ) : (
-                                                                        <>
-                                                                            <Trash2 size={14} />
-                                                                            <span className="text-xs">Cancel</span>
-                                                                        </>
-                                                                    )}
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    ))
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                );
-                            })()}
-                        </div>
+                    {selectedOrganization && (
+                        <Button onClick={() => setIsInviteModalOpen(true)}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Invite Member
+                        </Button>
                     )}
                 </div>
+
+                {error && (
+                    <Card className="border-destructive/30 bg-destructive/10">
+                        <CardContent className="py-4 flex items-center gap-3">
+                            <AlertCircle className="h-5 w-5 text-destructive" />
+                            <p className="text-sm text-destructive">{error}</p>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {!error && (
+                    <>
+                        {isLoading ? (
+                            <Card>
+                                <CardContent className="py-12 flex items-center justify-center gap-3 text-sm text-muted-foreground">
+                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                    Loading...
+                                </CardContent>
+                            </Card>
+                        ) : !selectedOrganization ? (
+                            <Card>
+                                <CardContent className="py-12 text-center space-y-3">
+                                    <div className="mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                                        <Users className="h-6 w-6 text-muted-foreground" />
+                                    </div>
+                                    <div>
+                                        <p className="font-medium">No organizations found</p>
+                                        <p className="text-sm text-muted-foreground">
+                                            You need to be a tenant admin to view and manage members.
+                                        </p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className=" space-y-4">
+                                <TabsList className="inline-flex">
+                                    <TabsTrigger value="members">Active Members</TabsTrigger>
+                                    <TabsTrigger value="invites">Pending Invites</TabsTrigger>
+                                    <TabsTrigger value="deactivated">Deactivated</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="members">{renderMembersTable()}</TabsContent>
+                                <TabsContent value="invites">{renderInvitesTable()}</TabsContent>
+                                <TabsContent value="deactivated">{renderDeactivatedTable()}</TabsContent>
+                            </Tabs>
+                        )}
+                    </>
+                )}
             </div>
 
-            {/* Invite Member Modal */}
-            {selectedOrganization && (
-                <Modal
-                    isOpen={isInviteModalOpen}
-                    onClose={() => {
-                        if (!isSendingInvitation) {
-                            setIsInviteModalOpen(false);
-                            setInviteEmail("");
-                            setInviteRole("MEMBER");
-                            setInviteError(null);
-                        }
-                    }}
-                    onConfirm={handleSendInvitation}
-                    title={selectedOrganization.organization.name}
-                    message="Invite a new member to your organization"
-                    body={inviteModalBody}
-                    confirmText={
-                        isSendingInvitation ? (
-                            <span className="flex items-center gap-2">
-                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                    <circle
-                                        className="opacity-25"
-                                        cx="12"
-                                        cy="12"
-                                        r="10"
-                                        stroke="currentColor"
-                                        strokeWidth="4"
-                                        fill="none"
-                                    />
-                                    <path
-                                        className="opacity-75"
-                                        fill="currentColor"
-                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                    />
-                                </svg>
-                                Sending...
-                            </span>
-                        ) : (
-                            "Send Invitation"
-                        )
-                    }
-                    cancelText="Cancel"
-                    confirmVariant="primary"
-                    maxWidth="md"
-                    isSubmitting={isSendingInvitation}
-                />
-            )}
+            {/* Invite Member Dialog */}
+            <Dialog open={isInviteModalOpen} onOpenChange={(open) => !isSendingInvitation && setIsInviteModalOpen(open)}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Invite Member</DialogTitle>
+                        <DialogDescription>
+                            Send an invitation to join {selectedOrganization?.organization.name}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium flex items-center gap-1">
+                                <Mail className="h-4 w-4 text-muted-foreground" />
+                                Email Address <span className="text-destructive">*</span>
+                            </label>
+                            <Input
+                                type="email"
+                                value={inviteEmail}
+                                onChange={(e) => setInviteEmail(e.target.value)}
+                                placeholder="Enter email address"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">
+                                Role <span className="text-destructive">*</span>
+                            </label>
+                            <Select value={inviteRole} onValueChange={(v: "ADMIN" | "MEMBER") => setInviteRole(v)}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {roleOptions.map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {inviteError && (
+                            <Alert variant="destructive">
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertDescription>{inviteError}</AlertDescription>
+                            </Alert>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsInviteModalOpen(false)} disabled={isSendingInvitation}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={async () => {
+                                await handleSendInvitation();
+                                if (!inviteError && !isSendingInvitation) {
+                                    toast.success("Invitation sent");
+                                }
+                            }}
+                            disabled={isSendingInvitation || !inviteEmail.trim()}
+                        >
+                            {isSendingInvitation ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Sending...
+                                </>
+                            ) : (
+                                "Send Invitation"
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
-            {/* Deactivate Member Confirmation Modal */}
-            <Modal
-                isOpen={showDeactivateModal}
-                onClose={() => {
-                    if (!isDeactivating) {
-                        setShowDeactivateModal(false);
-                        setMemberToDeactivate(null);
-                    }
-                }}
-                onConfirm={handleDeactivateMember}
-                title="Deactivate Member"
-                message={
-                    memberToDeactivate
-                        ? `Are you sure you want to deactivate "${memberToDeactivate.firstname} ${memberToDeactivate.lastname}"? This will prevent them from accessing the system. This action can be reversed later.`
-                        : ""
-                }
-                confirmText={
-                    isDeactivating ? (
-                        <span className="flex items-center gap-2">
-                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                    fill="none"
-                                />
-                                <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                />
-                            </svg>
-                            Deactivating...
-                        </span>
-                    ) : (
-                        "Deactivate"
-                    )
-                }
-                cancelText="Cancel"
-                confirmVariant="danger"
-                maxWidth="md"
-                isSubmitting={isDeactivating}
-            />
+            {/* Deactivate Member Confirmation */}
+            <AlertDialog open={showDeactivateModal} onOpenChange={(open) => !isDeactivating && setShowDeactivateModal(open)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Deactivate Member</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {memberToDeactivate
+                                ? memberToDeactivate.userId === user?.id
+                                    ? "You are deactivating your own account. You will be signed out after."
+                                    : `Are you sure you want to deactivate "${memberToDeactivate.firstname} ${memberToDeactivate.lastname}"?`
+                                : ""}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeactivating}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={async () => {
+                                const result = await handleDeactivateMember();
+                                if (result?.success) {
+                                    if (result.selfDeactivated) {
+                                        try {
+                                            await fetch("/api/auth/signout", { method: "POST", credentials: "include" });
+                                        } catch (err) {
+                                            console.error("Error signing out after self deactivation:", err);
+                                        } finally {
+                                            window.location.href = "/signin";
+                                        }
+                                    } else {
+                                        toast.success("Member deactivated");
+                                    }
+                                }
+                            }}
+                            disabled={isDeactivating}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {isDeactivating ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Deactivating...
+                                </>
+                            ) : (
+                                "Deactivate"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
-            {/* Activate Member Confirmation Modal */}
-            <Modal
-                isOpen={showActivateModal}
-                onClose={() => {
-                    if (!isActivating) {
-                        setShowActivateModal(false);
-                        setMemberToActivate(null);
-                    }
-                }}
-                onConfirm={handleActivateMember}
-                title="Activate Member"
-                message={
-                    memberToActivate
-                        ? `Are you sure you want to activate "${memberToActivate.firstname} ${memberToActivate.lastname}"? This will restore their access to the system.`
-                        : ""
-                }
-                confirmText={
-                    isActivating ? (
-                        <span className="flex items-center gap-2">
-                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                    fill="none"
-                                />
-                                <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                />
-                            </svg>
-                            Activating...
-                        </span>
-                    ) : (
-                        "Activate"
-                    )
-                }
-                cancelText="Cancel"
-                confirmVariant="primary"
-                maxWidth="md"
-                isSubmitting={isActivating}
-            />
+            {/* Activate Member Confirmation */}
+            <AlertDialog open={showActivateModal} onOpenChange={(open) => !isActivating && setShowActivateModal(open)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Activate Member</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {memberToActivate
+                                ? `Are you sure you want to activate "${memberToActivate.firstname} ${memberToActivate.lastname}"?`
+                                : ""}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isActivating}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={async () => {
+                                const success = await handleActivateMember();
+                                if (success) {
+                                    toast.success("Member activated");
+                                }
+                            }}
+                            disabled={isActivating}
+                        >
+                            {isActivating ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Activating...
+                                </>
+                            ) : (
+                                "Activate"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     );
 }

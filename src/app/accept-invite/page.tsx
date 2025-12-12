@@ -4,6 +4,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import AuthForm, { AuthFormValues } from "@/components/forms/AuthForm";
 import Modal from "@/components/ui/Modal";
 import { AnimatePresence, motion } from "framer-motion";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface InviteDetails {
     email: string;
@@ -115,45 +118,52 @@ function AcceptInviteContent() {
 
     if (isValidating) {
         return (
-            <div className="min-h-screen flex items-center justify-center px-4 bg-white dark:bg-[#121212]">
-                <div className="text-center">
-                    <svg className="animate-spin h-8 w-8 mx-auto mb-4 text-[#FAC133]" viewBox="0 0 24 24">
-                        <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                            fill="none"
-                        />
-                        <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        />
-                    </svg>
-                    <p className="text-[#1a1a1a] dark:text-[#e0e0e0]">Validating invitation...</p>
-                </div>
+            <div className="min-h-screen flex items-center justify-center px-4 bg-[var(--background)] text-[var(--text-primary)]">
+                <Card className="w-full max-w-md">
+                    <CardContent className="pt-6">
+                        <div className="text-center">
+                            <svg className="animate-spin h-8 w-8 mx-auto mb-4 text-[var(--primary)]" viewBox="0 0 24 24">
+                                <circle
+                                    className="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="none"
+                                />
+                                <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                />
+                            </svg>
+                            <p className="text-[var(--text-primary)]">Validating invitation...</p>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
         );
     }
 
     if (validationError || !inviteDetails) {
         return (
-            <div className="min-h-screen flex items-center justify-center px-4 bg-white dark:bg-[#121212]">
-                <div className="w-full max-w-md rounded-2xl px-8 pt-8 pb-10 border shadow-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1a1a]">
-                    <div className="text-center">
-                        <h2 className="text-2xl font-semibold mb-4 text-[#18416B] dark:text-[#FAC133]">Invalid Invitation</h2>
-                        <p className="mb-6 text-[#1a1a1a] dark:text-[#e0e0e0]">{validationError || "This invitation is invalid or has expired."}</p>
-                        <button
-                            onClick={() => router.push("/signin")}
-                            className="w-full bg-[#FAC133] hover:brightness-110 text-[#18416B] dark:text-[#1a1a1a] font-semibold py-2.5 px-4 rounded-xl transition"
-                        >
+            <div className="min-h-screen flex items-center justify-center px-4 bg-[var(--background)] text-[var(--text-primary)]">
+                <Card className="w-full max-w-md">
+                    <CardHeader>
+                        <CardTitle className="text-2xl font-semibold">Invalid Invitation</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <Alert variant="destructive" className="mb-6">
+                            <AlertDescription>{validationError || "This invitation is invalid or has expired."}</AlertDescription>
+                        </Alert>
+                    </CardContent>
+                    <CardFooter>
+                        <Button onClick={() => router.push("/signin")} className="w-full">
                             Go to Sign In
-                        </button>
-                    </div>
-                </div>
+                        </Button>
+                    </CardFooter>
+                </Card>
             </div>
         );
     }
@@ -199,26 +209,30 @@ export default function AcceptInvitePage() {
     return (
         <Suspense
             fallback={
-                <div className="min-h-screen flex items-center justify-center px-4 bg-white dark:bg-[#121212]">
-                    <div className="text-center">
-                        <svg className="animate-spin h-8 w-8 mx-auto mb-4 text-[#FAC133]" viewBox="0 0 24 24">
-                            <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                strokeWidth="4"
-                                fill="none"
-                            />
-                            <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            />
-                        </svg>
-                        <p className="text-[#1a1a1a] dark:text-[#e0e0e0]">Loading...</p>
-                    </div>
+                <div className="min-h-screen flex items-center justify-center px-4 bg-[var(--background)] text-[var(--text-primary)]">
+                    <Card className="w-full max-w-md">
+                        <CardContent className="pt-6">
+                            <div className="text-center">
+                                <svg className="animate-spin h-8 w-8 mx-auto mb-4 text-[var(--primary)]" viewBox="0 0 24 24">
+                                    <circle
+                                        className="opacity-25"
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                        fill="none"
+                                    />
+                                    <path
+                                        className="opacity-75"
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    />
+                                </svg>
+                                <p className="text-[var(--text-primary)]">Loading...</p>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
             }
         >

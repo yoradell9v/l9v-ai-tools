@@ -1,14 +1,16 @@
 "use client";
 
-import Navbar from "@/components/ui/Navbar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Clock } from "lucide-react";
 
 export default function SopPage() {
     return (
         <>
-            <Navbar />
+            <div className="flex items-center gap-2 p-4 border-b">
+                <SidebarTrigger />
+            </div>
             <div
-                className="transition-all duration-300 ease-in-out min-h-screen ml-64"
+                className="transition-all duration-300 ease-in-out min-h-screen"
             >
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                     <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
