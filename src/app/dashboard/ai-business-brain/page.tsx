@@ -43,9 +43,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -501,13 +498,7 @@ export default function BusinessBrainList() {
       {user && (
         <Dialog open={isModalOpen} onOpenChange={(open) => !isProcessing && setIsModalOpen(open)}>
           <DialogContent className="w-[min(1200px,95vw)] sm:max-w-5xl max-h-[90vh] overflow-hidden p-0 sm:p-2">
-            <DialogHeader className="px-6 pt-6 pb-2">
-              <DialogTitle>Setup Business Brain</DialogTitle>
-              <DialogDescription>
-                Provide the details to create a new business brain profile.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="px-4 pb-4">
+            <div className="px-4 pb-4 pt-6">
               <BaseIntakeForm
                 userId={user.id}
                 config={businessBrainFormConfig}
