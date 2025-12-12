@@ -5,6 +5,7 @@ import { verifyAccessToken } from "@/lib/auth";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { existsSync } from "fs";
+import { businessBrainFormConfig } from "@/components/forms/configs/businessBrainFormConfig";
 
 export const runtime = "nodejs";
 
