@@ -2,6 +2,8 @@ import { FormConfig } from "./jdFormConfig";
 
 export const businessBrainFormConfig: FormConfig = {
   storageKey: "business-brain-form-data",
+  title: "Set up your Business Brain",
+  description: "Fill out the details below to create your Business Brain",
   sections: [
     {
       id: "quick-start",

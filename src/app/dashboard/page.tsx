@@ -102,37 +102,31 @@ export default function DashboardPage() {
                         icon={Building2}
                         label="Total Organizations"
                         value={stats.totalOrganizations || 0}
-                        color="primary"
                     />
                     <StatCard
                         icon={Users}
                         label="Total Users"
                         value={stats.totalUsers || 0}
-                        color="blue"
                     />
                     <StatCard
                         icon={FileText}
                         label="Total Analyses"
                         value={stats.totalAnalyses || 0}
-                        color="green"
                     />
                     <StatCard
                         icon={Brain}
                         label="Business Brains"
                         value={stats.totalBusinessBrains || 0}
-                        color="purple"
                     />
                     <StatCard
                         icon={FileCheck}
                         label="Total SOPs"
                         value={stats.totalSOPs || 0}
-                        color="orange"
                     />
                     <StatCard
                         icon={Mail}
                         label="Pending Invitations"
                         value={stats.pendingInvitations || 0}
-                        color="primary"
                     />
                 </>
             );
@@ -147,31 +141,26 @@ export default function DashboardPage() {
                         icon={Users}
                         label="Organization Members"
                         value={stats.organizationMembers || 0}
-                        color="blue"
                     />
                     <StatCard
                         icon={FileText}
                         label="Analyses"
                         value={stats.organizationAnalyses || 0}
-                        color="green"
                     />
                     <StatCard
                         icon={Brain}
                         label="Business Brains"
                         value={stats.organizationBusinessBrains || 0}
-                        color="purple"
                     />
                     <StatCard
                         icon={FileCheck}
                         label="SOPs"
                         value={stats.organizationSOPs || 0}
-                        color="orange"
                     />
                     <StatCard
                         icon={Mail}
                         label="Pending Invitations"
                         value={stats.pendingInvitations || 0}
-                        color="primary"
                     />
                 </>
             );
@@ -184,19 +173,16 @@ export default function DashboardPage() {
                     icon={FileText}
                     label="My Analyses"
                     value={stats.myAnalyses || 0}
-                    color="green"
                 />
                 <StatCard
                     icon={Brain}
                     label="My Business Brains"
                     value={stats.myBusinessBrains || 0}
-                    color="purple"
                 />
                 <StatCard
                     icon={FileCheck}
                     label="My SOPs"
                     value={stats.mySOPs || 0}
-                    color="orange"
                 />
             </>
         );

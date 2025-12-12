@@ -1819,12 +1819,87 @@ function generateMonitoringPlan(validation: any) {
 
 //Main Function
 
+async function extractTextFromS3Url(url: string, filename: string, mimeType?: string): Promise<string> {
+  try {
+    // Fetch file from S3 URL
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch file from S3: ${response.statusText}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const extension = getFileExtension(filename);
+
+    // Reuse the existing extraction logic
+    if (extension === ".pdf" || mimeType === "application/pdf") {
+      const pdfModule: any = await import("pdf-parse");
+      const pdfParse = pdfModule.default || pdfModule;
+      const result = await pdfParse(buffer);
+      if (!result || !result.text) {
+        throw new Error("PDF parsing returned no text content");
+      }
+      return normalizeWhitespace(result.text);
+    }
+
+    if (
+      extension === ".docx" ||
+      mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
+      const mammoth = await import("mammoth");
+      const result = await mammoth.extractRawText({ buffer });
+      if (!result || !result.value) {
+        throw new Error("DOCX parsing returned no text content");
+      }
+      return normalizeWhitespace(result.value);
+    }
+
+    if (extension === ".doc" || mimeType === "application/msword") {
+      const WordExtractor = (await import("word-extractor")).default;
+      const extractor = new WordExtractor();
+      const doc = await extractor.extract(buffer);
+      const text =
+        typeof doc?.getBody === "function" ? doc.getBody() : String(doc ?? "");
+      if (!text) {
+        throw new Error("DOC parsing returned no text content");
+      }
+      return normalizeWhitespace(text);
+    }
+
+    if (extension === ".txt" || mimeType === "text/plain") {
+      const text = buffer.toString("utf-8");
+      if (!text || text.trim().length === 0) {
+        throw new Error("Text file is empty");
+      }
+      return normalizeWhitespace(text);
+    }
+
+    throw new Error(`Unsupported file type: ${extension || mimeType}`);
+  } catch (error) {
+    console.error("SOP extraction error from S3:", error);
+    if (error instanceof Error) {
+      if (error.message.includes("Failed to parse")) {
+        throw error;
+      }
+      throw new Error(
+        `Failed to parse the SOP file from S3: ${error.message}`
+      );
+    }
+    throw new Error(
+      "Failed to parse the SOP file from S3. Please ensure it's a valid PDF, DOC, DOCX, or TXT document."
+    );
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const contentType = request.headers.get("content-type") || "";
 
     let intake_json: any = null;
     let sopFile: File | null = null;
+    let sopFileUrl: string | null = null;
+    let sopFileName: string | null = null;
+    let sopFileType: string | null = null;
 
     // Parse request
     if (contentType.includes("multipart/form-data")) {
@@ -1856,8 +1931,14 @@ export async function POST(request: Request) {
     } else {
       const body = await request.json();
       intake_json = body?.intake_json;
+      sopFileUrl = body?.sopFileUrl || null;
+      sopFileName = body?.sopFileName || null;
+      sopFileType = body?.sopFileType || null;
       console.log("Received JSON body.", intake_json);
       console.log("Intake Data: ", intake_json);
+      if (sopFileUrl) {
+        console.log("SOP file URL provided:", sopFileUrl);
+      }
     }
 
     const normalizedTasks = normalizeTasks(intake_json?.tasks_top5);
@@ -1960,6 +2041,54 @@ export async function POST(request: Request) {
               const errorMsg = JSON.stringify({
                 type: "error",
                 error: "Failed to parse the SOP file.",
+                details:
+                  extractionError instanceof Error
+                    ? extractionError.message
+                    : "Unknown error",
+              });
+              controller.enqueue(encoder.encode(errorMsg + "\n"));
+              controller.close();
+              return;
+            }
+          } else if (sopFileUrl && sopFileName) {
+            sendProgress("Processing SOP file from S3...");
+            console.log(
+              "Processing SOP file from S3:",
+              sopFileName,
+              sopFileType,
+              sopFileUrl
+            );
+
+            // Validate file extension and type
+            const extension = getFileExtension(sopFileName);
+            const extensionAllowed = extension
+              ? ALLOWED_SOP_EXTENSIONS.has(extension)
+              : false;
+            const mimeAllowed = sopFileType ? ALLOWED_SOP_MIME_TYPES.has(sopFileType) : false;
+
+            if (!extensionAllowed && !mimeAllowed) {
+              console.error("SOP validation failed: unsupported file type");
+              const errorMsg = JSON.stringify({
+                type: "error",
+                error: "Unsupported SOP file type. Allowed types: PDF, DOC, DOCX, TXT.",
+              });
+              controller.enqueue(encoder.encode(errorMsg + "\n"));
+              controller.close();
+              return;
+            }
+
+            try {
+              console.log("Extracting text from SOP from S3...");
+              sopText = await extractTextFromS3Url(sopFileUrl, sopFileName, sopFileType || undefined);
+              console.log(
+                "Successfully extracted text, length:",
+                sopText?.length
+              );
+            } catch (extractionError) {
+              console.error("SOP extraction from S3 failed:", extractionError);
+              const errorMsg = JSON.stringify({
+                type: "error",
+                error: "Failed to parse the SOP file from S3.",
                 details:
                   extractionError instanceof Error
                     ? extractionError.message

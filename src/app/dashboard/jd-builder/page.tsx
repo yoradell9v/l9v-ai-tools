@@ -297,9 +297,9 @@ interface AnalysisResult {
                 output: string;
             }>;
             onboarding_roadmap: {
-                week_1: string[];
-                week_2: string[];
-                week_3_4: string[];
+                week_1: string[] | Record<string, any>;
+                week_2: string[] | Record<string, any>;
+                week_3_4: string[] | Record<string, any>;
             };
             success_milestones: {
                 week_2: string;
@@ -2735,19 +2735,26 @@ export default function JdBuilderPage() {
                                                     : null,
                                             };
 
-                                            const payload = new FormData();
-                                            payload.append("intake_json", JSON.stringify(intakePayload));
+                                            // Send JSON with S3 file URLs instead of FormData
+                                            const requestBody: any = {
+                                                intake_json: intakePayload,
+                                            };
 
                                             // Handle SOP file upload (field id is 'sopFile')
-                                            if (files.sopFile && Array.isArray(files.sopFile)) {
-                                                files.sopFile.forEach((file) => {
-                                                    payload.append("sopFile", file);
-                                                });
+                                            // files.sopFile is an array of { url, name, key, type } objects from S3
+                                            if (files.sopFile && Array.isArray(files.sopFile) && files.sopFile.length > 0) {
+                                                // Use the first file's URL (assuming single file upload)
+                                                requestBody.sopFileUrl = files.sopFile[0].url;
+                                                requestBody.sopFileName = files.sopFile[0].name;
+                                                requestBody.sopFileType = files.sopFile[0].type;
                                             }
 
                                             const response = await fetch('/api/jd/analyze', {
                                                 method: 'POST',
-                                                body: payload,
+                                                headers: {
+                                                    'Content-Type': 'application/json',
+                                                },
+                                                body: JSON.stringify(requestBody),
                                             });
 
                                             if (!response.ok) {
