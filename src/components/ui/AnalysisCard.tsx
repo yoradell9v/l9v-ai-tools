@@ -15,6 +15,7 @@ import {
     Target,
     Trash2,
     Loader2,
+    MoreVertical,
 } from 'lucide-react';
 import { Button } from './button';
 import { Card, CardContent, CardHeader, CardTitle } from './card';
@@ -35,6 +36,12 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from './alert-dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from './dropdown-menu';
 
 export interface AnalysisResult {
     preview: {
@@ -347,16 +354,16 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
 
     return (
         <>
-            <Card className="transition-all duration-150 group hover:shadow-sm p-2">
+            <Card className="transition-all duration-150 group hover:shadow-sm p-2 w-full max-w-full overflow-hidden">
                 <CardContent className="p-2">
                     <div className="space-y-3">
-                        <div className="flex items-start justify-between gap-4">
-                            <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                                <div className="p-2 rounded-lg flex-shrink-0 bg-amber-500/20">
-                                    <FileText size={18} className="text-amber-500" />
+                        <div className="flex items-start justify-between gap-1 sm:gap-3">
+                            <div className="flex items-start gap-2 flex-1 min-w-0">
+                                <div className="p-1.5 sm:p-2 rounded-lg flex-shrink-0 bg-amber-500/20">
+                                    <FileText size={16} className="text-amber-500" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
                                         <h3
                                             className="font-bold text-sm truncate"
                                             title={savedAnalysis.title}
@@ -374,7 +381,7 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
                                             </Badge>
                                         ) : null}
                                     </div>
-                                    <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                                    <div className="flex items-center gap-3 text-[10px] sm:text-xs text-muted-foreground flex-wrap">
                                         <span className="flex items-center gap-1">
                                             <Calendar size={12} />
                                             {new Date(savedAnalysis.createdAt).toLocaleDateString('en-US', {
@@ -406,34 +413,41 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-1.5 flex-shrink-0">
-                                {onEdit && (
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => onEdit(savedAnalysis)}
-                                        title="Edit analysis"
-                                    >
-                                        <Edit size={16} />
-                                    </Button>
-                                )}
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => setIsDownloadModalOpen(true)}
-                                    title="Download analysis as PDF"
-                                >
-                                    <Download size={16} />
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => setIsDeleteModalOpen(true)}
-                                    title="Delete analysis"
-                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                >
-                                    <Trash2 size={16} />
-                                </Button>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Analysis actions"
+                                        >
+                                            <MoreVertical size={16} />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-40">
+                                        {onEdit && (
+                                            <DropdownMenuItem
+                                                onClick={() => onEdit(savedAnalysis)}
+                                            >
+                                                <Edit className="h-4 w-4 mr-2" />
+                                                Edit analysis
+                                            </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem
+                                            onClick={() => setIsDownloadModalOpen(true)}
+                                        >
+                                            <Download className="h-4 w-4 mr-2" />
+                                            Download PDF
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            onClick={() => setIsDeleteModalOpen(true)}
+                                            className="text-destructive"
+                                        >
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            Delete
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -503,7 +517,7 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
                                                                     href={savedAnalysis.intakeData.website}
                                                                     target="_blank"
                                                                     rel="noreferrer"
-                                                                    className="text-xs underline text-primary"
+                                                                    className="text-xs underline text-primary break-all"
                                                                 >
                                                                     {savedAnalysis.intakeData.website}
                                                                 </a>

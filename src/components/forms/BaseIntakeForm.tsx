@@ -36,6 +36,7 @@ interface BaseIntakeFormProps {
     initialData?: Record<string, any>;
     hideClearButton?: boolean;
     secondaryButton?: React.ReactNode;
+    hideTitleAndDescription?: boolean;
 }
 
 export interface BaseIntakeFormRef {
@@ -54,6 +55,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
     initialData,
     hideClearButton = false,
     secondaryButton,
+    hideTitleAndDescription = false,
 }, ref) => {
     const [formData, setFormData] = useState<Record<string, any>>(config.defaultValues);
     const [files, setFiles] = useState<Record<string, File[]>>({});
@@ -294,7 +296,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
             }
 
             const { presignedUrl, fileUrl, key } = await presignedResponse.json();
-            
+
             // Debug: Log the fileUrl received from the API
             console.log("Received fileUrl from presigned URL API:", {
                 fileUrl,
@@ -345,7 +347,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
         } catch (error) {
             console.error("Error uploading file to S3:", error);
             const errorMessage = error instanceof Error ? error.message : "Failed to upload file";
-            
+
             // Set error for this specific file
             setFileUploadErrors((prev) => ({
                 ...prev,
@@ -354,7 +356,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                     [fileIndex]: errorMessage,
                 },
             }));
-            
+
             return null;
         }
     };
@@ -423,7 +425,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
             validFiles.forEach((file, index) => {
                 const fileIndex = startIndex + index;
                 const fileKey = `${file.name}-${file.size}`;
-                
+
                 uploadFileToS3(file, fieldId, fileIndex, field).then((uploadResult) => {
                     // Remove from uploading state
                     setUploadingFiles((prev) => {
@@ -478,7 +480,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
     const handleFileRemove = (fieldId: string, index: number) => {
         // Get the file being removed to match by name
         const fileToRemove = files[fieldId]?.[index];
-        
+
         // Remove from files state
         setFiles((prev) => {
             const currentFiles = prev[fieldId] || [];
@@ -909,7 +911,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                 const fileError = fileErrors[field.id];
                 const isDragOver = dragOver[field.id] || false;
                 const hasUploading = Object.values(fieldUploading).some((uploading) => uploading);
-                
+
                 return (
                     <div key={field.id} className="space-y-3">
                         <Label>
@@ -956,13 +958,12 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                                     const isUploading = fieldUploading[index] || false;
                                     const uploadError = fieldUploadErrors[index];
                                     const isUploaded = fieldUrls.some((url) => url.name === file.name);
-                                    
+
                                     return (
                                         <div
                                             key={`${file.name}-${index}`}
-                                            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-xs ${
-                                                uploadError ? "border-destructive bg-destructive/5" : ""
-                                            }`}
+                                            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-xs ${uploadError ? "border-destructive bg-destructive/5" : ""
+                                                }`}
                                         >
                                             <div className="flex items-center gap-2 flex-1 min-w-0">
                                                 {isUploading ? (
@@ -1141,7 +1142,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
             <div className="flex flex-col max-h-[calc(100vh-12rem)]">
                 {/* Progress Bar */}
                 <div className="pb-4 border-b">
-                    {(config.title || config.description) && (
+                    {!hideTitleAndDescription && (config.title || config.description) && (
                         <div className="flex items-center justify-between ">
                             <div>
                                 {config.title && (

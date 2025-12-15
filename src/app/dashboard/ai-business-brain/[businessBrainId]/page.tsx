@@ -13,6 +13,12 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import {
+    Drawer,
+    DrawerContent,
+    DrawerHeader,
+    DrawerTitle,
+} from "../../../../components/ui/drawer";
+import {
     Card,
     CardContent,
     CardHeader,
@@ -140,6 +146,7 @@ export default function BusinessBrainDetail() {
         status: string;
     }>>([]);
     const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+    const [isDesktop, setIsDesktop] = useState(false);
 
     const slashCommands = [
         {
@@ -293,6 +300,18 @@ export default function BusinessBrainDetail() {
         () => Math.round((missingFieldData.completion + refinementQuestionData.completion) / 2),
         [missingFieldData.completion, refinementQuestionData.completion]
     );
+
+    // Track desktop vs mobile to decide between inline sidebar and drawer for cards
+    useEffect(() => {
+        const handleResize = () => {
+            if (typeof window !== "undefined") {
+                setIsDesktop(window.innerWidth >= 768);
+            }
+        };
+        handleResize();
+        window.addEventListener("resize", handleResize);
+        return () => window.removeEventListener("resize", handleResize);
+    }, []);
 
     const renderMissingFieldsSection = () => {
         if (missingFieldData.totalMissing === 0) {
@@ -1242,7 +1261,7 @@ export default function BusinessBrainDetail() {
     useEffect(() => {
         const loadEnhancementAnalysis = async () => {
             if (!businessBrainId || !businessBrainData || !cards.length) return;
-            
+
             // Only load if we don't already have enhancement analysis
             if (enhancementAnalysis) return;
 
@@ -1550,13 +1569,13 @@ export default function BusinessBrainDetail() {
 
     return (
         <>
-            <div className="h-screen flex flex-col overflow-hidden">
+            <div className="h-screen flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full">
                 <div className="flex items-center gap-2 p-4 border-b flex-shrink-0">
                     <SidebarTrigger />
                 </div>
-                <div className="transition-all duration-300 ease-in-out flex-1 flex flex-col overflow-hidden">
+                <div className="transition-all duration-300 ease-in-out flex-1 flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full">
                     {/* Header */}
-                    <div className="flex-shrink-0 px-6 py-4 border-b border-[var(--border-color)]">
+                    <div className="flex-shrink-0 px-4 md:px-6 py-4 border-b border-[var(--border-color)]">
                         <Button
                             variant="ghost"
                             size="sm"
@@ -1566,8 +1585,8 @@ export default function BusinessBrainDetail() {
                             <ArrowLeft size={16} />
                             <span>Back to Business Brains</span>
                         </Button>
-                        <div className="flex items-center justify-between">
-                            <div>
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div className="space-y-1">
                                 <h1 className="text-2xl font-semibold mb-1 text-[var(--primary)]">
                                     AI Business Brain
                                 </h1>
@@ -1575,11 +1594,11 @@ export default function BusinessBrainDetail() {
                                     {businessBrainData?.intakeData?.businessName || "Chat with your AI business assistant"}
                                 </p>
                             </div>
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-4 mt-1 md:mt-0">
                                 <Button
                                     variant="outline"
                                     size="icon"
-                                    onClick={() => setIsDrawerOpen(!isDrawerOpen)}
+                                    onClick={() => setIsDrawerOpen((prev) => !prev)}
                                     title="View Cards"
                                 >
                                     <Brain size={20} className="text-[var(--accent-strong)]" />
@@ -1618,7 +1637,7 @@ export default function BusinessBrainDetail() {
                                             } catch (error) {
                                                 console.error("Error refreshing business brain data:", error);
                                             }
-                                            
+
                                             // Initialize form data with existing analysis
                                             initializeEnhancementFormData();
                                             return;
@@ -1724,11 +1743,11 @@ export default function BusinessBrainDetail() {
                             </div>
                         </div>
                     ) : (
-                        <div className="flex-1 flex overflow-hidden">
+                        <div className="flex-1 flex overflow-hidden overflow-x-hidden w-full max-w-full">
                             {/* Chat Area */}
-                            <div className="flex-1 flex flex-col overflow-hidden">
+                            <div className="flex-1 flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full">
                                 {/* Messages */}
-                                <div className="flex-1 overflow-y-auto px-6 py-4 relative">
+                                <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-6 py-4 relative w-full max-w-full">
                                     {chatMessages.length === 0 ? (
                                         <div className="flex flex-col items-center justify-center h-full text-center">
                                             <div className="w-16 h-16 rounded-lg bg-[var(--accent)]/20 flex items-center justify-center mb-4">
@@ -1891,7 +1910,7 @@ export default function BusinessBrainDetail() {
                                 </div>
 
                                 {/* Input Area */}
-                                <div className="flex-shrink-0 px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-color)]">
+                                <div className="flex-shrink-0 px-4 md:px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-color)] overflow-x-hidden w-full max-w-full">
                                     <div className="relative">
                                         {showSlashCommands && (
                                             <div
@@ -1973,15 +1992,15 @@ export default function BusinessBrainDetail() {
                                 </div>
                             </div>
 
-                            {/* Conversation History Sidebar (right) */}
+                            {/* Conversation History Sidebar (desktop, right) */}
                             <AnimatePresence>
-                                {isConversationSidebarOpen && (
+                                {isDesktop && isConversationSidebarOpen && (
                                     <motion.div
                                         initial={{ width: 0, opacity: 0 }}
                                         animate={{ width: 300, opacity: 1 }}
                                         exit={{ width: 0, opacity: 0 }}
                                         transition={{ duration: 0.2 }}
-                                        className="flex-shrink-0 border-l border-[var(--border-color)] bg-[var(--bg-color)] overflow-hidden"
+                                        className="hidden md:block flex-shrink-0 border-l border-[var(--border-color)] bg-[var(--bg-color)] overflow-hidden"
                                     >
                                         <div className="h-full flex flex-col">
                                             <div className="flex-shrink-0 px-4 py-3 border-b border-[var(--border-color)] flex items-center justify-between">
@@ -2087,17 +2106,15 @@ export default function BusinessBrainDetail() {
                                 )}
                             </AnimatePresence>
 
-                            {/* Cards Drawer */}
-
-                            {/* Cards Drawer */}
+                            {/* Cards Sidebar (desktop) */}
                             <AnimatePresence>
-                                {isDrawerOpen && (
+                                {isDesktop && isDrawerOpen && (
                                     <motion.div
                                         initial={{ width: 0, opacity: 0 }}
                                         animate={{ width: 400, opacity: 1 }}
                                         exit={{ width: 0, opacity: 0 }}
                                         transition={{ duration: 0.2 }}
-                                        className="flex-shrink-0 border-l border-[var(--border-color)] bg-[var(--bg-color)] overflow-hidden"
+                                        className="hidden md:block flex-shrink-0 border-l border-[var(--border-color)] bg-[var(--bg-color)] overflow-hidden"
                                     >
                                         <div className="h-full flex flex-col">
                                             <div className="flex-shrink-0 px-4 py-3 border-b border-[var(--border-color)] flex items-center justify-between">
@@ -2129,6 +2146,120 @@ export default function BusinessBrainDetail() {
                     )}
                 </div>
             </div>
+
+            {/* Mobile Cards Drawer */}
+            <Drawer open={!isDesktop && isDrawerOpen} onOpenChange={setIsDrawerOpen}>
+                <DrawerContent className="max-w-full">
+                    <DrawerHeader>
+                        <DrawerTitle>Business Cards</DrawerTitle>
+                    </DrawerHeader>
+                    <div className="px-4 pb-4 max-h-[70vh] overflow-y-auto">
+                        {cards.length === 0 ? (
+                            <p className="text-sm text-[var(--text-secondary)] text-center">
+                                No cards available
+                            </p>
+                        ) : (
+                            cards.map((card) => renderCardDetails(card))
+                        )}
+                    </div>
+                </DrawerContent>
+            </Drawer>
+
+            {/* Mobile Conversation History Drawer */}
+            <Drawer open={!isDesktop && isConversationSidebarOpen} onOpenChange={setIsConversationSidebarOpen}>
+                <DrawerContent className="max-w-full">
+                    <DrawerHeader>
+                        <DrawerTitle>Conversations</DrawerTitle>
+                    </DrawerHeader>
+                    <div className="px-4 pb-4 max-h-[70vh] overflow-y-auto">
+                        <Button
+                            variant="default"
+                            size="sm"
+                            onClick={startNewConversation}
+                            className="w-full mb-3 justify-center"
+                        >
+                            <Plus size={16} />
+                            <span>New Conversation</span>
+                        </Button>
+                        {isLoadingConversations ? (
+                            <div className="flex items-center justify-center py-8">
+                                <svg
+                                    className="animate-spin h-5 w-5 text-[var(--accent)]"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <circle
+                                        className="opacity-25"
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                        fill="none"
+                                    />
+                                    <path
+                                        className="opacity-75"
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    />
+                                </svg>
+                            </div>
+                        ) : conversations.length === 0 ? (
+                            <div className="py-6 text-center">
+                                <p className="text-sm text-[var(--text-secondary)]">
+                                    No conversations yet
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {conversations.map((conv) => {
+                                    const isActive = currentConversationId === conv.id;
+                                    const lastMessageDate = new Date(conv.lastMessageAt);
+                                    const now = new Date();
+                                    const diffMs = now.getTime() - lastMessageDate.getTime();
+                                    const diffMins = Math.floor(diffMs / 60000);
+                                    const diffHours = Math.floor(diffMs / 3600000);
+                                    const diffDays = Math.floor(diffMs / 86400000);
+
+                                    let timeAgo = "";
+                                    if (diffMins < 1) timeAgo = "Just now";
+                                    else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
+                                    else if (diffHours < 24) timeAgo = `${diffHours}h ago`;
+                                    else if (diffDays < 7) timeAgo = `${diffDays}d ago`;
+                                    else timeAgo = lastMessageDate.toLocaleDateString();
+
+                                    return (
+                                        <Button
+                                            key={conv.id}
+                                            variant={isActive ? "secondary" : "ghost"}
+                                            onClick={() => {
+                                                loadConversation(conv.id);
+                                                setIsConversationSidebarOpen(false);
+                                            }}
+                                            className={`w-full justify-start text-left ${isActive ? "border border-[var(--primary)]/20" : ""}`}
+                                        >
+                                            <div className="flex flex-col items-start gap-1 w-full">
+                                                <p
+                                                    className={`text-sm font-medium truncate ${isActive
+                                                        ? "text-[var(--primary)]"
+                                                        : "text-[var(--text-primary)]"
+                                                        }`}
+                                                >
+                                                    {conv.title}
+                                                </p>
+                                                <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                                                    <span>{conv.messageCount} messages</span>
+                                                    <span>•</span>
+                                                    <span>{timeAgo}</span>
+                                                </div>
+                                            </div>
+                                        </Button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </DrawerContent>
+            </Drawer>
 
             <Dialog
                 open={isEnhanceModalOpen}
@@ -2585,12 +2716,12 @@ export default function BusinessBrainDetail() {
                                 try {
                                     // Upload files to S3 first
                                     const uploadedFileUrls: Record<string, Array<{ url: string; name: string; key: string; type: string }>> = {};
-                                    
+
                                     // Upload all files to S3
                                     for (const [fieldId, files] of Object.entries(enhancementFiles)) {
                                         if (files && files.length > 0) {
                                             uploadedFileUrls[fieldId] = [];
-                                            
+
                                             for (const file of files) {
                                                 try {
                                                     // Get presigned URL
@@ -2654,7 +2785,7 @@ export default function BusinessBrainDetail() {
                                         ...enhancementFormData,
                                         ...refinementAnswers,
                                     };
-                                    
+
                                     const payload = {
                                         intake_json: JSON.stringify(mergedData),
                                         file_urls: JSON.stringify(uploadedFileUrls),

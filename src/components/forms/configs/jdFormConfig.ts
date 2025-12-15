@@ -1,4 +1,4 @@
-export type FieldType = 'text' | 'textarea' | 'select' | 'array' | 'file' | 'slider' | 'repeater';
+export type FieldType = 'text' | 'textarea' | 'select' | 'combobox' | 'array' | 'file' | 'slider' | 'repeater';
 
 export interface FieldOption {
     label: string;
@@ -41,8 +41,8 @@ export interface FormSection {
 
 export interface FormConfig {
     storageKey: string;
-    title: string;
-    description: string;
+    title?: string;
+    description?: string;
     sections: FormSection[];
     defaultValues: Record<string, any>;
     submitButtonText: string;

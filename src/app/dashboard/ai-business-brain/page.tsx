@@ -43,7 +43,11 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
+  DialogHeader,
+  DialogDescription
 } from "@/components/ui/dialog";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -497,11 +501,18 @@ export default function BusinessBrainList() {
 
       {user && (
         <Dialog open={isModalOpen} onOpenChange={(open) => !isProcessing && setIsModalOpen(open)}>
-          <DialogContent className="w-[min(1200px,95vw)] sm:max-w-5xl max-h-[90vh] overflow-hidden p-0 sm:p-2">
-            <div className="px-4 pb-4 pt-6">
+          <DialogContent className="w-[min(900px,95vw)] sm:max-w-3xl max-h-[90vh] overflow-hidden p-0 sm:p-2">
+            <DialogHeader className="px-4 pt-4">
+              <DialogTitle >Setup Business Brain</DialogTitle>
+              <DialogDescription>
+                Fill out the details below to setup your business profile.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="px-4 pb-4 pt-4">
               <BaseIntakeForm
                 userId={user.id}
                 config={businessBrainFormConfig}
+                hideTitleAndDescription={true}
                 onClose={() => {
                   if (!isProcessing) {
                     setIsModalOpen(false);

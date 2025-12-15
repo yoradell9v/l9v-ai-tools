@@ -195,7 +195,7 @@ export default function SavedPage() {
             <div className="flex items-center gap-2 p-4 border-b">
                 <SidebarTrigger />
             </div>
-            <div className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden">
+            <div className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden overflow-x-hidden">
                 <div className="w-full p-4 md:p-8 pt-6 flex flex-col h-full">
                     {/* Fixed Header */}
                     <div className="flex-shrink-0 pt-0">
@@ -231,7 +231,7 @@ export default function SavedPage() {
                     </div>
 
                     {/* Scrollable Analyses List */}
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden">
                         <Card className="p-0">
                             <CardContent className="p-2">
                                 <div className="space-y-3">

@@ -2194,7 +2194,7 @@ export async function POST(request: Request) {
               return;
             }
           } else if (sopFileUrl && sopFileName) {
-            sendProgress("Processing SOP file from S3...");
+            sendProgress("Processing SOP file...");
             console.log(
               "Processing SOP file from S3:",
               {
