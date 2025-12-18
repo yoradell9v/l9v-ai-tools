@@ -26,7 +26,6 @@ export async function GET() {
         }
       }
     } catch (authError) {
-      // Auth-related issues should not break tenant listing; just log them
       console.error("Error resolving current tenant for user:", authError);
     }
 

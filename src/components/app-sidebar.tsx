@@ -14,8 +14,10 @@ import {
     MoreVertical,
     LogOut,
     UserCircle,
+    Lightbulb,
+    AlertCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Modal from "@/components/ui/Modal";
 import { GlobalRole } from "@prisma/client";
 import Image from "next/image";
@@ -31,7 +33,9 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
     SidebarMenuAction,
+    SidebarMenuBadge,
 } from "@/components/ui/sidebar";
+import { checkOnboardingStatus, type OnboardingStatus } from "@/lib/organizationKnowledgeBase";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -54,10 +58,68 @@ export function AppSidebar() {
     const router = useRouter();
     const [isSignoutModalOpen, setIsSignoutModalOpen] = useState(false);
     const [isSigningOut, setIsSigningOut] = useState(false);
+    const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus | null>(null);
 
     if (!user) {
         return null;
     }
+
+    // Fetch knowledge base completion status for badge
+    const fetchOnboardingStatus = async () => {
+        try {
+            const response = await fetch("/api/organization-knowledge-base", {
+                credentials: "include",
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    const status = checkOnboardingStatus(data.organizationProfile);
+                    setOnboardingStatus(status);
+                } else {
+                    const status = checkOnboardingStatus(null);
+                    setOnboardingStatus(status);
+                }
+            } else {
+                const status = checkOnboardingStatus(null);
+                setOnboardingStatus(status);
+            }
+        } catch (err) {
+            console.error("Error fetching onboarding status:", err);
+            const status = checkOnboardingStatus(null);
+            setOnboardingStatus(status);
+        }
+    };
+
+    // Initial fetch on mount
+    useEffect(() => {
+        fetchOnboardingStatus();
+    }, []);
+
+    // Refetch when pathname changes (e.g., user navigates to/from knowledge base page or dashboard)
+    // This ensures the badge updates when knowledge base is completed
+    useEffect(() => {
+        fetchOnboardingStatus();
+    }, [pathname]);
+
+    // Listen for custom event when knowledge base is updated
+    useEffect(() => {
+        const handleKnowledgeBaseUpdate = () => {
+            fetchOnboardingStatus();
+        };
+
+        window.addEventListener("organizationProfileUpdated", handleKnowledgeBaseUpdate);
+        return () => {
+            window.removeEventListener("organizationProfileUpdated", handleKnowledgeBaseUpdate);
+        };
+    }, []);
+
+    // Refetch onboarding status when pathname changes (e.g., user navigates to/from knowledge base page)
+    useEffect(() => {
+        if (pathname === "/dashboard/organization-profile" || pathname === "/dashboard") {
+            fetchOnboardingStatus();
+        }
+    }, [pathname]);
 
     const handleSignout = async () => {
         setIsSigningOut(true);
@@ -81,6 +143,9 @@ export function AppSidebar() {
 
     const isActive = (path: string) => {
         if (path === "/dashboard/jd-builder") {
+            return pathname === path || pathname?.startsWith(path + "/");
+        }
+        if (path === "/dashboard/organization-profile") {
             return pathname === path || pathname?.startsWith(path + "/");
         }
         return pathname === path;
@@ -236,6 +301,33 @@ export function AppSidebar() {
                             </SidebarGroupContent>
                         </SidebarGroup>
                     )}
+
+
+                    {(user.globalRole === "ADMIN" ||
+                        user.globalRole === "MEMBER" ||
+                        user.globalRole === "SUPERADMIN") && (
+                            <SidebarGroup>
+                                <SidebarGroupLabel>Organization</SidebarGroupLabel>
+                                <SidebarGroupContent>
+                                    <SidebarMenu>
+                                        <SidebarMenuItem>
+                                            <SidebarMenuButton
+                                                asChild
+                                                isActive={isActive("/dashboard/organization-profile")}
+                                            >
+                                                <Link href="/dashboard/organization-profile" className="flex items-center gap-2 w-full">
+                                                    <Lightbulb className="h-4 w-4" />
+                                                    <span className="flex-1">Knowledge Base</span>
+                                                    {onboardingStatus && onboardingStatus.needsOnboarding && (
+                                                        <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                                    )}
+                                                </Link>
+                                            </SidebarMenuButton>
+                                        </SidebarMenuItem>
+                                    </SidebarMenu>
+                                </SidebarGroupContent>
+                            </SidebarGroup>
+                        )}
 
                     {/* Tools Section */}
                     {(user.globalRole === "SUPERADMIN" ||

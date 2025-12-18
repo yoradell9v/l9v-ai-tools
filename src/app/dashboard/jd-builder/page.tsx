@@ -505,6 +505,8 @@ export default function JdBuilderPage() {
     const [isLoadingLatest, setIsLoadingLatest] = useState(false);
     const [hasNoSavedAnalyses, setHasNoSavedAnalyses] = useState(false);
     const intakeFormRef = useRef<BaseIntakeFormRef>(null);
+    const hasAttemptedLoadRef = useRef(false);
+    const lastLoadedUserIdRef = useRef<string | null>(null);
 
     const handleSuccess = async ({ apiResult, input }: { apiResult: any; input: IntakeFormData }) => {
         setCurrentStage(""); // Reset stage when analysis completes
@@ -617,6 +619,7 @@ export default function JdBuilderPage() {
         setAnalysisResult(null);
         setIntakeData(null);
         setAnalysisError(null);
+        // Don't reset the ref here - we don't want to reload the latest analysis when starting a new one
         setIsModalOpen(true);
     };
 
@@ -637,8 +640,20 @@ export default function JdBuilderPage() {
     // Load latest saved analysis on mount if no analysis result
     useEffect(() => {
         const loadLatestAnalysis = async () => {
+            // Only load if we have a user, no existing result, and not currently loading
             if (!user || analysisResult || isLoadingLatest) return;
+            
+            // Reset ref if user changed
+            const currentUserId = user.id;
+            if (lastLoadedUserIdRef.current !== currentUserId) {
+                hasAttemptedLoadRef.current = false;
+            }
+            
+            // Skip if we've already attempted to load for this user
+            if (hasAttemptedLoadRef.current) return;
 
+            hasAttemptedLoadRef.current = true;
+            lastLoadedUserIdRef.current = currentUserId;
             setIsLoadingLatest(true);
             try {
                 const response = await fetch("/api/jd/saved?page=1&limit=1", {
@@ -673,7 +688,7 @@ export default function JdBuilderPage() {
         };
 
         loadLatestAnalysis();
-    }, [user, analysisResult, isLoadingLatest]);
+    }, [user, analysisResult]);
 
     // Calculate dynamic height for tab content
     useEffect(() => {

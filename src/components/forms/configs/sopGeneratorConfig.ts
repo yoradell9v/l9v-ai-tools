@@ -93,84 +93,6 @@ export const sopGeneratorConfig: FormConfig = {
       defaultExpanded: false,
       fields: [
         {
-          id: "industry",
-          label: "Industry / Business Type",
-          type: "select",
-          placeholder: "Which best describes your business?",
-          helpText: "Which best describes your business?",
-          options: [
-            {
-              label: "Financial Services & Insurance",
-              value: "Financial Services & Insurance",
-            },
-            { label: "Legal Services", value: "Legal Services" },
-            {
-              label: "Real Estate & Property",
-              value: "Real Estate & Property",
-            },
-            {
-              label: "Home Services & Contractors",
-              value: "Home Services & Contractors",
-            },
-            {
-              label: "Medical, Dental & Healthcare",
-              value: "Medical, Dental & Healthcare",
-            },
-            {
-              label: "Beauty, Aesthetics & Wellness",
-              value: "Beauty, Aesthetics & Wellness",
-            },
-            { label: "Fitness & Sports", value: "Fitness & Sports" },
-            {
-              label: "Hospitality, Travel & Tourism",
-              value: "Hospitality, Travel & Tourism",
-            },
-            {
-              label: "Restaurants, Cafes & Food/Beverage",
-              value: "Restaurants, Cafes & Food/Beverage",
-            },
-            {
-              label: "Events, Weddings & Entertainment",
-              value: "Events, Weddings & Entertainment",
-            },
-            {
-              label: "Advertising, Marketing & Creative Services",
-              value: "Advertising, Marketing & Creative Services",
-            },
-            {
-              label: "Professional & B2B Services",
-              value: "Professional & B2B Services",
-            },
-            {
-              label: "Manufacturing, Industrial & Construction",
-              value: "Manufacturing, Industrial & Construction",
-            },
-            {
-              label: "Retail (Physical Store)",
-              value: "Retail (Physical Store)",
-            },
-            { label: "Automotive", value: "Automotive" },
-            { label: "Education & Training", value: "Education & Training" },
-            {
-              label: "Nonprofit, Charity, Church / Faith-Based",
-              value: "Nonprofit, Charity, Church / Faith-Based",
-            },
-            {
-              label: "Government / Public Sector",
-              value: "Government / Public Sector",
-            },
-            { label: "Other", value: "other" },
-          ],
-        },
-        {
-          id: "industryOther",
-          label: "Describe Your Niche",
-          type: "text",
-          placeholder: "Tell us your niche in a few words",
-          showIf: { field: "industry", value: "other" },
-          helpText: "Describe your business niche",
-        },
-        {
           id: "department",
           label: "Department / Team",
           type: "text",
@@ -291,8 +213,6 @@ export const sopGeneratorConfig: FormConfig = {
     frequency: "",
     trigger: "",
     successCriteria: "",
-    industry: "",
-    industryOther: "",
     department: "",
     estimatedTime: "",
     decisionPoints: "",
