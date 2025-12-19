@@ -99,7 +99,9 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                     if (field.type === 'array') {
                         const arrayMinItems = field.minItems || 0;
                         const arrayValue = Array.isArray(value) ? value : [];
-                        if (arrayValue.slice(0, arrayMinItems).every((item: string) => item?.trim())) {
+                        // Check that there are at least minItems AND all minItems are filled
+                        if (arrayValue.length >= arrayMinItems &&
+                            arrayValue.slice(0, arrayMinItems).every((item: string) => item?.trim())) {
                             filledRequired++;
                         }
                     } else if (field.type === 'repeater') {
@@ -159,17 +161,21 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
         });
         setExpandedSections(initialExpanded);
 
-        // Priority: initialData > localStorage
+        // Priority: initialData (merged with defaults) > localStorage > defaults
         if (initialData) {
-            setFormData(initialData);
-            onFormChange?.(initialData);
+            // Merge initialData with defaultValues to ensure all fields have defaults
+            const mergedData = { ...config.defaultValues, ...initialData };
+            setFormData(mergedData);
+            onFormChange?.(mergedData);
         } else {
             try {
                 const saved = localStorage.getItem(`${config.storageKey}-${userId}`);
                 if (saved) {
                     const parsed = JSON.parse(saved);
-                    setFormData(parsed);
-                    onFormChange?.(parsed);
+                    // Merge saved data with defaults to ensure all fields exist
+                    const mergedData = { ...config.defaultValues, ...parsed };
+                    setFormData(mergedData);
+                    onFormChange?.(mergedData);
                 }
             } catch (error) {
                 console.error('Failed to load saved form data:', error);
@@ -297,17 +303,6 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
 
             const { presignedUrl, fileUrl, key } = await presignedResponse.json();
 
-            // Debug: Log the fileUrl received from the API
-            console.log("Received fileUrl from presigned URL API:", {
-                fileUrl,
-                fileUrlType: typeof fileUrl,
-                fileUrlLength: fileUrl?.length,
-                fileUrlStartsWith: fileUrl?.substring(0, 50),
-                isHttpUrl: fileUrl?.startsWith("http://") || fileUrl?.startsWith("https://"),
-            });
-
-            // Upload file directly to S3
-            // Note: credentials must be 'omit' for S3 presigned URLs to work with CORS wildcard
             const uploadResponse = await fetch(presignedUrl, {
                 method: "PUT",
                 body: file,
@@ -616,6 +611,32 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
         );
         if (hasUploadErrors) {
             setSubmitError("Please resolve file upload errors before submitting.");
+            return;
+        }
+
+        // Validate required array fields with minItems
+        const validationErrors: string[] = [];
+        config.sections.forEach((section) => {
+            section.fields.forEach((field) => {
+                if (!shouldShowField(field)) return;
+
+                if (field.required && field.type === 'array') {
+                    const arrayMinItems = field.minItems || 0;
+                    const arrayValue = Array.isArray(formData[field.id]) ? formData[field.id] : [];
+                    const filledItems = arrayValue.filter((item: string) => item?.trim()).length;
+
+                    if (filledItems < arrayMinItems) {
+                        validationErrors.push(
+                            `${field.label} requires at least ${arrayMinItems} ${arrayMinItems === 1 ? 'item' : 'items'}. You have ${filledItems}.`
+                        );
+                    }
+                }
+            });
+        });
+
+        if (validationErrors.length > 0) {
+            setSubmitError(validationErrors.join(' '));
+            setIsSubmitting(false);
             return;
         }
 

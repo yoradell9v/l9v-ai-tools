@@ -69,7 +69,8 @@ export interface SavedAnalysis {
         tools: string;
         website: string;
         timezone: string;
-        companyName: string;
+        businessName?: string;
+        companyName?: string; // Legacy field name for backward compatibility
         weeklyHours: string;
         businessGoal: string;
         clientFacing: string;
@@ -494,7 +495,7 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
                                 </div>
 
                                 <Accordion type="multiple" className="w-full">
-                                    {savedAnalysis.intakeData.companyName && (
+                                    {(savedAnalysis.intakeData.businessName || savedAnalysis.intakeData.companyName) && (
                                         <AccordionItem value="intake">
                                             <AccordionTrigger className="text-sm">
                                                 <div className="flex items-center gap-2">
@@ -510,7 +511,7 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
                                                                 Company
                                                             </p>
                                                             <p className="text-sm font-medium">
-                                                                {savedAnalysis.intakeData.companyName}
+                                                                {savedAnalysis.intakeData.businessName || savedAnalysis.intakeData.companyName}
                                                             </p>
                                                             {savedAnalysis.intakeData.website && (
                                                                 <a

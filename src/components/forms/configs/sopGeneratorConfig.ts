@@ -48,7 +48,8 @@ export const sopGeneratorConfig: FormConfig = {
           label: "What tools/software are used?",
           type: "textarea",
           placeholder:
-            "e.g., Salesforce, Excel, Shopify admin panel, Google Sheets",
+            "e.g., Salesforce, Excel, Shopify admin panel, Google Sheets. Organization tool stack will be included automatically.",
+          helpText: "Organization tool stack from Knowledge Base will be included. Add process-specific tools here.",
           required: true,
         },
         {

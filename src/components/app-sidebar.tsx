@@ -64,7 +64,6 @@ export function AppSidebar() {
         return null;
     }
 
-    // Fetch knowledge base completion status for badge
     const fetchOnboardingStatus = async () => {
         try {
             const response = await fetch("/api/organization-knowledge-base", {
@@ -81,7 +80,7 @@ export function AppSidebar() {
                     setOnboardingStatus(status);
                 }
             } else {
-                const status = checkOnboardingStatus(null);
+                const status = checkOnboardingStatus(null);0
                 setOnboardingStatus(status);
             }
         } catch (err) {
@@ -91,18 +90,16 @@ export function AppSidebar() {
         }
     };
 
-    // Initial fetch on mount
     useEffect(() => {
         fetchOnboardingStatus();
     }, []);
 
-    // Refetch when pathname changes (e.g., user navigates to/from knowledge base page or dashboard)
-    // This ensures the badge updates when knowledge base is completed
+
     useEffect(() => {
         fetchOnboardingStatus();
     }, [pathname]);
 
-    // Listen for custom event when knowledge base is updated
+
     useEffect(() => {
         const handleKnowledgeBaseUpdate = () => {
             fetchOnboardingStatus();

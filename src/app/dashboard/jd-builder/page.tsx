@@ -6,6 +6,8 @@ import BaseIntakeForm, { BaseIntakeFormRef } from "@/components/forms/BaseIntake
 import { jdFormConfig } from "@/components/forms/configs/jdFormConfig";
 import RefinementForm from "@/components/forms/RefinementForm";
 import { useUser } from "@/context/UserContext";
+import { OrganizationKnowledgeBase } from "@/lib/organizationKnowledgeBase";
+import { mapOrgKBToJDForm, resolveJDFormWithOrgKB, resolvedJDFormToIntakePayload } from "@/lib/field-mapping";
 import { Briefcase, Sparkles, CheckCircle2, ShieldAlert, AlertTriangle, TrendingUp, Target, AlertCircle, Network, FileText, Plus, MoreVertical, Edit, Download, Save, History, Loader2 } from "lucide-react";
 import { getConfidenceValue, getConfidenceColor } from '@/utils/confidence';
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -14,7 +16,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
     Dialog,
     DialogContent,
@@ -52,14 +53,11 @@ interface AnalysisResult {
         confidence: string;
         key_risks: string[];
         critical_questions: string[];
-        // Dedicated VA fields
         role_title?: string;
         hours_per_week?: number;
-        // Unicorn VA fields
         core_va_title?: string;
         core_va_hours?: string | number;
         team_support_areas?: number;
-        // Projects on Demand fields
         project_count?: number;
         total_hours?: string | number;
         estimated_timeline?: string;
@@ -67,7 +65,6 @@ interface AnalysisResult {
     full_package: {
         service_structure: {
             service_type: string;
-            // Dedicated VA
             dedicated_va_role?: {
                 title: string;
                 craft_family?: string;
@@ -92,7 +89,6 @@ interface AnalysisResult {
                     timezone_criticality?: string;
                 };
             };
-            // Unicorn VA Service
             core_va_role?: {
                 title: string;
                 craft_family?: string;
@@ -114,7 +110,6 @@ interface AnalysisResult {
             };
             team_support_areas?: any;
             coordination_model?: string;
-            // Projects on Demand
             projects?: Array<{
                 project_name: string;
                 category?: string;
@@ -165,7 +160,6 @@ interface AnalysisResult {
             key_insights: string[];
         };
         detailed_specifications: {
-            // Dedicated VA - flat structure
             title?: string;
             hours_per_week?: string | number;
             mission_statement?: string;
@@ -184,7 +178,6 @@ interface AnalysisResult {
             communication_structure?: any;
             timezone_requirements?: any;
             success_indicators?: any;
-            // Unicorn VA Service
             core_va_jd?: {
                 title: string;
                 hours_per_week: string;
@@ -206,7 +199,6 @@ interface AnalysisResult {
                 success_indicators: any;
             };
             team_support_specs?: any;
-            // Projects on Demand
             projects?: Array<{
                 project_name: string;
                 overview?: string;
@@ -463,7 +455,7 @@ interface AnalysisResult {
 }
 
 interface IntakeFormData {
-    companyName: string;
+    businessName: string;
     website: string;
     businessGoal: string;
     tasks: string[];
@@ -495,8 +487,6 @@ export default function JdBuilderPage() {
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [intakeData, setIntakeData] = useState<IntakeFormData | null>(null);
     const [activeTab, setActiveTab] = useState<'summary' | 'overview' | 'roles' | 'implementation' | 'risks'>('summary');
-    const tabsRef = useRef<HTMLDivElement>(null);
-    const [tabContentHeight, setTabContentHeight] = useState<string>('calc(100vh)');
     const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
     const [isRefinementModalOpen, setIsRefinementModalOpen] = useState(false);
     const [savedAnalysisId, setSavedAnalysisId] = useState<string | null>(null);
@@ -504,14 +494,22 @@ export default function JdBuilderPage() {
     const [analysisError, setAnalysisError] = useState<string | null>(null);
     const [isLoadingLatest, setIsLoadingLatest] = useState(false);
     const [hasNoSavedAnalyses, setHasNoSavedAnalyses] = useState(false);
+    const [organizationKB, setOrganizationKB] = useState<OrganizationKnowledgeBase | null>(null);
+    const [isLoadingOrgKB, setIsLoadingOrgKB] = useState(false);
+
+    const [kbMetadata, setKbMetadata] = useState<{
+        usedKnowledgeBaseVersion: number | null;
+        knowledgeBaseSnapshot: any | null;
+        organizationId: string | null;
+        contributedInsights: any[] | null;
+    } | null>(null);
     const intakeFormRef = useRef<BaseIntakeFormRef>(null);
     const hasAttemptedLoadRef = useRef(false);
     const lastLoadedUserIdRef = useRef<string | null>(null);
 
     const handleSuccess = async ({ apiResult, input }: { apiResult: any; input: IntakeFormData }) => {
-        setCurrentStage(""); // Reset stage when analysis completes
-        setAnalysisError(null); // Clear any previous errors
-        // Analysis is complete, so processing should be false
+        setCurrentStage("");
+        setAnalysisError(null);
         setIsProcessing(false);
         try {
             const result: AnalysisResult = {
@@ -543,10 +541,20 @@ export default function JdBuilderPage() {
             setAnalysisResult(result);
             setIntakeData(input);
 
-            // Automatically save the analysis
+            const usedKnowledgeBaseVersion = apiResult.knowledgeBase?.version ?? null;
+            const knowledgeBaseSnapshot = apiResult.knowledgeBase?.snapshot ?? null;
+            const organizationId = apiResult.knowledgeBase?.organizationId ?? null;
+            const contributedInsights = apiResult.extractedInsights ?? null;
+
+            setKbMetadata({
+                usedKnowledgeBaseVersion,
+                knowledgeBaseSnapshot,
+                organizationId,
+                contributedInsights,
+            });
+
             try {
-                // Generate a title from the analysis
-                const title = `${input.companyName} - ${apiResult.preview?.service_type || apiResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
+                const title = `${input.businessName} - ${apiResult.preview?.service_type || apiResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
 
                 const saveResponse = await fetch("/api/jd/save", {
                     method: "POST",
@@ -559,6 +567,10 @@ export default function JdBuilderPage() {
                         intakeData: input,
                         analysis: result,
                         isFinalized: false,
+                        organizationId: organizationId,
+                        usedKnowledgeBaseVersion: usedKnowledgeBaseVersion,
+                        knowledgeBaseSnapshot: knowledgeBaseSnapshot,
+                        contributedInsights: contributedInsights,
                     }),
                 });
 
@@ -566,17 +578,14 @@ export default function JdBuilderPage() {
 
                 if (!saveResponse.ok) {
                     console.error("Failed to save analysis:", saveData.error);
-                    // Don't show error to user, just log it - analysis is still displayed
                 } else {
                     console.log("Analysis saved successfully:", saveData.savedAnalysis);
-                    // Store the saved analysis ID for refinement
                     if (saveData.savedAnalysis?.id) {
                         setSavedAnalysisId(saveData.savedAnalysis.id);
                     }
                 }
             } catch (saveError) {
                 console.error("Error saving analysis:", saveError);
-                // Don't show error to user, just log it - analysis is still displayed
             }
         } catch (e) {
             console.error("Failed to process API result:", e);
@@ -609,18 +618,9 @@ export default function JdBuilderPage() {
             } as AnalysisResult);
             setIntakeData(input);
         } finally {
-            // Ensure processing is false after handling results
             setIsProcessing(false);
-            setCurrentStage(""); // Clear stage when done
+            setCurrentStage("");
         }
-    };
-
-    const handleNewAnalysis = () => {
-        setAnalysisResult(null);
-        setIntakeData(null);
-        setAnalysisError(null);
-        // Don't reset the ref here - we don't want to reload the latest analysis when starting a new one
-        setIsModalOpen(true);
     };
 
     const summary = analysisResult?.preview?.summary || analysisResult?.full_package?.executive_summary?.what_you_told_us;
@@ -628,7 +628,6 @@ export default function JdBuilderPage() {
     const riskManagement = analysisResult?.full_package?.risk_management;
     const monitoringPlan = riskManagement?.monitoring_plan;
 
-    // Greeting based on time of day
     const getCurrentGreeting = () => {
         if (!user) return "Welcome";
         const hour = new Date().getHours();
@@ -637,19 +636,13 @@ export default function JdBuilderPage() {
         return `Good evening, ${user.firstname}`;
     };
 
-    // Load latest saved analysis on mount if no analysis result
     useEffect(() => {
         const loadLatestAnalysis = async () => {
-            // Only load if we have a user, no existing result, and not currently loading
             if (!user || analysisResult || isLoadingLatest) return;
-            
-            // Reset ref if user changed
             const currentUserId = user.id;
             if (lastLoadedUserIdRef.current !== currentUserId) {
                 hasAttemptedLoadRef.current = false;
             }
-            
-            // Skip if we've already attempted to load for this user
             if (hasAttemptedLoadRef.current) return;
 
             hasAttemptedLoadRef.current = true;
@@ -668,19 +661,22 @@ export default function JdBuilderPage() {
                 const data = await response.json();
                 if (data.success && data.data?.analyses && data.data.analyses.length > 0) {
                     const latestAnalysis = data.data.analyses[0];
-
-                    // Map the saved analysis to the component's state
                     setAnalysisResult(latestAnalysis.analysis as AnalysisResult);
                     setIntakeData(latestAnalysis.intakeData as IntakeFormData);
                     setSavedAnalysisId(latestAnalysis.id);
                     setHasNoSavedAnalyses(false);
+                    // Store KB metadata from saved analysis
+                    setKbMetadata({
+                        usedKnowledgeBaseVersion: latestAnalysis.usedKnowledgeBaseVersion ?? null,
+                        knowledgeBaseSnapshot: latestAnalysis.knowledgeBaseSnapshot ?? null,
+                        organizationId: latestAnalysis.organizationId ?? null,
+                        contributedInsights: latestAnalysis.contributedInsights ?? null,
+                    });
                 } else {
-                    // No saved analyses found
                     setHasNoSavedAnalyses(true);
                 }
             } catch (error) {
                 console.error("Error loading latest analysis:", error);
-                // Don't show error to user, just mark as no saved analyses
                 setHasNoSavedAnalyses(true);
             } finally {
                 setIsLoadingLatest(false);
@@ -690,26 +686,32 @@ export default function JdBuilderPage() {
         loadLatestAnalysis();
     }, [user, analysisResult]);
 
-    // Calculate dynamic height for tab content
     useEffect(() => {
-        const calculateHeight = () => {
-            if (tabsRef.current) {
-                const tabsTop = tabsRef.current.getBoundingClientRect().top;
-                const viewportHeight = window.innerHeight;
-                const padding = 32; // py-8 = 2rem top + 2rem bottom
-                const headerHeight = 80; // Approximate header height
-                const tabsHeight = 50; // Tabs height
-                const calculatedHeight = viewportHeight - tabsTop - padding - tabsHeight;
-                setTabContentHeight(`${Math.max(400, calculatedHeight)}px`);
+        const fetchOrgKB = async () => {
+            if (!user || isLoadingOrgKB) return;
+
+            setIsLoadingOrgKB(true);
+            try {
+                const response = await fetch("/api/organization-knowledge-base", {
+                    method: "GET",
+                    credentials: "include",
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.organizationProfile) {
+                        setOrganizationKB(data.organizationProfile as OrganizationKnowledgeBase);
+                    }
+                }
+            } catch (error) {
+                console.error("Error fetching organization knowledge base:", error);
+            } finally {
+                setIsLoadingOrgKB(false);
             }
         };
 
-        if (analysisResult && !isProcessing) {
-            calculateHeight();
-            window.addEventListener('resize', calculateHeight);
-            return () => window.removeEventListener('resize', calculateHeight);
-        }
-    }, [analysisResult, isProcessing, activeTab]);
+        fetchOrgKB();
+    }, [user]);
 
     const handleDownload = async () => {
         if (!analysisResult) {
@@ -745,13 +747,11 @@ export default function JdBuilderPage() {
                 : 'job-description-analysis.pdf';
 
             a.download = filename;
-            // Mark as download to prevent NavigationLoader from intercepting
             a.setAttribute('data-download', 'true');
             a.style.display = 'none';
             document.body.appendChild(a);
             a.click();
 
-            // Small delay to ensure download starts before cleanup
             setTimeout(() => {
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
@@ -772,8 +772,7 @@ export default function JdBuilderPage() {
         }
 
         try {
-            // Generate a title from the analysis
-            const title = `${intakeData.companyName} - ${analysisResult.preview?.service_type || analysisResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
+            const title = `${intakeData.businessName} - ${analysisResult.preview?.service_type || analysisResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
 
             const saveResponse = await fetch("/api/jd/save", {
                 method: "POST",
@@ -786,6 +785,10 @@ export default function JdBuilderPage() {
                     intakeData,
                     analysis: analysisResult,
                     isFinalized: false,
+                    organizationId: kbMetadata?.organizationId ?? null,
+                    usedKnowledgeBaseVersion: kbMetadata?.usedKnowledgeBaseVersion ?? null,
+                    knowledgeBaseSnapshot: kbMetadata?.knowledgeBaseSnapshot ?? null,
+                    contributedInsights: kbMetadata?.contributedInsights ?? null,
                 }),
             });
 
@@ -793,18 +796,14 @@ export default function JdBuilderPage() {
 
             if (!saveResponse.ok) {
                 console.error("Failed to save analysis:", saveData.error);
-                // TODO: Show error message to user
             } else {
                 console.log("Analysis saved successfully:", saveData.savedAnalysis);
-                // Store the saved analysis ID for refinement
                 if (saveData.savedAnalysis?.id) {
                     setSavedAnalysisId(saveData.savedAnalysis.id);
                 }
-                // TODO: Show success message to user
             }
         } catch (error) {
             console.error("Error saving analysis:", error);
-            // TODO: Show error message to user
         } finally {
             setActionsMenuOpen(false);
         }
@@ -820,7 +819,6 @@ export default function JdBuilderPage() {
                     className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full"
                 >
                     <div className="w-full max-w-full p-4 md:p-8 pt-6 flex flex-col h-full">
-                        {/* Header - Always Visible */}
                         <div className="flex-shrink-0 p-2">
                             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
                                 <div className="space-y-1">
@@ -849,8 +847,6 @@ export default function JdBuilderPage() {
                                     </Button>
                                 </div>
                             </div>
-
-                            {/* Divider */}
                             <Separator />
                         </div>
 
@@ -924,7 +920,7 @@ export default function JdBuilderPage() {
                                 </div>
                             )}
 
-                            {/* Empty State - Only show if no saved analyses */}
+                            {/* Empty State */}
                             {!analysisResult && !isProcessing && !isDownloading && !isLoadingLatest && hasNoSavedAnalyses && (
                                 <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
                                     <div className="p-4 rounded-xl mb-4 bg-muted">
@@ -948,7 +944,6 @@ export default function JdBuilderPage() {
                             {/* Results State */}
                             {analysisResult && !isProcessing && !isDownloading && (
                                 <Card className="flex flex-col w-full max-w-full gap-2" style={{ maxHeight: 'calc(100vh - 200px)' }}>
-                                    {/* Header with Actions Menu */}
                                     <CardHeader className="flex-shrink-0 sm:px-6 sm:pt-4 sm:pb-2">
                                         <div className="flex items-start justify-between">
                                             <div>
@@ -959,7 +954,6 @@ export default function JdBuilderPage() {
                                                     {analysisResult.preview.service_type || 'Your recommendations'}
                                                 </CardDescription>
                                             </div>
-                                            {/* Actions Dropdown */}
                                             <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="outline" size="icon">
@@ -970,10 +964,9 @@ export default function JdBuilderPage() {
                                                     <DropdownMenuItem
                                                         onClick={async () => {
                                                             setActionsMenuOpen(false);
-                                                            // Ensure analysis is saved before refining
                                                             if (!savedAnalysisId && analysisResult && intakeData && user) {
                                                                 try {
-                                                                    const title = `${intakeData.companyName} - ${analysisResult.preview?.service_type || analysisResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
+                                                                    const title = `${intakeData.businessName} - ${analysisResult.preview?.service_type || analysisResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
 
                                                                     const saveResponse = await fetch("/api/jd/save", {
                                                                         method: "POST",
@@ -986,6 +979,10 @@ export default function JdBuilderPage() {
                                                                             intakeData,
                                                                             analysis: analysisResult,
                                                                             isFinalized: false,
+                                                                            organizationId: kbMetadata?.organizationId ?? null,
+                                                                            usedKnowledgeBaseVersion: kbMetadata?.usedKnowledgeBaseVersion ?? null,
+                                                                            knowledgeBaseSnapshot: kbMetadata?.knowledgeBaseSnapshot ?? null,
+                                                                            contributedInsights: kbMetadata?.contributedInsights ?? null,
                                                                         }),
                                                                     });
 
@@ -1024,7 +1021,6 @@ export default function JdBuilderPage() {
                                         </div>
                                     </CardHeader>
 
-                                    {/* Tabs */}
                                     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1 flex flex-col min-h-0">
                                         <TabsList className="mx-4 sm:mx-6 mt-0 mb-4">
                                             {(['summary', 'overview', 'roles', 'implementation', 'risks'] as const).map((tab) => (
@@ -1034,10 +1030,8 @@ export default function JdBuilderPage() {
                                             ))}
                                         </TabsList>
 
-                                        {/* Tab Content */}
                                         <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4 sm:px-6 sm:pb-6 min-h-0">
                                             <TabsContent value="summary" className="mt-0 space-y-6">
-                                                {/* What You Told Us Section */}
                                                 <Card>
                                                     <CardHeader>
                                                         <div className="flex items-center justify-between">
@@ -2675,6 +2669,7 @@ export default function JdBuilderPage() {
                                         userId={user.id}
                                         config={jdFormConfig}
                                         hideClearButton={true}
+                                        initialData={mapOrgKBToJDForm(organizationKB)}
                                         onClose={() => {
                                             if (!isProcessing) {
                                                 setIsModalOpen(false);
@@ -2682,15 +2677,13 @@ export default function JdBuilderPage() {
                                             }
                                         }}
                                         onSuccess={async (data) => {
-                                            // Close modal first, then handle success
                                             setIsModalOpen(false);
                                             await handleSuccess(data);
                                         }}
                                         onProgress={(stage) => {
                                             setCurrentStage(stage);
                                             setIsProcessing(true);
-                                            setAnalysisError(null); // Clear errors when starting new analysis
-                                            // Close modal when analysis starts so user can see progress
+                                            setAnalysisError(null);
                                             setIsModalOpen(false);
                                         }}
                                         onError={(errorMessage) => {
@@ -2699,57 +2692,37 @@ export default function JdBuilderPage() {
                                             setCurrentStage("");
                                         }}
                                         onSubmit={async (formData, files) => {
-                                            // Clear any previous errors
                                             setAnalysisError(null);
 
                                             try {
-                                                // Transform form data to match API expected format
-                                                const toolsArray = formData.tools
-                                                    ? formData.tools
-                                                        .split(",")
-                                                        .map((tool: string) => tool.trim())
-                                                        .filter(Boolean)
-                                                    : [];
-
-                                                const tasksArray = Array.isArray(formData.tasks)
-                                                    ? formData.tasks.filter((task: string) => task && task.trim()).slice(0, 5)
-                                                    : [];
+                                                // Resolve form data with org KB defaults
+                                                const resolvedData = resolveJDFormWithOrgKB(formData, organizationKB);
 
                                                 // Validate required fields
-                                                if (!formData.companyName || !formData.companyName.trim()) {
+                                                if (!resolvedData.businessName || !resolvedData.businessName.trim()) {
                                                     throw new Error("Company name is required");
                                                 }
+
+                                                const tasksArray = Array.isArray(resolvedData.tasks)
+                                                    ? resolvedData.tasks.filter((task: string) => task && task.trim()).slice(0, 5)
+                                                    : [];
+
                                                 if (tasksArray.length === 0) {
                                                     throw new Error("At least one task is required");
                                                 }
 
-                                                const intakePayload = {
-                                                    brand: {
-                                                        name: formData.companyName.trim(),
-                                                    },
-                                                    website: formData.website || "",
-                                                    business_goal: formData.businessGoal || "",
-                                                    outcome_90d: formData.outcome90Day || "",
-                                                    tasks_top5: tasksArray,
-                                                    requirements: Array.isArray(formData.requirements)
-                                                        ? formData.requirements.filter((req: string) => req && req.trim())
+                                                // Convert resolved form data to API intake payload format
+                                                const intakePayload = resolvedJDFormToIntakePayload({
+                                                    ...resolvedData,
+                                                    tasks: tasksArray,
+                                                    requirements: Array.isArray(resolvedData.requirements)
+                                                        ? resolvedData.requirements.filter((req: string) => req && req.trim())
                                                         : [],
-                                                    weekly_hours: parseInt(formData.weeklyHours || "0", 10) || 0,
-                                                    timezone: formData.timezone || "",
-                                                    client_facing: formData.clientFacing === "Yes",
-                                                    tools: toolsArray,
-                                                    tools_raw: formData.tools || "",
-                                                    english_level: formData.englishLevel || "",
-                                                    management_style: formData.managementStyle || "",
-                                                    reporting_expectations: formData.reportingExpectations || "",
-                                                    security_needs: formData.securityNeeds || "",
-                                                    deal_breakers: formData.dealBreakers || "",
-                                                    nice_to_have_skills: formData.niceToHaveSkills || "",
-                                                    existing_sops: formData.existingSOPs === "Yes",
+                                                    existingSOPs: formData.existingSOPs || "No",
                                                     sop_filename: files.sopFile && files.sopFile.length > 0
                                                         ? files.sopFile.map(f => f.name).join(", ")
                                                         : null,
-                                                };
+                                                });
 
                                                 // Send JSON with S3 file URLs instead of FormData
                                                 const requestBody: any = {
@@ -2776,7 +2749,7 @@ export default function JdBuilderPage() {
                                                         throw new Error(`Invalid SOP file URL format. Expected HTTP/HTTPS URL, got: ${sopFile.url}`);
                                                     }
 
-                                                    // Use the first file's data (assuming single file upload)
+
                                                     requestBody.sopFileUrl = sopFile.url;
                                                     requestBody.sopFileName = sopFile.name;
                                                     requestBody.sopFileType = sopFile.type;
@@ -2943,15 +2916,12 @@ export default function JdBuilderPage() {
                                             userId={user.id}
                                             serviceType={analysisResult?.preview?.service_type || analysisResult?.full_package?.service_structure?.service_type}
                                             onRefinementComplete={async (refinedPackage) => {
-                                                // Update the analysis result with refined package
                                                 if (analysisResult) {
                                                     setAnalysisResult({
                                                         ...analysisResult,
                                                         full_package: refinedPackage,
                                                     });
                                                 }
-
-                                                // Update the saved analysis in the database
                                                 try {
                                                     await fetch(`/api/jd/save`, {
                                                         method: "POST",
@@ -2960,13 +2930,17 @@ export default function JdBuilderPage() {
                                                         },
                                                         credentials: "include",
                                                         body: JSON.stringify({
-                                                            title: `${intakeData?.companyName || 'Analysis'} - ${analysisResult?.preview?.service_type || 'Job Description Analysis'}`,
+                                                            title: `${intakeData?.businessName || 'Analysis'} - ${analysisResult?.preview?.service_type || 'Job Description Analysis'}`,
                                                             intakeData,
                                                             analysis: {
                                                                 ...analysisResult,
                                                                 full_package: refinedPackage,
                                                             },
                                                             isFinalized: false,
+                                                            organizationId: kbMetadata?.organizationId ?? null,
+                                                            usedKnowledgeBaseVersion: kbMetadata?.usedKnowledgeBaseVersion ?? null,
+                                                            knowledgeBaseSnapshot: kbMetadata?.knowledgeBaseSnapshot ?? null,
+                                                            contributedInsights: kbMetadata?.contributedInsights ?? null,
                                                         }),
                                                     });
                                                 } catch (error) {

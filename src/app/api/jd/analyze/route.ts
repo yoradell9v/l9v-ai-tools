@@ -1,163 +1,23 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
-import path from "path";
-import * as cheerio from "cheerio";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { cookies } from "next/headers";
+import { prisma } from "@/lib/prisma";
+import { verifyAccessToken } from "@/lib/auth";
+import { extractInsights } from "@/lib/analysis/extractInsights";
+import { extractFromFile, extractFromUrl } from "@/lib/extract-content";
 
 export const runtime = "nodejs";
 
-const MAX_SOP_FILE_SIZE = 10 * 1024 * 1024;
-const ALLOWED_SOP_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".txt"]);
-const ALLOWED_SOP_MIME_TYPES = new Set([
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "text/plain",
-]);
 
-function getFileExtension(fileName?: string | null) {
-  if (!fileName) return "";
-  return path.extname(fileName).toLowerCase();
-}
 
-function validateSopFile(file: File) {
-  if (file.size > MAX_SOP_FILE_SIZE) {
-    return {
-      valid: false,
-      error: "The SOP file is too large. Please upload a document under 10MB.",
-    };
-  }
 
-  const extension = getFileExtension(file.name);
-  const extensionAllowed = extension
-    ? ALLOWED_SOP_EXTENSIONS.has(extension)
-    : false;
-  const mimeAllowed = file.type ? ALLOWED_SOP_MIME_TYPES.has(file.type) : false;
 
-  if (!extensionAllowed && !mimeAllowed) {
-    return {
-      valid: false,
-      error: "Unsupported SOP file type. Allowed types: PDF, DOC, DOCX, TXT.",
-    };
-  }
-
-  return { valid: true };
-}
-
-function normalizeWhitespace(text: string) {
-  return text.replace(/\s+/g, " ").trim();
-}
-
-// Extract text from PDF buffer using Mozilla's pdfjs-dist
-// This replaces pdf-parse which had initialization issues
-async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
-  try {
-    // Import pdfjs-dist legacy build for Node.js compatibility
-    // The legacy build works with Node.js 18+ (Promise.withResolvers requires Node 22+)
-    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    
-    // Configure worker for Node.js environment
-    // The legacy build requires workerSrc to be set, but in Node.js we run in main thread
-    // We'll set it to satisfy the check, but disable worker usage completely
-    if (typeof window === 'undefined') {
-      // Set a placeholder - the legacy build checks for this but won't actually use it
-      // when useWorkerFetch is false
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/legacy/build/pdf.worker.mjs';
-    }
-    
-    console.log("Loading PDF document from buffer, size:", buffer.length);
-    
-    // Create a loading task with the PDF buffer
-    // Include memory optimization options for large PDFs
-    // CRITICAL: useWorkerFetch: false tells pdfjs to run in main thread (no worker)
-    const loadingTask = pdfjsLib.getDocument({
-      data: new Uint8Array(buffer),
-      useSystemFonts: true, // Better font handling in Node.js
-      verbosity: 0, // Suppress warnings
-      useWorkerFetch: false, // CRITICAL: Disables worker, runs in main thread
-      isEvalSupported: false, // Disable eval for security
-      maxImageSize: 1024 * 1024, // 1MB max per image (prevents memory issues)
-    });
-    
-    // Load the PDF document
-    const pdf = await loadingTask.promise;
-    const numPages = pdf.numPages;
-    
-    console.log(`PDF loaded successfully, pages: ${numPages}`);
-    
-    // Extract text from all pages
-    let fullText = '';
-    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const textContent = await page.getTextContent();
-      
-      // Extract text from text items
-      // Each item has a 'str' property containing the text
-      const pageText = textContent.items
-        .map((item: any) => item.str)
-        .join(' ');
-      
-      fullText += pageText;
-      
-      // Add newline between pages (except after last page)
-      if (pageNum < numPages) {
-        fullText += '\n';
-      }
-    }
-    
-    if (!fullText || fullText.trim().length === 0) {
-      throw new Error("PDF parsing returned no text content");
-    }
-    
-    console.log(`PDF text extracted successfully, length: ${fullText.length}`);
-    return fullText.trim();
-  } catch (error: any) {
-    console.error("PDF extraction error:", error);
-    
-    // Provide more specific error messages
-    if (error.name === "PasswordException") {
-      throw new Error("PDF is password-protected and cannot be parsed");
-    } else if (error.name === "InvalidPDFException") {
-      throw new Error("Invalid or corrupted PDF file");
-    } else if (error.message) {
-      throw new Error(`Failed to parse PDF: ${error.message}`);
-    } else {
-      throw new Error("Failed to parse PDF: Unknown error");
-    }
-  }
-}
-
-async function extractWebsiteContent(url: string) {
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch website: ${response.statusText}`);
-    }
-
-    const html = await response.text();
-    const $ = cheerio.load(html);
-
-    return {
-      hero: extractHeroSection($),
-      about: extractAboutSection($),
-      services: extractServicesSection($),
-      testimonials: extractTestimonials($),
-      fullText: extractBodyText($, { maxLength: 50000 }),
-      metadata: extractMetadata($),
-      companyInfo: extractCompanyInfo($),
-      team: extractTeamSection($),
-      values: extractValuesSection($),
-      contact: extractContactInfo($),
-    };
-  } catch (error) {
-    console.error("Error extracting website content:", error);
+/**
+ * Transforms the output from extractFromUrl to match the expected format
+ * for the analysis prompts
+ */
+function transformWebsiteContent(extracted: any): any {
+  if (!extracted || extracted.error) {
     return {
       hero: "",
       about: "",
@@ -171,323 +31,35 @@ async function extractWebsiteContent(url: string) {
       contact: "",
     };
   }
-}
 
-function extractHeroSection($: cheerio.CheerioAPI): string {
-  const selectors = [
-    "section.hero",
-    "section[class*='hero']",
-    "div.hero",
-    "div[class*='hero']",
-    "header .hero",
-    ".hero-section",
-    "h1",
-  ];
+  // Combine section summaries and key points for full text
+  const sectionTexts: string[] = [];
+  if (extracted.sections?.hero?.summary) sectionTexts.push(`Hero: ${extracted.sections.hero.summary}`);
+  if (extracted.sections?.about?.summary) sectionTexts.push(`About: ${extracted.sections.about.summary}`);
+  if (extracted.sections?.services?.summary) sectionTexts.push(`Services: ${extracted.sections.services.summary}`);
+  if (extracted.sections?.companyInfo?.summary) sectionTexts.push(`Company Info: ${extracted.sections.companyInfo.summary}`);
+  if (extracted.sections?.team?.summary) sectionTexts.push(`Team: ${extracted.sections.team.summary}`);
+  if (extracted.sections?.values?.summary) sectionTexts.push(`Values: ${extracted.sections.values.summary}`);
+  if (extracted.sections?.contact?.summary) sectionTexts.push(`Contact: ${extracted.sections.contact.summary}`);
+  if (extracted.overallSummary) sectionTexts.push(`Overall: ${extracted.overallSummary}`);
+  
+  const fullText = sectionTexts.join("\n\n").substring(0, 50000);
 
-  for (const selector of selectors) {
-    const element = $(selector).first();
-    if (element.length > 0) {
-      const text = element.text().trim();
-      if (text.length > 20) {
-        return text.substring(0, 500);
-      }
-    }
-  }
-
-  const h1 = $("h1").first();
-  if (h1.length > 0) {
-    return h1.text().trim().substring(0, 500);
-  }
-
-  return "";
-}
-
-function extractAboutSection($: cheerio.CheerioAPI): string {
-  const selectors = [
-    "section.about",
-    "section[class*='about']",
-    "section#about",
-    "div.about",
-    "div[class*='about']",
-    "div#about",
-    "[data-section='about']",
-  ];
-
-  for (const selector of selectors) {
-    const element = $(selector).first();
-    if (element.length > 0) {
-      const text = element.text().trim();
-      if (text.length > 50) {
-        return text.substring(0, 2000);
-      }
-    }
-  }
-
-  return "";
-}
-
-function extractServicesSection($: cheerio.CheerioAPI): string {
-  const selectors = [
-    "section.services",
-    "section[class*='service']",
-    "section#services",
-    "div.services",
-    "div[class*='service']",
-    "div#services",
-    "[data-section='services']",
-  ];
-
-  for (const selector of selectors) {
-    const element = $(selector).first();
-    if (element.length > 0) {
-      const text = element.text().trim();
-      if (text.length > 50) {
-        return text.substring(0, 2000);
-      }
-    }
-  }
-
-  return "";
-}
-
-function extractTestimonials($: cheerio.CheerioAPI): string[] {
-  const testimonials: string[] = [];
-
-  const selectors = [
-    "blockquote",
-    ".testimonial",
-    "[class*='testimonial']",
-    ".review",
-    "[class*='review']",
-    ".quote",
-    "[class*='quote']",
-  ];
-
-  for (const selector of selectors) {
-    $(selector).each((_, element) => {
-      const text = $(element).text().trim();
-      if (text.length > 20 && text.length < 500) {
-        testimonials.push(text);
-      }
-    });
-  }
-
-  return [...new Set(testimonials)].slice(0, 10);
-}
-
-function extractBodyText(
-  $: cheerio.CheerioAPI,
-  options: { maxLength: number }
-): string {
-  $("script, style, noscript").remove();
-
-  const body = $("body");
-  if (body.length > 0) {
-    let text = body.text();
-    text = normalizeWhitespace(text);
-    return text.substring(0, options.maxLength);
-  }
-
-  return "";
-}
-
-function extractMetadata($: cheerio.CheerioAPI): {
-  title: string;
-  description: string;
-} {
-  const title =
-    $("title").text().trim() ||
-    $('meta[property="og:title"]').attr("content") ||
-    "";
-
-  const description =
-    $('meta[name="description"]').attr("content") ||
-    $('meta[property="og:description"]').attr("content") ||
-    "";
-
-  return { title, description };
-}
-
-function extractCompanyInfo($: cheerio.CheerioAPI): string {
-  const selectors = [
-    "section.company",
-    "section[class*='company']",
-    "section#company",
-    ".company-info",
-    "[data-section='company']",
-    ".mission",
-    ".vision",
-  ];
-
-  let combinedText = "";
-
-  for (const selector of selectors) {
-    const element = $(selector).first();
-    if (element.length > 0) {
-      const text = element.text().trim();
-      if (text.length > 50) {
-        combinedText += text.substring(0, 1000) + " ";
-      }
-    }
-  }
-
-  const mission = $(".mission, [class*='mission']").first().text().trim();
-  const vision = $(".vision, [class*='vision']").first().text().trim();
-
-  if (mission) combinedText += `Mission: ${mission.substring(0, 500)} `;
-  if (vision) combinedText += `Vision: ${vision.substring(0, 500)} `;
-
-  return normalizeWhitespace(combinedText).substring(0, 2000);
-}
-
-function extractTeamSection($: cheerio.CheerioAPI): string {
-  const selectors = [
-    "section.team",
-    "section[class*='team']",
-    "section#team",
-    ".team-section",
-    "[data-section='team']",
-  ];
-
-  for (const selector of selectors) {
-    const element = $(selector).first();
-    if (element.length > 0) {
-      const text = element.text().trim();
-      if (text.length > 50) {
-        return text.substring(0, 2000);
-      }
-    }
-  }
-
-  return "";
-}
-
-function extractValuesSection($: cheerio.CheerioAPI): string {
-  const selectors = [
-    "section.values",
-    "section[class*='value']",
-    "section#values",
-    ".values-section",
-    "[data-section='values']",
-    ".culture",
-    "[class*='culture']",
-  ];
-
-  let combinedText = "";
-
-  for (const selector of selectors) {
-    const element = $(selector).first();
-    if (element.length > 0) {
-      const text = element.text().trim();
-      if (text.length > 50) {
-        combinedText += text.substring(0, 1000) + " ";
-      }
-    }
-  }
-
-  return normalizeWhitespace(combinedText).substring(0, 2000);
-}
-
-function extractContactInfo($: cheerio.CheerioAPI): string {
-  const contactSelectors = [
-    "section.contact",
-    "section[class*='contact']",
-    "section#contact",
-    ".contact-section",
-    "[data-section='contact']",
-  ];
-
-  let contactText = "";
-
-  for (const selector of contactSelectors) {
-    const element = $(selector).first();
-    if (element.length > 0) {
-      const text = element.text().trim();
-      if (text.length > 20) {
-        contactText += text.substring(0, 500) + " ";
-      }
-    }
-  }
-
-  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-  const emails = $("body").text().match(emailRegex);
-  if (emails) {
-    contactText += `Emails: ${emails.slice(0, 3).join(", ")} `;
-  }
-
-  // Extract phone numbers
-  const phoneRegex = /[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}/g;
-  const phones = $("body").text().match(phoneRegex);
-  if (phones) {
-    contactText += `Phones: ${phones.slice(0, 2).join(", ")} `;
-  }
-
-  return normalizeWhitespace(contactText).substring(0, 1000);
-}
-
-async function extractTextFromSop(file: File) {
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  const extension = getFileExtension(file.name);
-  const mimeType = file.type;
-
-  try {
-    if (extension === ".pdf" || mimeType === "application/pdf") {
-      console.log("Extracting text from PDF using pdfjs-dist...");
-      const text = await extractTextFromPdfBuffer(buffer);
-      return normalizeWhitespace(text);
-    }
-
-    if (
-      extension === ".docx" ||
-      mimeType ===
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    ) {
-      const mammoth = await import("mammoth");
-      const result = await mammoth.extractRawText({ buffer });
-      if (!result || !result.value) {
-        throw new Error("DOCX parsing returned no text content");
-      }
-      return normalizeWhitespace(result.value);
-    }
-
-    if (extension === ".doc" || mimeType === "application/msword") {
-      const WordExtractor = (await import("word-extractor")).default;
-      const extractor = new WordExtractor();
-      const doc = await extractor.extract(buffer);
-      const text =
-        typeof doc?.getBody === "function" ? doc.getBody() : String(doc ?? "");
-      if (!text) {
-        throw new Error("DOC parsing returned no text content");
-      }
-      return normalizeWhitespace(text);
-    }
-
-    if (extension === ".txt" || mimeType === "text/plain") {
-      const text = buffer.toString("utf-8");
-      if (!text || text.trim().length === 0) {
-        throw new Error("Text file is empty");
-      }
-      return normalizeWhitespace(text);
-    }
-
-    throw new Error(`Unsupported file type: ${extension || mimeType}`);
-  } catch (error) {
-    console.error("SOP extraction error:", error);
-    if (error instanceof Error) {
-      if (error.message.includes("Failed to parse")) {
-        throw error;
-      }
-      throw new Error(
-        `Failed to parse the SOP file (${extension || mimeType}): ${
-          error.message
-        }`
-      );
-    }
-    throw new Error(
-      "Failed to parse the SOP file. Please ensure it's a valid PDF, DOC, DOCX, or TXT document."
-    );
-  }
+  return {
+    hero: extracted.sections?.hero?.summary || "",
+    about: extracted.sections?.about?.summary || "",
+    services: extracted.sections?.services?.summary || "",
+    testimonials: extracted.testimonials || [],
+    fullText: fullText,
+    metadata: {
+      title: extracted.metadata?.title || "",
+      description: extracted.metadata?.description || "",
+    },
+    companyInfo: extracted.sections?.companyInfo?.summary || "",
+    team: extracted.sections?.team?.summary || "",
+    values: extracted.sections?.values?.summary || "",
+    contact: extracted.sections?.contact?.summary || "",
+  };
 }
 
 function normalizeTasks(input: unknown): string[] {
@@ -638,12 +210,58 @@ function cleanTeamSupportAreas(analysisResult: any): any {
   return analysisResult;
 }
 
+function formatKnowledgeBaseContext(kb: any): string {
+  if (!kb) return "";
+
+  const contextParts: string[] = [];
+
+  contextParts.push("ORGANIZATION KNOWLEDGE BASE CONTEXT:");
+  contextParts.push("Use this existing knowledge about the organization to personalize the analysis:");
+
+  if (kb.businessName) {
+    contextParts.push(`- Business Name: ${kb.businessName}`);
+  }
+  if (kb.industry) {
+    contextParts.push(`- Industry: ${kb.industry}${kb.industryOther ? ` (${kb.industryOther})` : ""}`);
+  }
+  if (kb.whatYouSell) {
+    contextParts.push(`- What They Sell: ${kb.whatYouSell}`);
+  }
+  if (kb.idealCustomer) {
+    contextParts.push(`- Ideal Customer: ${kb.idealCustomer}`);
+  }
+  if (kb.toolStack && Array.isArray(kb.toolStack) && kb.toolStack.length > 0) {
+    contextParts.push(`- Existing Tools: ${kb.toolStack.join(", ")}`);
+  }
+  if (kb.primaryCRM) {
+    contextParts.push(`- Primary CRM: ${kb.primaryCRM}`);
+  }
+  if (kb.defaultWeeklyHours) {
+    contextParts.push(`- Default Weekly Hours: ${kb.defaultWeeklyHours}`);
+  }
+  if (kb.defaultManagementStyle) {
+    contextParts.push(`- Default Management Style: ${kb.defaultManagementStyle}`);
+  }
+  if (kb.brandVoiceStyle) {
+    contextParts.push(`- Brand Voice Style: ${kb.brandVoiceStyle}`);
+  }
+  if (kb.biggestBottleNeck) {
+    contextParts.push(`- Known Bottleneck: ${kb.biggestBottleNeck}`);
+  }
+
+  contextParts.push("\nWhen analyzing, consider how this role fits with their existing tools, processes, and business context.");
+  contextParts.push("If intake data conflicts with knowledge base, note the discrepancy but prioritize intake data for this specific role.");
+
+  return contextParts.join("\n");
+}
+
 //Stage 1: Deep Discovery
 
 async function runDeepDiscovery(
   openai: OpenAI,
   intakeData: any,
-  sopText: string | null
+  sopText: string | null,
+  knowledgeBase: any = null
 ) {
   const websiteInfo = intakeData.websiteContent
     ? `
@@ -667,9 +285,11 @@ WEBSITE CONTENT (extracted company information):
 `
     : "";
 
+  const kbContext = formatKnowledgeBaseContext(knowledgeBase);
+
   const discoveryPrompt = `You are a business analyst conducting deep discovery for a virtual assistant placement.
   
-INTAKE DATA:
+${kbContext ? `${kbContext}\n\n` : ""}INTAKE DATA:
 ${JSON.stringify({ ...intakeData, websiteContent: undefined }, null, 2)}
 
 ${websiteInfo}
@@ -760,7 +380,8 @@ Be specific and insightful. Look for what's NOT said but is clearly implied.`;
 async function classifyServiceType(
   openai: OpenAI,
   intakeData: any,
-  discovery: any
+  discovery: any,
+  knowledgeBase: any = null
 ) {
   const preClassificationChecks = `
 
@@ -808,11 +429,13 @@ PROJECTS ON DEMAND characteristics:
 
 `;
 
+  const kbContext = formatKnowledgeBaseContext(knowledgeBase);
+
   const classificationPrompt = `You are a service type classifier for a VA agency. Based on the client's needs, classify which service model fits best.
 
 ${preClassificationChecks}
 
-INTAKE DATA:
+${kbContext ? `${kbContext}\n\n` : ""}INTAKE DATA:
 ${JSON.stringify(intakeData, null, 2)}
 
 DISCOVERY INSIGHTS:
@@ -978,7 +601,8 @@ async function designRoleArchitecture(
   openai: OpenAI,
   intakeData: any,
   discovery: any,
-  serviceClassification: any
+  serviceClassification: any,
+  knowledgeBase: any = null
 ) {
   const recommendedService =
     serviceClassification.service_type_analysis.recommended_service;
@@ -1124,9 +748,11 @@ Respond with JSON:
 }`,
   };
 
+  const kbContext = formatKnowledgeBaseContext(knowledgeBase);
+
   const architecturePrompt = `You are a role design architect designing a ${recommendedService} engagement.
 
-INTAKE DATA:
+${kbContext ? `${kbContext}\n\n` : ""}INTAKE DATA:
 ${JSON.stringify(intakeData, null, 2)}
 
 DISCOVERY INSIGHTS:
@@ -1896,193 +1522,16 @@ function generateMonitoringPlan(validation: any) {
 
 //Main Function
 
-async function generateGetPresignedUrl(s3Key: string): Promise<string> {
-  const s3Client = new S3Client({
-    region: process.env.AWS_REGION!,
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    },
-  });
-
-  const command = new GetObjectCommand({
-    Bucket: process.env.AWS_BUCKET_NAME!,
-    Key: s3Key,
-  });
-
-  const presignedUrl = await getSignedUrl(s3Client, command, {
-    expiresIn: 300, // 5 minutes
-  });
-
-  return presignedUrl;
-}
-
-async function extractTextFromS3Url(url: string, filename: string, mimeType?: string, s3Key?: string): Promise<string> {
-  try {
-    // Debug: Log the incoming URL
-    console.log("extractTextFromS3Url called with:", {
-      url,
-      filename,
-      mimeType,
-      s3Key,
-      urlType: typeof url,
-      urlLength: url?.length,
-      urlStartsWith: url?.substring(0, 20),
-    });
-
-    // Validate URL format - must be HTTP/HTTPS
-    if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
-      console.error("Invalid URL format - not an HTTP/HTTPS URL:", url);
-      throw new Error(`Invalid URL format. Expected HTTP/HTTPS URL, got: ${url}`);
-    }
-
-    // If we have an S3 key, generate a GET presigned URL
-    let fetchUrl = url;
-    if (s3Key) {
-      try {
-        console.log("Generating GET presigned URL for S3 key:", s3Key);
-        fetchUrl = await generateGetPresignedUrl(s3Key);
-        console.log("Generated presigned URL (first 50 chars):", fetchUrl?.substring(0, 50));
-      } catch (presignError) {
-        console.warn("Failed to generate GET presigned URL, falling back to provided URL:", presignError);
-      }
-    }
-
-    console.log("Fetching from URL (first 100 chars):", fetchUrl?.substring(0, 100));
-
-    // Fetch file from S3 URL
-    const response = await fetch(fetchUrl, {
-      credentials: "omit",
-    });
-
-    if (!response.ok) {
-      console.error("Fetch failed:", {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
-      });
-      throw new Error(`Failed to fetch file from S3: ${response.status} ${response.statusText}`);
-    }
-
-    console.log("Fetch successful, converting to buffer...");
-    const arrayBuffer = await response.arrayBuffer();
-    console.log("ArrayBuffer size:", arrayBuffer.byteLength);
-    const buffer = Buffer.from(arrayBuffer);
-    console.log("Buffer created, size:", buffer.length, "type:", Buffer.isBuffer(buffer));
-    const extension = getFileExtension(filename);
-    console.log("File extension:", extension, "MIME type:", mimeType);
-
-    // Parse directly using the same logic as extractTextFromSop
-    // but without creating a File object (which doesn't exist in Node.js)
-
-    if (extension === ".pdf" || mimeType === "application/pdf") {
-      console.log("Extracting text from PDF using pdfjs-dist...");
-      const text = await extractTextFromPdfBuffer(buffer);
-      return normalizeWhitespace(text);
-    }
-
-    if (
-      extension === ".docx" ||
-      mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    ) {
-      const mammoth = await import("mammoth");
-      const result = await mammoth.extractRawText({ buffer });
-      if (!result || !result.value) {
-        throw new Error("DOCX parsing returned no text content");
-      }
-      return normalizeWhitespace(result.value);
-    }
-
-    if (extension === ".doc" || mimeType === "application/msword") {
-      const WordExtractor = (await import("word-extractor")).default;
-      const extractor = new WordExtractor();
-      const doc = await extractor.extract(buffer);
-      const text =
-        typeof doc?.getBody === "function" ? doc.getBody() : String(doc ?? "");
-      if (!text) {
-        throw new Error("DOC parsing returned no text content");
-      }
-      return normalizeWhitespace(text);
-    }
-
-    if (extension === ".txt" || mimeType === "text/plain") {
-      const text = buffer.toString("utf-8");
-      if (!text || text.trim().length === 0) {
-        throw new Error("Text file is empty");
-      }
-      return normalizeWhitespace(text);
-    }
-
-    throw new Error(`Unsupported file type: ${extension || mimeType}`);
-  } catch (error) {
-    console.error("SOP extraction error from S3:", error);
-    if (error instanceof Error) {
-      throw new Error(`Failed to parse the SOP file from S3: ${error.message}`);
-    }
-    throw new Error(
-      "Failed to parse the SOP file from S3. Please ensure it's a valid PDF, DOC, DOCX, or TXT document."
-    );
-  }
-}
 
 export async function POST(request: Request) {
   try {
-    const contentType = request.headers.get("content-type") || "";
-
-    let intake_json: any = null;
-    let sopFile: File | null = null;
-    let sopFileUrl: string | null = null;
-    let sopFileName: string | null = null;
-    let sopFileType: string | null = null;
-    let sopFileKey: string | null = null;
-
-    // Parse request
-    if (contentType.includes("multipart/form-data")) {
-      const formData = await request.formData();
-      const rawIntake = formData.get("intake_json");
-
-      if (typeof rawIntake !== "string") {
-        return NextResponse.json(
-          { error: "Missing intake_json payload." },
-          { status: 400 }
-        );
-      }
-
-      try {
-        intake_json = JSON.parse(rawIntake);
-        console.log("Intake Data: ", intake_json);
-      } catch (parseError) {
-        console.error("Failed to parse intake_json:", parseError);
-        return NextResponse.json(
-          { error: "Invalid intake_json payload." },
-          { status: 400 }
-        );
-      }
-
-      const potentialFile = formData.get("sopFile");
-      if (potentialFile instanceof File && potentialFile.size > 0) {
-        sopFile = potentialFile;
-      }
-    } else {
-      const body = await request.json();
-      intake_json = body?.intake_json;
-      sopFileUrl = body?.sopFileUrl || null;
-      sopFileName = body?.sopFileName || null;
-      sopFileType = body?.sopFileType || null;
-      sopFileKey = body?.sopFileKey || null;
-      console.log("Received JSON body.", intake_json);
-      console.log("Intake Data: ", intake_json);
-      if (sopFileUrl) {
-        console.log("SOP file URL provided:", sopFileUrl);
-        console.log("SOP file URL type:", typeof sopFileUrl);
-        console.log("SOP file URL length:", sopFileUrl?.length);
-        console.log("SOP file URL starts with:", sopFileUrl?.substring(0, 50));
-        console.log("Is valid HTTP/HTTPS URL?", sopFileUrl?.startsWith("http://") || sopFileUrl?.startsWith("https://"));
-        if (sopFileKey) {
-          console.log("SOP file S3 key provided:", sopFileKey);
-        }
-      }
-    }
+    // Parse request - frontend sends JSON with file URLs from S3
+    const body = await request.json();
+    const intake_json = body?.intake_json;
+    const sopFileUrl = body?.sopFileUrl || null;
+    const sopFileName = body?.sopFileName || null;
+    const sopFileType = body?.sopFileType || null;
+    const sopFileKey = body?.sopFileKey || null;
 
     const normalizedTasks = normalizeTasks(intake_json?.tasks_top5);
 
@@ -2113,6 +1562,179 @@ export async function POST(request: Request) {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
+    // Fetch Knowledge Base if user is authenticated
+    let knowledgeBase: any = null;
+    let knowledgeBaseVersion: number | null = null;
+    let knowledgeBaseSnapshot: any = null;
+    let organizationId: string | null = null;
+
+    try {
+      const cookieStore = await cookies();
+      const accessToken = cookieStore.get("accessToken")?.value;
+
+      if (accessToken) {
+        const decoded = await verifyAccessToken(accessToken);
+        if (decoded) {
+          const userOrg = await prisma.userOrganization.findFirst({
+            where: {
+              userId: decoded.userId,
+              organization: {
+                deactivatedAt: null,
+              },
+              deactivatedAt: null,
+            },
+            select: {
+              organizationId: true,
+            },
+            orderBy: {
+              createdAt: "asc",
+            },
+          });
+
+          if (userOrg) {
+            organizationId = userOrg.organizationId;
+            knowledgeBase = await prisma.organizationKnowledgeBase.findUnique({
+              where: { organizationId: userOrg.organizationId },
+              select: {
+                id: true,
+                version: true,
+                // Core Identity Tier 1
+                businessName: true,
+                website: true,
+                industry: true,
+                industryOther: true,
+                whatYouSell: true,
+                // Business Context Tier 1
+                monthlyRevenue: true,
+                teamSize: true,
+                primaryGoal: true,
+                biggestBottleNeck: true,
+                // Customer and Market Tier 2
+                idealCustomer: true,
+                topObjection: true,
+                coreOffer: true,
+                customerJourney: true,
+                // Operations and Tools Tier 2
+                toolStack: true,
+                primaryCRM: true,
+                defaultTimeZone: true,
+                bookingLink: true,
+                supportEmail: true,
+                // Brand & Voice Tier 2
+                brandVoiceStyle: true,
+                riskBoldness: true,
+                voiceExampleGood: true,
+                voiceExamplesAvoid: true,
+                contentLinks: true,
+                // Compliance Tier 2
+                isRegulated: true,
+                regulatedIndustry: true,
+                forbiddenWords: true,
+                disclaimers: true,
+                // HR Defaults
+                defaultWeeklyHours: true,
+                defaultManagementStyle: true,
+                defaultEnglishLevel: true,
+                // Proof & Credibility
+                proofAssets: true,
+                // Additional Context
+                pipeLineStages: true,
+                emailSignOff: true,
+                // Versioning
+                lastEditedBy: true,
+                lastEditedAt: true,
+                contributors: true,
+                // Enrichment tracking
+                lastEnrichedAt: true,
+                enrichmentVersion: true,
+                // Exclude large Json fields to save storage:
+                // aiInsights, extractedKnowledge, proofFiles, completenessBreakdown, aiQualityAnalysis
+              },
+            });
+
+            if (knowledgeBase) {
+              // Store the KB version number (OrganizationKnowledgeBase.version)
+              // This will be saved as SavedAnalysis.usedKnowledgeBaseVersion
+              knowledgeBaseVersion = knowledgeBase.version;
+              console.log(`[KB] Found KB for org ${organizationId}, version: ${knowledgeBaseVersion}`);
+              
+              // Create snapshot of KB state (hybrid: all non-Json fields)
+              // Excludes large Json fields (aiInsights, extractedKnowledge, proofFiles, etc.)
+              // to balance storage cost with audit trail completeness
+              knowledgeBaseSnapshot = {
+                version: knowledgeBase.version,
+                // Core Identity
+                businessName: knowledgeBase.businessName,
+                website: knowledgeBase.website,
+                industry: knowledgeBase.industry,
+                industryOther: knowledgeBase.industryOther,
+                whatYouSell: knowledgeBase.whatYouSell,
+                // Business Context
+                monthlyRevenue: knowledgeBase.monthlyRevenue,
+                teamSize: knowledgeBase.teamSize,
+                primaryGoal: knowledgeBase.primaryGoal,
+                biggestBottleNeck: knowledgeBase.biggestBottleNeck,
+                // Customer and Market
+                idealCustomer: knowledgeBase.idealCustomer,
+                topObjection: knowledgeBase.topObjection,
+                coreOffer: knowledgeBase.coreOffer,
+                customerJourney: knowledgeBase.customerJourney,
+                // Operations and Tools
+                toolStack: knowledgeBase.toolStack,
+                primaryCRM: knowledgeBase.primaryCRM,
+                defaultTimeZone: knowledgeBase.defaultTimeZone,
+                bookingLink: knowledgeBase.bookingLink,
+                supportEmail: knowledgeBase.supportEmail,
+                // Brand & Voice
+                brandVoiceStyle: knowledgeBase.brandVoiceStyle,
+                riskBoldness: knowledgeBase.riskBoldness,
+                voiceExampleGood: knowledgeBase.voiceExampleGood,
+                voiceExamplesAvoid: knowledgeBase.voiceExamplesAvoid,
+                contentLinks: knowledgeBase.contentLinks,
+                // Compliance
+                isRegulated: knowledgeBase.isRegulated,
+                regulatedIndustry: knowledgeBase.regulatedIndustry,
+                forbiddenWords: knowledgeBase.forbiddenWords,
+                disclaimers: knowledgeBase.disclaimers,
+                // HR Defaults
+                defaultWeeklyHours: knowledgeBase.defaultWeeklyHours,
+                defaultManagementStyle: knowledgeBase.defaultManagementStyle,
+                defaultEnglishLevel: knowledgeBase.defaultEnglishLevel,
+                // Proof & Credibility
+                proofAssets: knowledgeBase.proofAssets,
+                // Additional Context
+                pipeLineStages: knowledgeBase.pipeLineStages,
+                emailSignOff: knowledgeBase.emailSignOff,
+                // Versioning
+                lastEditedBy: knowledgeBase.lastEditedBy,
+                lastEditedAt: knowledgeBase.lastEditedAt,
+                contributors: knowledgeBase.contributors,
+                // Enrichment tracking
+                lastEnrichedAt: knowledgeBase.lastEnrichedAt,
+                enrichmentVersion: knowledgeBase.enrichmentVersion,
+                // Metadata
+                snapshotAt: new Date().toISOString(),
+                // Note: Large Json fields excluded (aiInsights, extractedKnowledge, proofFiles, etc.)
+                // to optimize storage while maintaining audit trail
+              };
+              console.log(`[KB] Created snapshot with ${Object.keys(knowledgeBaseSnapshot).length} fields`);
+            } else {
+              console.log(`[KB] No KB found for org ${organizationId}`);
+            }
+          } else {
+            console.log(`[KB] No userOrg found for user`);
+          }
+        } else {
+          console.log(`[KB] Token verification failed`);
+        }
+      } else {
+        console.log(`[KB] No access token found`);
+      }
+    } catch (kbError) {
+      // If KB fetch fails, continue without KB context (non-blocking)
+      console.warn("Failed to fetch knowledge base, continuing without KB context:", kbError);
+    }
+
     //Stage 1: Deep Discovery
 
     // Create a streaming response
@@ -2133,9 +1755,11 @@ export async function POST(request: Request) {
           ) {
             sendProgress("Extracting company information from website...");
             try {
-              websiteContent = await extractWebsiteContent(
-                augmentedIntakeJson.website
+              const extracted = await extractFromUrl(
+                augmentedIntakeJson.website,
+                true // useCache
               );
+              websiteContent = transformWebsiteContent(extracted);
               console.log("Extracted website content:", {
                 hasHero: !!websiteContent.hero,
                 hasAbout: !!websiteContent.about,
@@ -2151,93 +1775,28 @@ export async function POST(request: Request) {
 
           let sopText: string | null = null;
 
-          if (sopFile) {
+          if (sopFileUrl && sopFileName) {
             sendProgress("Processing SOP file...");
-            console.log(
-              "Processing SOP file:",
-              sopFile.name,
-              sopFile.type,
-              sopFile.size
-            );
-
-            const validation = validateSopFile(sopFile);
-            if (!validation.valid) {
-              console.error("SOP validation failed:", validation.error);
-              const errorMsg = JSON.stringify({
-                type: "error",
-                error: validation.error,
-              });
-              controller.enqueue(encoder.encode(errorMsg + "\n"));
-              controller.close();
-              return;
-            }
-
             try {
-              console.log("Extracting text from SOP...");
-              sopText = await extractTextFromSop(sopFile);
-              console.log(
-                "Successfully extracted text, length:",
-                sopText?.length
+              const extracted = await extractFromFile(
+                sopFileUrl,
+                sopFileName,
+                sopFileType || undefined,
+                sopFileKey || undefined,
+                true // useCache
               );
+              
+              // Use cleanedText if available (raw extracted text), otherwise use summary
+              sopText = extracted.cleanedText || extracted.summary || "";
+              
+              if (!sopText || sopText.trim().length === 0) {
+                throw new Error("SOP file extraction returned no content");
+              }
             } catch (extractionError) {
               console.error("SOP extraction failed:", extractionError);
               const errorMsg = JSON.stringify({
                 type: "error",
                 error: "Failed to parse the SOP file.",
-                details:
-                  extractionError instanceof Error
-                    ? extractionError.message
-                    : "Unknown error",
-              });
-              controller.enqueue(encoder.encode(errorMsg + "\n"));
-              controller.close();
-              return;
-            }
-          } else if (sopFileUrl && sopFileName) {
-            sendProgress("Processing SOP file...");
-            console.log(
-              "Processing SOP file from S3:",
-              {
-                fileName: sopFileName,
-                fileType: sopFileType,
-                fileUrl: sopFileUrl,
-                fileUrlType: typeof sopFileUrl,
-                fileUrlLength: sopFileUrl?.length,
-                fileUrlPreview: sopFileUrl?.substring(0, 100),
-                s3Key: sopFileKey,
-              }
-            );
-
-            // Validate file extension and type
-            const extension = getFileExtension(sopFileName);
-            const extensionAllowed = extension
-              ? ALLOWED_SOP_EXTENSIONS.has(extension)
-              : false;
-            const mimeAllowed = sopFileType ? ALLOWED_SOP_MIME_TYPES.has(sopFileType) : false;
-
-            if (!extensionAllowed && !mimeAllowed) {
-              console.error("SOP validation failed: unsupported file type");
-              const errorMsg = JSON.stringify({
-                type: "error",
-                error: "Unsupported SOP file type. Allowed types: PDF, DOC, DOCX, TXT.",
-              });
-              controller.enqueue(encoder.encode(errorMsg + "\n"));
-              controller.close();
-              return;
-            }
-
-            try {
-              console.log("Extracting text from SOP from S3...");
-              sopText = await extractTextFromS3Url(sopFileUrl, sopFileName, sopFileType || undefined, sopFileKey || undefined);
-              console.log(
-                "Successfully extracted text, length:",
-                sopText?.length
-              );
-            } catch (extractionError) {
-              console.error("SOP extraction from S3 failed:", extractionError);
-              const errorMsg = JSON.stringify({
-                type: "error",
-                error: "Failed to parse the SOP file from S3.",
                 details:
                   extractionError instanceof Error
                     ? extractionError.message
@@ -2256,7 +1815,8 @@ export async function POST(request: Request) {
               ...augmentedIntakeJson,
               websiteContent,
             },
-            sopText
+            sopText,
+            knowledgeBase
           );
 
           sendProgress("Stage 1.5: Classifying service type...");
@@ -2266,7 +1826,8 @@ export async function POST(request: Request) {
               ...augmentedIntakeJson,
               websiteContent,
             },
-            discovery
+            discovery,
+            knowledgeBase
           );
 
           const recommendedService =
@@ -2281,7 +1842,8 @@ export async function POST(request: Request) {
               websiteContent,
             },
             discovery,
-            serviceClassification
+            serviceClassification,
+            knowledgeBase
           );
 
           sendProgress("Stage 3: Generating detailed specifications...");
@@ -2406,9 +1968,31 @@ export async function POST(request: Request) {
 
           const cleanedResponse = cleanTeamSupportAreas(response);
 
+          const extractedInsights = extractInsights("JOB_DESCRIPTION", cleanedResponse);
+
+          const finalResponse = {
+            ...cleanedResponse,
+            knowledgeBase: {
+              used: !!knowledgeBase,
+              version: knowledgeBaseVersion,
+              snapshot: knowledgeBaseSnapshot,
+              organizationId: organizationId,
+            },
+            extractedInsights: extractedInsights.length > 0 ? extractedInsights : undefined,
+          };
+
+          // Debug logging for KB metadata
+          console.log(`[KB Response] Sending KB metadata:`, {
+            hasKB: !!knowledgeBase,
+            version: knowledgeBaseVersion,
+            hasSnapshot: !!knowledgeBaseSnapshot,
+            organizationId: organizationId,
+            insightsCount: extractedInsights.length,
+          });
+
           const final = JSON.stringify({
             type: "result",
-            data: cleanedResponse,
+            data: finalResponse,
           });
           controller.enqueue(encoder.encode(final + "\n"));
           controller.close();
@@ -2443,78 +2027,6 @@ export async function POST(request: Request) {
         details: formattedError.details,
         userMessage: formattedError.userMessage,
       },
-      { status: 500 }
-    );
-  }
-}
-
-//Refinement Function
-export async function PATCH(request: Request) {
-  try {
-    const body = await request.json();
-    const { package_id, feedback, refinement_areas, service_override } = body;
-
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-
-    const refinementPrompt = `The client has reviewed the service design and provided feedback.
-
-ORIGINAL PACKAGE:
-${JSON.stringify(body.original_package, null, 2)}
-
-CLIENT FEEDBACK:
-${feedback}
-
-AREAS TO REFINE:
-${JSON.stringify(refinement_areas, null, 2)}
-
-${
-  service_override
-    ? `CLIENT REQUESTS SERVICE TYPE OVERRIDE TO: ${service_override}`
-    : ""
-}
-
-Generate an updated version addressing their concerns. Respond with the same JSON structure as the original package, but with refinements in the specified areas.
-
-Focus on:
-1. Addressing specific feedback points
-2. Maintaining consistency with unchanged sections
-3. Providing rationale for changes made
-${
-  service_override
-    ? "4. Redesigning for the requested service type while noting any concerns"
-    : ""
-}`;
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are refining a VA service package based on client feedback.",
-        },
-        { role: "user", content: refinementPrompt },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.5,
-      max_tokens: 3000,
-    });
-
-    const refinedPackage = JSON.parse(
-      completion.choices[0].message.content || "{}"
-    );
-
-    return NextResponse.json({
-      refined_package: refinedPackage,
-      changes_summary: "Package refined based on client feedback",
-      iteration: (body.iteration || 0) + 1,
-    });
-  } catch (error) {
-    console.error("Refinement error:", error);
-    return NextResponse.json(
-      { error: "Failed to refine package" },
       { status: 500 }
     );
   }
