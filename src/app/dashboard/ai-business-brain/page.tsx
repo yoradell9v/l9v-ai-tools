@@ -1,715 +1,595 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import BaseIntakeForm from "@/components/forms/BaseIntakeForm";
-import { businessBrainFormConfig } from "@/components/forms/configs/businessBrainFormConfig";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useUser } from "@/context/UserContext";
 import {
-  Brain,
-  Plus,
-  Calendar,
-  Building2,
-  User,
-  CheckCircle2,
-  ArrowRight,
-  Search,
-  Trash,
-  Loader2,
+    Brain,
+    Send,
+    History,
+    Plus,
+    Bot,
+    FileText,
+    Target,
+    Palette,
+    Mail,
+    Sparkles,
+    Briefcase,
+    ArrowRight,
+    Lightbulb,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogHeader,
-  DialogDescription
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
 } from "@/components/ui/dialog";
-import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
-type BusinessBrain = {
-  id: string;
-  businessName: string;
-  createdAt: string;
-  updatedAt: string;
-  completionScore: number | null;
-  organization: {
+type ChatMessage = {
     id: string;
-    name: string;
-    slug: string;
-  };
-  createdBy: {
-    id: string;
-    firstname: string;
-    lastname: string;
-    email: string;
-  };
-  hasCards: boolean;
-  cardsCount: number;
-  conversationsCount: number;
+    role: "user" | "assistant";
+    content: string;
+    timestamp: Date;
+    citations?: any[];
+    confidence?: number;
 };
 
-type OrganizationStat = {
-  organization: {
+type OrganizationKnowledgeBase = {
     id: string;
-    name: string;
-    slug: string;
-  };
-  count: number;
+    organizationId: string;
+    businessName: string | null;
+    [key: string]: any;
 };
 
-export default function BusinessBrainList() {
-  const { user } = useUser();
-  const router = useRouter();
-  const [businessBrains, setBusinessBrains] = useState<BusinessBrain[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
-  const [activeTab, setActiveTab] = useState<string>("all");
-  const [currentUserOrgIds, setCurrentUserOrgIds] = useState<string[]>([]);
-  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<BusinessBrain | null>(null);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [organizationStats, setOrganizationStats] = useState<OrganizationStat[]>([]);
+const slashCommands = [
+    {
+        command: "/calibrate-voice",
+        description: "Generates brand voice guidelines",
+        icon: Palette,
+    },
+    {
+        command: "/ad-kit",
+        description: "Creates 10 hooks, 6 angles, 5 ad scripts",
+        icon: Target,
+    },
+    {
+        command: "/email-kit",
+        description: "Generates 5 email templates with subject lines",
+        icon: Mail,
+    },
+    {
+        command: "/offers-map",
+        description: "Lists all offers with objections/rebuttals",
+        icon: Briefcase,
+    },
+    {
+        command: "/summarize-sops",
+        description: "Creates 1-page SOP summary",
+        icon: FileText,
+    },
+    {
+        command: "/content-brief",
+        description: "Generates creative brief for content",
+        icon: Sparkles,
+    },
+];
 
-  const effectiveGlobalRole = user?.globalRole || currentUserRole;
-  const isSuperadmin = effectiveGlobalRole === "SUPERADMIN";
+export default function AIBusinessBrainPage() {
+    const { user } = useUser();
+    const router = useRouter();
+    const [knowledgeBase, setKnowledgeBase] = useState<OrganizationKnowledgeBase | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+    const [inputValue, setInputValue] = useState("");
+    const [isSending, setIsSending] = useState(false);
+    const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+    const [showSlashCommands, setShowSlashCommands] = useState(false);
+    const [slashCommandFilter, setSlashCommandFilter] = useState("");
+    const [isConversationSidebarOpen, setIsConversationSidebarOpen] = useState(false);
+    const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    const loadBusinessBrains = async () => {
-      if (!user) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const response = await fetch("/api/business-brain/list");
-        const result = await response.json();
-
-        if (result.success) {
-          setBusinessBrains(result.businessBrains || []);
-          setCurrentUserOrgIds(result.currentUserOrganizationIds || []);
-          if (result.currentUserGlobalRole) {
-            setCurrentUserRole(result.currentUserGlobalRole);
-          }
-          if (result.organizationStats) {
-            setOrganizationStats(result.organizationStats);
-          }
-          if (
-            (user?.globalRole === "SUPERADMIN" ||
-              result.currentUserGlobalRole === "SUPERADMIN") &&
-            result.currentUserOrganizationIds?.length &&
-            activeTab === "all"
-          ) {
-            setActiveTab(result.currentUserOrganizationIds[0]);
-          }
-        } else {
-          const message = result.error || "Failed to load business brains";
-          setError(message);
-          toast.error(message);
-        }
-      } catch (error) {
-        console.error("Error loading business brains:", error);
-        setError("Failed to load business brains");
-        toast.error("Failed to load business brains");
-      } finally {
-        setIsLoading(false);
-      }
+    const handleCompleteKnowledgeBase = () => {
+        router.push("/dashboard/organization-profile");
     };
 
-    loadBusinessBrains();
-  }, [user]);
+    // Fetch knowledge base on mount
+    useEffect(() => {
+        const fetchKnowledgeBase = async () => {
+            if (!user) {
+                setIsLoading(false);
+                return;
+            }
 
-  // Group brains by organization
-  const brainsByOrganization = businessBrains.reduce((acc, brain) => {
-    const orgId = brain.organization.id;
-    if (!acc[orgId]) {
-      acc[orgId] = {
-        organization: brain.organization,
-        brains: [],
-      };
-    }
-    acc[orgId].brains.push(brain);
-    return acc;
-  }, {} as Record<string, { organization: BusinessBrain["organization"]; brains: BusinessBrain[] }>);
+            try {
+                const response = await fetch("/api/organization-knowledge-base");
+                const result = await response.json();
 
-  // Get unique organizations
-  const organizations = Object.values(brainsByOrganization).map((group) => group.organization);
+                if (result.success) {
+                    if (result.organizationProfile) {
+                        setKnowledgeBase(result.organizationProfile);
+                    } else {
+                        // No KB exists - will show onboarding form
+                        setKnowledgeBase(null);
+                    }
+                }
+            } catch (error) {
+                console.error("Error fetching knowledge base:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
 
-  // Filter brains based on active tab and search query
-  const getFilteredBrains = () => {
-    let brainsToFilter: BusinessBrain[] = [];
+        fetchKnowledgeBase();
+    }, [user]);
 
-    if (activeTab === "all") {
-      brainsToFilter = businessBrains;
-    } else {
-      const orgGroup = brainsByOrganization[activeTab];
-      brainsToFilter = orgGroup ? orgGroup.brains : [];
-    }
+    // Scroll to bottom when messages change
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [chatMessages]);
 
-    return brainsToFilter.filter(
-      (brain) =>
-        brain.businessName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        brain.organization.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const filteredSlashCommands = slashCommands.filter((cmd) =>
+        cmd.command.toLowerCase().includes(slashCommandFilter.toLowerCase()) ||
+        cmd.description.toLowerCase().includes(slashCommandFilter.toLowerCase())
     );
-  };
 
-  const filteredBrains = getFilteredBrains();
+    const getCurrentGreeting = () => {
+        const hour = new Date().getHours();
+        if (hour < 12) return "Good morning!";
+        if (hour < 18) return "Good afternoon!";
+        return "Good evening!";
+    };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
+    const handleSendMessage = async () => {
+        if (!inputValue.trim() || isSending || !knowledgeBase) return;
 
-  const getCompletionColor = (score: number | null) => {
-    if (!score) return "text-gray-400";
-    if (score >= 80) return "text-green-500";
-    if (score >= 60) return "text-amber-500";
-    return "text-red-500";
-  };
+        const userMessage: ChatMessage = {
+            id: `user-${Date.now()}`,
+            role: "user",
+            content: inputValue,
+            timestamp: new Date(),
+        };
 
-  const getCompletionBg = (score: number | null) => {
-    if (!score) return "bg-gray-100 dark:bg-gray-800";
-    if (score >= 80) return "bg-green-100 dark:bg-green-900/20";
-    if (score >= 60) return "bg-amber-100 dark:bg-amber-900/20";
-    return "bg-red-100 dark:bg-red-900/20";
-  };
+        setChatMessages((prev) => [...prev, userMessage]);
+        setInputValue("");
+        setIsSending(true);
+        setShowSlashCommands(false);
 
-  const handleDeleteClick = (
-    e: React.MouseEvent,
-    brain: BusinessBrain
-  ) => {
-    e.stopPropagation();
-    setDeleteTarget(brain);
-    setDeleteError(null);
-    setIsDeleteModalOpen(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!deleteTarget) return;
-    setIsDeleting(true);
-    setDeleteError(null);
-    try {
-      const response = await fetch(
-        `/api/business-brain/${deleteTarget.id}`,
-        {
-          method: "DELETE",
-        }
-      );
-
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || "Failed to delete business brain");
-      }
-
-      setBusinessBrains((prev) =>
-        prev.filter((brain) => brain.id !== deleteTarget.id)
-      );
-      setIsDeleteModalOpen(false);
-      setDeleteTarget(null);
-      toast.success("Business brain deleted");
-    } catch (err) {
-      console.error("Error deleting business brain:", err);
-      setDeleteError(
-        err instanceof Error
-          ? err.message
-          : "Failed to delete business brain"
-      );
-      toast.error(
-        err instanceof Error ? err.message : "Failed to delete business brain"
-      );
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="flex items-center gap-2 p-4 border-b">
-        <SidebarTrigger />
-      </div>
-      <div className="min-h-screen">
-        <div className="p-6 space-y-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h1 className="text-2xl font-semibold">AI Business Brain</h1>
-                <p className="text-sm text-muted-foreground">
-                  Manage and access your business intelligence profiles
-                </p>
-              </div>
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
-                <div className="relative sm:w-72">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by business or organization..."
-                    className="pl-10"
-                  />
-                </div>
-                <Button onClick={() => setIsModalOpen(true)} className="sm:self-start">
-                  <Plus className="h-4 w-4" />
-                  <span>Setup New Business Brain</span>
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {isSuperadmin && (
-            <Card className="border-dashed">
-              <CardContent className="text-sm text-muted-foreground">
-                Only members of an organization can access its business profiles and conversation history. Cross-organization access is restricted for privacy.
-              </CardContent>
-            </Card>
-          )}
-
-          {isSuperadmin && organizationStats.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold">Organization totals</CardTitle>
-                <CardDescription>Business brains per org</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {organizationStats.map((stat) => (
-                  <Badge key={stat.organization.id} variant="secondary" className="gap-2">
-                    <span className="font-medium">{stat.organization.name}</span>
-                    <span className="text-muted-foreground">
-                      {stat.count} brain{stat.count === 1 ? "" : "s"}
-                    </span>
-                  </Badge>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-
-          {isSuperadmin && organizations.length > 0 && (
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="flex overflow-x-auto">
-                <TabsTrigger value="all">All ({businessBrains.length})</TabsTrigger>
-                {organizations.map((org) => {
-                  const count = brainsByOrganization[org.id]?.brains.length ?? 0;
-                  const isUsersOrg = currentUserOrgIds.includes(org.id);
-                  return (
-                    <TabsTrigger key={org.id} value={org.id} className="flex items-center gap-2">
-                      <Building2 className="h-3.5 w-3.5" />
-                      <span className="truncate">{org.name}</span>
-                      <span className="text-xs text-muted-foreground">({count})</span>
-                      {isUsersOrg && <Badge variant="secondary" className="text-[10px] px-1.5">Yours</Badge>}
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
-            </Tabs>
-          )}
-
-          {isProcessing && (
-            <Card>
-              <CardContent className="flex items-center gap-3">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <p className="text-sm font-medium">
-                  {statusMessage || "Processing your business brain..."}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {isLoading && (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            </div>
-          )}
-
-          {error && !isLoading && (
-            <Card className="border-destructive/30 bg-destructive/10">
-              <CardContent className="py-4">
-                <p className="text-sm text-destructive">{error}</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {!isLoading && !error && filteredBrains.length === 0 && (
-            <Card className="text-center">
-              <CardContent className="py-12 space-y-4">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                  <Brain className="h-6 w-6 text-primary" />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-lg font-semibold">
-                    {searchQuery
-                      ? "No results found"
-                      : activeTab === "all"
-                        ? "No Business Brains Yet"
-                        : `No Business Brains in ${organizations.find((o) => o.id === activeTab)?.name || "this organization"}`}
-                  </h3>
-                  <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                    {searchQuery
-                      ? "Try adjusting your search query"
-                      : activeTab === "all"
-                        ? "Create your first AI Business Brain to get started"
-                        : "Create a new business brain for this organization"}
-                  </p>
-                </div>
-                {!searchQuery && (
-                  <Button onClick={() => setIsModalOpen(true)} className="inline-flex items-center gap-2">
-                    <Plus className="h-4 w-4" />
-                    {activeTab === "all" ? "Create Your First Brain" : "Create New Brain"}
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {!isLoading && !error && filteredBrains.length > 0 && (
-            <TooltipProvider>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredBrains.map((brain) => {
-                  const isUsersOrg = currentUserOrgIds.includes(brain.organization.id);
-                  const canNavigate = !isSuperadmin || isUsersOrg;
-                  return (
-                    <Card
-                      key={brain.id}
-                      className={`hover:shadow-sm transition ${canNavigate ? "cursor-pointer" : "cursor-not-allowed opacity-90"}`}
-                      onClick={() => {
-                        if (canNavigate) {
-                          router.push(`/dashboard/ai-business-brain/${brain.id}`);
-                        }
-                      }}
-                    >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="space-y-1">
-                            <CardTitle className="text-base line-clamp-1">{brain.businessName}</CardTitle>
-                            <CardDescription className="flex items-center gap-2">
-                              <Building2 className="h-4 w-4" />
-                              <span className="truncate">{brain.organization.name}</span>
-                            </CardDescription>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            {brain.createdBy.id === user?.id && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={(e) => handleDeleteClick(e, brain)}
-                                className="text-destructive hover:text-destructive"
-                                aria-label="Delete business brain"
-                              >
-                                <Trash className="h-4 w-4" />
-                              </Button>
-                            )}
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div
-                                  className={`flex-shrink-0 w-12 h-12 rounded-lg ${getCompletionBg(
-                                    brain.completionScore
-                                  )} flex items-center justify-center`}
-                                >
-                                  <span
-                                    className={`text-sm font-bold ${getCompletionColor(
-                                      brain.completionScore
-                                    )}`}
-                                  >
-                                    {brain.completionScore ?? "—"}%
-                                  </span>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom" align="center">
-                                Intake form completion percentage
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <User className="h-4 w-4" />
-                          <span>
-                            {brain.createdBy.firstname} {brain.createdBy.lastname}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Calendar className="h-4 w-4" />
-                          <span>Created {formatDate(brain.createdAt)}</span>
-                        </div>
-                        <div className="flex items-center justify-between pt-3 border-t">
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            {brain.hasCards && (
-                              <div className="flex items-center gap-1">
-                                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                <span>{brain.cardsCount} cards</span>
-                              </div>
-                            )}
-                            {brain.conversationsCount > 0 && (
-                              <div className="flex items-center gap-1">
-                                <Brain className="h-4 w-4" />
-                                <span>{brain.conversationsCount} chats</span>
-                              </div>
-                            )}
-                          </div>
-                          <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </TooltipProvider>
-          )}
-        </div>
-      </div>
-
-      {user && (
-        <Dialog open={isModalOpen} onOpenChange={(open) => !isProcessing && setIsModalOpen(open)}>
-          <DialogContent className="w-[min(900px,95vw)] sm:max-w-3xl max-h-[90vh] overflow-hidden p-0 sm:p-2">
-            <DialogHeader className="px-4 pt-4">
-              <DialogTitle >Setup Business Brain</DialogTitle>
-              <DialogDescription>
-                Fill out the details below to setup your business profile.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="px-4 pb-4 pt-4">
-              <BaseIntakeForm
-                userId={user.id}
-                config={businessBrainFormConfig}
-                hideTitleAndDescription={true}
-                onClose={() => {
-                  if (!isProcessing) {
-                    setIsModalOpen(false);
-                  }
-                }}
-                onSuccess={async (data) => {
-                  setIsModalOpen(false);
-                  setIsProcessing(true);
-
-                  if (data.apiResult?.businessBrainId) {
-                    const businessBrainId = data.apiResult.businessBrainId;
-
-                    try {
-                      setStatusMessage("Creating your business intelligence cards...");
-                      const cardsResponse = await fetch(
-                        `/api/business-brain/generate-cards?profileId=${businessBrainId}`,
-                        {
-                          method: "POST",
-                        }
-                      );
-
-                      if (!cardsResponse.ok) {
-                        const errorData = await cardsResponse.json();
-                        throw new Error(errorData.error || "Failed to generate cards");
-                      }
-
-                      const cardsResult = await cardsResponse.json();
-                      if (!cardsResult.success) {
-                        throw new Error("Failed to generate cards");
-                      }
-
-                      setStatusMessage("Synthesizing knowledge base...");
-                      try {
-                        const synthesizeResponse = await fetch(
-                          `/api/business-brain/${businessBrainId}/synthesize-knowledge`,
-                          {
-                            method: "POST",
-                          }
-                        );
-
-                        if (!synthesizeResponse.ok) {
-                          const errorData = await synthesizeResponse.json();
-                          console.warn(
-                            "Failed to synthesize knowledge base:",
-                            errorData.error
-                          );
-                        }
-                      } catch (synthesizeError) {
-                        console.warn(
-                          "Error synthesizing knowledge base:",
-                          synthesizeError
-                        );
-                      }
-
-                      setStatusMessage("Calculating completion score...");
-                      try {
-                        const completionResponse = await fetch(
-                          "/api/business-brain/calculate-completion",
-                          {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({
-                              businessBrainId,
-                            }),
-                          }
-                        );
-
-                        if (!completionResponse.ok) {
-                          console.warn("Failed to calculate completion");
-                        }
-                      } catch (completionError) {
-                        console.warn("Error calculating completion:", completionError);
-                      }
-
-                      setIsProcessing(false);
-                      toast.success("Business brain created");
-                      router.push(`/dashboard/ai-business-brain/${businessBrainId}`);
-                    } catch (error) {
-                      console.error("Error processing business brain:", error);
-                      setIsProcessing(false);
-                      const message =
-                        error instanceof Error
-                          ? error.message
-                          : "Failed to process business brain";
-                      setError(message);
-                      toast.error(message);
+        try {
+            let conversationId = currentConversationId;
+            if (!conversationId) {
+                // Create conversation using new endpoint
+                const convResponse = await fetch(
+                    `/api/organization-knowledge-base/conversation`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            title: userMessage.content.substring(0, 50),
+                        }),
                     }
-                  } else {
-                    setIsProcessing(false);
-                    const message = "Business brain ID not found in response";
-                    setError(message);
-                    toast.error(message);
-                  }
-                }}
-                onProgress={(stage) => {
-                  setStatusMessage(stage || "Uploading files...");
-                }}
-                onSubmit={async (formData, uploadedFileUrls) => {
-                  setStatusMessage("Setting up your business brain...");
+                );
 
-                  // Send JSON payload with S3 URLs instead of FormData with files
-                  const payload = {
-                    intake_json: JSON.stringify(formData),
-                    file_urls: JSON.stringify(uploadedFileUrls),
-                  };
+                if (!convResponse.ok) {
+                    throw new Error("Failed to create conversation");
+                }
 
-                  const response = await fetch("/api/business-brain/setup", {
+                const convResult = await convResponse.json();
+                conversationId = convResult.conversation.id;
+                setCurrentConversationId(conversationId);
+            }
+
+            // Send message using new endpoint
+            const messageResponse = await fetch(
+                `/api/organization-knowledge-base/conversation/${conversationId}/message`,
+                {
                     method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(payload),
-                  });
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        content: userMessage.content,
+                    }),
+                }
+            );
 
-                  if (!response.ok) {
-                    let message =
-                      "Unable to save your business profile. Please try again.";
-                    let userFriendlyMessage = message;
-                    try {
-                      const errorPayload = await response.json();
-                      if (errorPayload?.error) {
-                        message = errorPayload.error;
-                        if (
-                          message.includes("must not be null") ||
-                          message.includes("undefined")
-                        ) {
-                          userFriendlyMessage =
-                            "There was an issue saving your profile. Please try again. If the problem persists, contact support.";
-                        } else {
-                          userFriendlyMessage = message;
-                        }
-                      }
-                    } catch {
-                      // Ignore JSON parse errors
-                    }
-                    const error = new Error(message);
-                    (error as any).userFriendlyMessage = userFriendlyMessage;
-                    throw error;
-                  }
+            if (!messageResponse.ok) {
+                const errorData = await messageResponse.json();
+                throw new Error(errorData.error || "Failed to send message");
+            }
 
-                  const result = await response.json();
+            const messageResult = await messageResponse.json();
 
-                  if (!result.success) {
-                    throw new Error(result.error || "Failed to setup business brain");
-                  }
+            const assistantMessage: ChatMessage = {
+                id: messageResult.assistantMessage.id,
+                role: "assistant",
+                content: messageResult.assistantMessage.content,
+                timestamp: new Date(),
+                citations: messageResult.assistantMessage.citations,
+                confidence: messageResult.assistantMessage.confidence,
+            };
 
-                  return {
-                    businessBrainId: result.businessBrainId,
-                    businessBrain: result.businessBrain,
-                  };
-                }}
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+            setChatMessages((prev) => [...prev, assistantMessage]);
+        } catch (error) {
+            console.error("Error sending message:", error);
+            let errorContent = "Sorry, I encountered an error while processing your message.";
 
-      <AlertDialog open={isDeleteModalOpen} onOpenChange={(open) => {
-        if (!isDeleting) {
-          setIsDeleteModalOpen(open);
-          if (!open) {
-            setDeleteTarget(null);
-            setDeleteError(null);
-          }
+            if (error instanceof Error) {
+                errorContent = `Sorry, I encountered an error: ${error.message}`;
+            }
+
+            const errorMessage: ChatMessage = {
+                id: `error-${Date.now()}`,
+                role: "assistant",
+                content: errorContent,
+                timestamp: new Date(),
+            };
+            setChatMessages((prev) => [...prev, errorMessage]);
+        } finally {
+            setIsSending(false);
         }
-      }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this Business Brain?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. You can only delete business brains you created.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {deleteError && (
-            <p className="text-sm text-destructive">{deleteError}</p>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                "Delete"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
+    };
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="flex flex-col items-center">
+                    <svg
+                        className="animate-spin h-8 w-8 mb-3 text-[var(--accent)]"
+                        viewBox="0 0 24 24"
+                    >
+                        <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                            fill="none"
+                        />
+                        <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                    </svg>
+                    <p className="text-sm text-[var(--text-secondary)]">Loading...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Show onboarding form if KB doesn't exist
+    if (!knowledgeBase) {
+        return (
+            <>
+                <div className="flex items-center gap-2 p-4 border-b">
+                    <SidebarTrigger />
+                </div>
+                <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] p-6">
+                    <div className="max-w-2xl w-full space-y-6">
+                        <div className="text-center space-y-4">
+                            <div className="w-16 h-16 rounded-lg bg-[var(--accent)]/20 flex items-center justify-center mx-auto">
+                                <Brain size={48} className="text-[var(--accent)]" />
+                            </div>
+                            <h1 className="text-2xl font-semibold text-[var(--text-primary)]">
+                                Setup Your AI Business Brain
+                            </h1>
+                            <p className="text-sm text-[var(--text-secondary)] max-w-md mx-auto">
+                                Complete your organization knowledge base to unlock the AI Business Brain.
+                                This will power all your AI tools and conversations.
+                            </p>
+                        </div>
+
+                        <Dialog open={isOnboardingModalOpen} onOpenChange={setIsOnboardingModalOpen}>
+                            <DialogContent className="sm:max-w-[550px]">
+                                <DialogHeader>
+                                    <DialogTitle className="flex items-center gap-2 text-lg">
+                                        <Brain className="h-5 w-5 text-[color:var(--accent-strong)]" />
+                                        Complete Your Organization Knowledge Base
+                                    </DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-5">
+                                    <div className="bg-gradient-to-r from-[color:var(--accent-strong)]/10 to-[color:var(--accent-strong)]/5 border border-[color:var(--accent-strong)]/20 rounded-lg p-4">
+                                        <div className="flex items-start gap-3">
+                                            <Lightbulb className="h-5 w-5 text-[color:var(--accent-strong)] mt-0.5 flex-shrink-0" />
+                                            <div className="flex-1">
+                                                <p className="text-sm font-semibold text-[color:var(--text-primary)] mb-1">
+                                                    Your Knowledge Base powers everything
+                                                </p>
+                                                <p className="text-xs text-[color:var(--text-secondary)] leading-relaxed">
+                                                    This single source of truth feeds all your tools—Job Descriptions, SOPs, Business Brain conversations, and more. The more complete it is, the smarter your results become.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-muted/50 p-4 rounded-lg space-y-3 border border-[color:var(--border-color)]">
+                                        <p className="text-sm font-semibold text-[color:var(--text-primary)]">Why complete your Knowledge Base?</p>
+                                        <ul className="text-sm text-[color:var(--text-secondary)] space-y-2 list-none">
+                                            <li className="flex items-start gap-2">
+                                                <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
+                                                <span><strong>Auto-fill forms</strong> across all tools—save hours of repetitive data entry</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
+                                                <span><strong>Smarter AI responses</strong> in Business Brain conversations with full context</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
+                                                <span><strong>Personalized outputs</strong> for Job Descriptions and SOPs that match your brand</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
+                                                <span><strong>Consistent messaging</strong> across your entire organization</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
+                                                <span><strong>Continuous learning</strong>—the system gets smarter as you use it</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+
+                                    <div className="flex gap-2 pt-2">
+                                        <Button
+                                            onClick={handleCompleteKnowledgeBase}
+                                            className="flex-1 bg-[color:var(--accent-strong)] hover:bg-[color:var(--accent-strong)]/90"
+                                        >
+                                            <Brain className="h-4 w-4 mr-2" />
+                                            Complete Knowledge Base
+                                            <ArrowRight className="h-4 w-4 ml-2" />
+                                        </Button>
+                                        <Button variant="outline" onClick={() => setIsOnboardingModalOpen(false)}>
+                                            Maybe Later
+                                        </Button>
+                                    </div>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+
+                        <div className="flex justify-center">
+                            <Button onClick={() => setIsOnboardingModalOpen(true)} size="lg" className="gap-2">
+                                <Plus size={20} />
+                                <span>Get Started</span>
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </>
+        );
+    }
+
+    // Show chat interface if KB exists
+    return (
+        <div className="flex flex-col h-screen">
+            <div className="flex items-center gap-2 p-4 border-b flex-shrink-0">
+                <SidebarTrigger />
+                <div className="flex-1 flex items-center justify-between">
+                    <div>
+                        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
+                            AI Business Brain
+                        </h1>
+                        {knowledgeBase.businessName && (
+                            <p className="text-sm text-[var(--text-secondary)]">
+                                {knowledgeBase.businessName}
+                            </p>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setIsConversationSidebarOpen((prev) => !prev)}
+                            title="Conversation History"
+                        >
+                            <History size={18} className="text-[var(--accent-strong)]" />
+                        </Button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                {/* Chat Area */}
+                <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                    {/* Messages */}
+                    <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 min-h-0">
+                        {chatMessages.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-center">
+                                <div className="w-16 h-16 rounded-lg bg-[var(--accent)]/20 flex items-center justify-center mb-4">
+                                    <Bot size={48} className="text-[var(--accent)]" />
+                                </div>
+                                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
+                                    {getCurrentGreeting()}
+                                </h3>
+                                <p className="text-sm text-[var(--text-secondary)] mb-6 max-w-md">
+                                    Ask me anything about your business, or use a slash command to get started.
+                                </p>
+                                <div className="grid grid-cols-2 gap-2 max-w-md">
+                                    {slashCommands.slice(0, 4).map((cmd) => (
+                                        <button
+                                            key={cmd.command}
+                                            onClick={() => {
+                                                setInputValue(cmd.command);
+                                                setShowSlashCommands(false);
+                                            }}
+                                            className="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-left transition-colors"
+                                        >
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <cmd.icon size={16} className="text-[var(--primary)]" />
+                                                <span className="text-xs font-medium text-[var(--text-primary)]">
+                                                    {cmd.command}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-[var(--text-secondary)]">
+                                                {cmd.description}
+                                            </p>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {chatMessages.map((message) => (
+                                    <div
+                                        key={message.id}
+                                        className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                                    >
+                                        <div
+                                            className={`max-w-[80%] rounded-lg ${message.role === "user"
+                                                ? "bg-[var(--primary)] text-white px-4 py-2"
+                                                : "bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-primary)] p-4"
+                                                }`}
+                                        >
+                                            <div className={`prose prose-sm max-w-none break-words ${message.role === "user" ? "prose-invert" : ""}`}>
+                                                <ReactMarkdown
+                                                    remarkPlugins={[remarkGfm]}
+                                                    components={{
+                                                        p: ({ node, ...props }) => (
+                                                            <p className="mb-3 leading-relaxed last:mb-0" {...props} />
+                                                        ),
+                                                        strong: ({ node, ...props }) => (
+                                                            <strong className="font-semibold" {...props} />
+                                                        ),
+                                                        ul: ({ node, ...props }: any) => (
+                                                            <ul className="mb-3 ml-4 list-disc space-y-1 last:mb-0" {...props} />
+                                                        ),
+                                                        ol: ({ node, ...props }: any) => (
+                                                            <ol className="mb-3 ml-4 list-decimal space-y-1 last:mb-0" {...props} />
+                                                        ),
+                                                        li: ({ node, ...props }) => (
+                                                            <li className="leading-relaxed" {...props} />
+                                                        ),
+                                                        code: (props: any) => {
+                                                            const { inline, children, ...rest } = props;
+                                                            if (inline) {
+                                                                return (
+                                                                    <code
+                                                                        className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono break-words"
+                                                                        {...rest}
+                                                                    >
+                                                                        {children}
+                                                                    </code>
+                                                                );
+                                                            }
+                                                            return (
+                                                                <code
+                                                                    className="block rounded bg-muted p-3 text-xs font-mono whitespace-pre-wrap break-words overflow-auto"
+                                                                    {...rest}
+                                                                >
+                                                                    {children}
+                                                                </code>
+                                                            );
+                                                        },
+                                                    }}
+                                                >
+                                                    {message.content}
+                                                </ReactMarkdown>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {isSending && (
+                                    <div className="flex justify-start">
+                                        <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg p-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce" />
+                                                <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce delay-75" />
+                                                <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce delay-150" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                <div ref={messagesEndRef} />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Input Area */}
+                    <div className="flex-shrink-0 px-4 md:px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-color)]">
+                        <div className="relative">
+                            {showSlashCommands && (
+                                <div className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg shadow-lg max-h-64 overflow-y-auto z-10">
+                                    <div className="p-2 border-b border-[var(--border-color)]">
+                                        <Input
+                                            type="text"
+                                            placeholder="Search commands..."
+                                            value={slashCommandFilter}
+                                            onChange={(e) => setSlashCommandFilter(e.target.value)}
+                                            className="text-sm"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <div className="p-2">
+                                        {filteredSlashCommands.map((cmd) => (
+                                            <Button
+                                                variant="ghost"
+                                                key={cmd.command}
+                                                onClick={() => {
+                                                    setInputValue(cmd.command);
+                                                    setShowSlashCommands(false);
+                                                    setSlashCommandFilter("");
+                                                }}
+                                                className="w-full justify-start gap-3 px-2 py-2"
+                                            >
+                                                <cmd.icon
+                                                    size={18}
+                                                    className="text-[var(--primary)] flex-shrink-0"
+                                                />
+                                                <div className="flex-1 min-w-0 text-left">
+                                                    <div className="text-sm font-medium text-[var(--text-primary)]">
+                                                        {cmd.command}
+                                                    </div>
+                                                    <div className="text-xs text-[var(--text-secondary)]">
+                                                        {cmd.description}
+                                                    </div>
+                                                </div>
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            <div className="flex items-end gap-2">
+                                <Textarea
+                                    ref={chatInputRef}
+                                    value={inputValue}
+                                    onChange={(e) => {
+                                        setInputValue(e.target.value);
+                                        if (e.target.value.startsWith("/")) {
+                                            setShowSlashCommands(true);
+                                        }
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleSendMessage();
+                                        }
+                                        if (e.key === "Escape") {
+                                            setShowSlashCommands(false);
+                                        }
+                                    }}
+                                    placeholder="Type a message or use / for commands..."
+                                    className="flex-1 min-h-[52px] max-h-32"
+                                    rows={1}
+                                />
+                                <Button
+                                    onClick={handleSendMessage}
+                                    disabled={!inputValue.trim() || isSending}
+                                    className="p-3"
+                                    size="icon"
+                                >
+                                    <Send size={20} />
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 }
+

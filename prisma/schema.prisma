@@ -263,6 +263,7 @@ model LearningEvent {
 
   triggeredBy String?
   sourceIds String[]
+  metadata Json? // Structured metadata from ExtractedInsight for mapping to KB fields
 
   applied Boolean @default(false)
   appliedAt DateTime?

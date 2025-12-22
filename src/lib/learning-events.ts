@@ -82,6 +82,7 @@ export async function createLearningEvents(
           confidence: normalizedConfidence,
           triggeredBy: triggeredBy || null,
           sourceIds: [sourceId],
+          metadata: insight.metadata || null,
         },
       });
 

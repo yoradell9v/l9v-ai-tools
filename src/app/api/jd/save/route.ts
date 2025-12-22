@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import { createLearningEvents } from "@/lib/learning-events";
+import { applyLearningEventsToKB } from "@/lib/apply-learning-events";
 
 export async function POST(request: Request) {
   try {
@@ -160,6 +161,33 @@ export async function POST(request: Request) {
             console.log(
               `Created ${learningEventsResult.eventsCreated} LearningEvents for analysis ${savedAnalysis.id}`
             );
+
+            // Apply learning events to KB immediately (light enrichment for MVP)
+            try {
+              const enrichmentResult = await applyLearningEventsToKB({
+                knowledgeBaseId: knowledgeBase.id,
+                minConfidence: 80, // MVP: only high confidence insights
+              });
+
+              if (enrichmentResult.success) {
+                console.log(
+                  `Applied ${enrichmentResult.eventsApplied} learning events to KB ${knowledgeBase.id}. ` +
+                  `Updated fields: ${enrichmentResult.fieldsUpdated.join(", ") || "none"}. ` +
+                  `Enrichment version: ${enrichmentResult.enrichmentVersion}`
+                );
+              } else {
+                console.warn(
+                  `Failed to apply some learning events:`,
+                  enrichmentResult.errors
+                );
+              }
+            } catch (enrichmentError) {
+              // Don't fail the save if enrichment fails (non-critical)
+              console.error(
+                "Error applying learning events to KB (non-critical):",
+                enrichmentError
+              );
+            }
           } else {
             console.warn(
               `Failed to create some LearningEvents:`,

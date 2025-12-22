@@ -5,10 +5,7 @@ import { verifyAccessToken } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ businessBrainId: string }> }
-) {
+export async function GET(request: Request) {
   try {
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("accessToken")?.value;
@@ -43,8 +40,6 @@ export async function GET(
       );
     }
 
-    const { businessBrainId } = await params;
-
     const { searchParams } = new URL(request.url);
     const conversationId = searchParams.get("conversationId");
     const listAll = searchParams.get("list") === "true";
@@ -53,36 +48,50 @@ export async function GET(
       where: {
         userId: decoded.userId,
         organization: { deactivatedAt: null },
+        deactivatedAt: null,
       },
-      select: { id: true },
-    });
-
-    const userOrganizationIds = userOrganizations.map((uo) => uo.id);
-    const isSuperadmin = user.globalRole === "SUPERADMIN";
-
-    // Verify access to business brain
-    const businessBrain = await prisma.businessBrain.findFirst({
-      where: {
-        id: businessBrainId,
-        ...(isSuperadmin ? {} : { userOrganizationId: { in: userOrganizationIds } }),
+      select: { 
+        id: true,
+        organizationId: true,
       },
     });
 
-    if (!businessBrain) {
+    if (userOrganizations.length === 0) {
       return NextResponse.json(
         {
           success: false,
-          error: "Business brain not found or access denied.",
+          error: "User does not belong to any active organization.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const userOrganizationIds = userOrganizations.map((uo) => uo.id);
+    const organizationIds = userOrganizations.map((uo) => uo.organizationId);
+    const isSuperadmin = user.globalRole === "SUPERADMIN";
+
+    // Get the user's organization knowledge base
+    const knowledgeBase = await prisma.organizationKnowledgeBase.findFirst({
+      where: {
+        organizationId: { in: organizationIds },
+      },
+    });
+
+    if (!knowledgeBase) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Knowledge base not found. Please complete your organization profile first.",
         },
         { status: 404 }
       );
     }
 
-    // If list=true, return all conversations for this brain
+    // If list=true, return all conversations for this knowledge base
     if (listAll) {
       const conversations = await prisma.businessConversation.findMany({
         where: {
-          brainId: businessBrainId,
+          knowledgeBaseId: knowledgeBase.id,
           ...(isSuperadmin ? {} : { userOrganizationId: { in: userOrganizationIds } }),
         },
         include: {
@@ -115,7 +124,7 @@ export async function GET(
       const conversation = await prisma.businessConversation.findFirst({
         where: {
           id: conversationId,
-          brainId: businessBrainId,
+          knowledgeBaseId: knowledgeBase.id,
           ...(isSuperadmin ? {} : { userOrganizationId: { in: userOrganizationIds } }),
         },
         include: {
@@ -159,11 +168,7 @@ export async function GET(
   }
 }
 
-
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ businessBrainId: string }> }
-) {
+export async function POST(request: Request) {
   try {
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("accessToken")?.value;
@@ -182,8 +187,6 @@ export async function POST(
         { status: 401 }
       );
     }
-
-    const { businessBrainId } = await params;
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
@@ -204,31 +207,15 @@ export async function POST(
       where: {
         userId: decoded.userId,
         organization: { deactivatedAt: null },
+        deactivatedAt: null,
       },
-      select: { id: true },
-    });
-
-    const userOrganizationIds = userOrganizations.map((uo) => uo.id);
-    const isSuperadmin = user.globalRole === "SUPERADMIN";
-
-    const businessBrain = await prisma.businessBrain.findFirst({
-      where: {
-        id: businessBrainId,
-        ...(isSuperadmin ? {} : { userOrganizationId: { in: userOrganizationIds } }),
+      select: { 
+        id: true,
+        organizationId: true,
       },
     });
 
-    if (!businessBrain) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Business brain not found or access denied.",
-        },
-        { status: 404 }
-      );
-    }
-
-    if (!isSuperadmin && userOrganizations.length === 0) {
+    if (userOrganizations.length === 0) {
       return NextResponse.json(
         {
           success: false,
@@ -238,23 +225,48 @@ export async function POST(
       );
     }
 
+    const userOrganizationIds = userOrganizations.map((uo) => uo.id);
+    const organizationIds = userOrganizations.map((uo) => uo.organizationId);
+    const isSuperadmin = user.globalRole === "SUPERADMIN";
+
+    // Get the user's organization knowledge base
+    const knowledgeBase = await prisma.organizationKnowledgeBase.findFirst({
+      where: {
+        organizationId: { in: organizationIds },
+      },
+    });
+
+    if (!knowledgeBase) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Knowledge base not found. Please complete your organization profile first.",
+        },
+        { status: 404 }
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
     const title = body.title || "New Conversation";
 
-    // For superadmins, attach the conversation to the brain's organization so access works consistently
-    const userOrganizationId = isSuperadmin
-      ? businessBrain.userOrganizationId
-      : userOrganizationIds[0];
+    // Use the first user organization (or the one associated with the KB's organization)
+    const userOrganizationId = userOrganizationIds.find(
+      (uoId) => {
+        const uo = userOrganizations.find((uo) => uo.id === uoId);
+        return uo?.organizationId === knowledgeBase.organizationId;
+      }
+    ) || userOrganizationIds[0];
 
     const conversation = await prisma.businessConversation.create({
       data: {
-        brainId: businessBrainId,
+        organizationId: knowledgeBase.organizationId,
+        knowledgeBaseId: knowledgeBase.id,
         userOrganizationId: userOrganizationId,
         title: title,
         status: "ACTIVE",
         lastMessageAt: new Date(),
         messageCount: 0,
-        activeCardIds: [],
+        usedKnowledgeBaseVersion: knowledgeBase.version,
       },
       include: {
         messages: true,
