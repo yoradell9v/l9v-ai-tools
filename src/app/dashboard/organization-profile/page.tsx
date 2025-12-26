@@ -316,6 +316,8 @@ export default function OrganizationProfilePage() {
 
             if (result.success) {
                 setQualityAnalysis(result.qualityAnalysis);
+                // Reload profile to get updated completion analysis with quality readiness scores
+                await loadProfile();
                 toast.success("Quality analysis completed!", {
                     description: result.cached
                         ? "Returned cached analysis from less than 24 hours ago."

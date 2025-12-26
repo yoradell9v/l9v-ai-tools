@@ -1,81 +1,63 @@
-/**
- * TypeScript interface matching the OrganizationKnowledgeBase Prisma model
- * This represents the single source of truth for all organization business information
- */
 export interface OrganizationKnowledgeBase {
   id: string;
   organizationId: string;
 
-  // Core Identity Tier 1 Required
   businessName: string | null;
   website: string | null;
   industry: string | null;
   industryOther: string | null;
   whatYouSell: string | null;
 
-  // Business Context Tier 1
   monthlyRevenue: string | null;
   teamSize: string | null;
   primaryGoal: string | null;
   biggestBottleNeck: string | null;
 
-  // Customer and Market Tier 2
   idealCustomer: string | null;
   topObjection: string | null;
   coreOffer: string | null;
   customerJourney: string | null;
 
-  // Operations and Tools Tier 2
   toolStack: string[];
   primaryCRM: string | null;
   defaultTimeZone: string | null;
   bookingLink: string | null;
   supportEmail: string | null;
 
-  // Brand & Voice (Tier 2)
   brandVoiceStyle: string | null;
   riskBoldness: string | null;
   voiceExampleGood: string | null;
   voiceExamplesAvoid: string | null;
   contentLinks: string | null;
 
-  // Compliance Tier 2
   isRegulated: boolean | null;
   regulatedIndustry: string | null;
   forbiddenWords: string | null;
   disclaimers: string | null;
 
-  // HR Defaults
   defaultWeeklyHours: string | null;
   defaultManagementStyle: string | null;
   defaultEnglishLevel: string | null;
 
-  // Proof & Credibility
   proofAssets: string | null;
-  proofFiles: any | null; // Json type
+  proofFiles: any | null;
 
-  // Additional Context
   pipeLineStages: string | null;
   emailSignOff: string | null;
 
-  // AI-Generated Insights
-  aiInsights: any | null; // Json type
+  aiInsights: any | null;
 
-  // Knowledge Extraction (data extracted from tool usage)
-  extractedKnowledge: any | null; // Json type
+  extractedKnowledge: any | null;
 
-  // Completion and Quality
   completeness: number | null;
-  completenessBreakdown: any | null; // Json type
+  completenessBreakdown: any | null;
   qualityScore: number | null;
 
-  // Versioning
   version: number;
   lastEditedBy: string;
   lastEditedAt: Date | null;
   contributors: string[];
 
-  // Enrichment tracking
   lastEnrichedAt: Date | null;
   enrichmentVersion: number;
 
@@ -83,10 +65,6 @@ export interface OrganizationKnowledgeBase {
   updatedAt: Date;
 }
 
-/**
- * Partial interface for onboarding completion calculation
- * Only includes the required Tier 1 fields
- */
 export interface OnboardingProfileFields {
   businessName?: string | null;
   website?: string | null;
@@ -110,11 +88,6 @@ export interface OnboardingStatus {
   requiredFieldsComplete: boolean;
 }
 
-/**
- * Calculates onboarding completion based on required Tier 1 fields
- * Required fields: businessName, website, industry, whatYouSell
- * If industry is "other", industryOther is also required
- */
 export function calculateOnboardingCompletion(
   profile: OnboardingProfileFields
 ): OnboardingCompletionStatus {
@@ -162,7 +135,8 @@ export function calculateOnboardingCompletion(
     missingFields.push("What You Sell");
   }
 
-  const percentage = totalRequired > 0 ? Math.round((filled / totalRequired) * 100) : 0;
+  const percentage =
+    totalRequired > 0 ? Math.round((filled / totalRequired) * 100) : 0;
 
   return {
     filled,
@@ -172,10 +146,6 @@ export function calculateOnboardingCompletion(
   };
 }
 
-/**
- * Checks the onboarding status of an organization knowledge base
- * Returns whether onboarding is needed and completion details
- */
 export function checkOnboardingStatus(
   profile: OnboardingProfileFields | null
 ): OnboardingStatus {
@@ -188,7 +158,12 @@ export function checkOnboardingStatus(
         filled: 0,
         total: 4,
         percentage: 0,
-        missingFields: ["Business Name", "Website", "Industry", "What You Sell"],
+        missingFields: [
+          "Business Name",
+          "Website",
+          "Industry",
+          "What You Sell",
+        ],
       };
 
   const needsOnboarding = !requiredFieldsComplete;

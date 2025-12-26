@@ -3,12 +3,37 @@ import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { verifyAccessToken } from "@/lib/auth";
+import { extractInsights } from "@/lib/analysis/extractInsights";
+import { createLearningEvents } from "@/lib/learning-events";
+import { applyLearningEventsToKB } from "@/lib/apply-learning-events";
+import { markdownToHtml } from "@/lib/markdown-to-html";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// System prompt for OpenAI SOP Generator API route
+// System prompt for markdown to HTML conversion using OpenAI (fallback)
+const MARKDOWN_TO_HTML_SYSTEM_PROMPT = `You are a markdown to HTML converter. Your job is to convert markdown content into clean, semantic HTML.
+
+Rules:
+1. Convert ALL markdown syntax to proper HTML tags
+2. Use semantic HTML5 tags (article, section, header, etc.) where appropriate
+3. Preserve all content exactly as provided
+4. Add appropriate structure:
+   - Headings: h1, h2, h3, h4, h5, h6
+   - Paragraphs: <p> tags
+   - Lists: <ul> and <ol> with <li> items
+   - Code blocks: <pre><code>
+   - Inline code: <code>
+   - Tables: <table> with <thead>, <tbody>, <tr>, <th>, <td>
+   - Bold: <strong>
+   - Italic: <em>
+   - Links: <a href="...">
+   - Blockquotes: <blockquote>
+5. Return ONLY the HTML content, no markdown backticks or explanations
+6. Do not add <!DOCTYPE>, <html>, <head>, or <body> tags - just the content HTML
+7. Ensure proper HTML entity encoding for special characters`;
+
 export const SOP_GENERATOR_SYSTEM_PROMPT = `You are an expert Standard Operating Procedure (SOP) writer with 15+ years of experience creating operational documentation for businesses across all industries. Your SOPs are known for being exceptionally clear, actionable, and practical.
 
 # Your Mission
@@ -514,6 +539,38 @@ ${formData.mainSteps}
   return prompt;
 }
 
+/**
+ * Convert markdown to HTML using OpenAI as a fallback
+ * This is used when the library-based conversion fails or produces poor results
+ */
+async function convertMarkdownToHtmlWithOpenAI(markdown: string): Promise<string> {
+  try {
+    console.log("[SOP Generate] Converting markdown to HTML with OpenAI, length:", markdown.length);
+    
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini", // Fast and cheap for conversion
+      messages: [
+        { role: "system", content: MARKDOWN_TO_HTML_SYSTEM_PROMPT },
+        { role: "user", content: markdown },
+      ],
+      temperature: 0, // Deterministic output
+      max_tokens: 16000, // Large enough for full SOP HTML
+    });
+
+    let html = completion.choices[0].message.content || "";
+    
+    // Remove any markdown code fences that might have slipped through
+    html = html.replace(/```html\n?/g, "").replace(/```\n?/g, "").trim();
+    
+    console.log("[SOP Generate] OpenAI HTML conversion complete, length:", html.length);
+    
+    return html;
+  } catch (error) {
+    console.error("[SOP Generate] Error converting markdown to HTML with OpenAI:", error);
+    throw error;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     // 1. Authenticate user
@@ -563,32 +620,140 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Get organization profile
+    // 3. Get organization profile (legacy - using knowledgeBase as fallback)
+    // Note: OrganizationProfile model doesn't exist in schema, using knowledgeBase data instead
     let organizationProfile = null;
+
+    // 3.5. Get organization knowledge base (for learning events)
+    let knowledgeBase = null;
+    let knowledgeBaseVersion: number | null = null;
+    let knowledgeBaseSnapshot: any = null;
     try {
-      const profileResponse = await prisma.organizationProfile.findUnique({
+      knowledgeBase = await prisma.organizationKnowledgeBase.findUnique({
         where: { organizationId: userOrg.organizationId },
         select: {
+          id: true,
+          version: true,
+          // Core Identity
           businessName: true,
           website: true,
           industry: true,
           industryOther: true,
-          primaryTools: true,
+          whatYouSell: true,
+          // Business Context
+          monthlyRevenue: true,
+          teamSize: true,
+          primaryGoal: true,
+          biggestBottleNeck: true,
+          // Customer and Market
+          idealCustomer: true,
+          topObjection: true,
+          coreOffer: true,
+          customerJourney: true,
+          // Operations and Tools
+          toolStack: true,
           primaryCRM: true,
-          managementStyle: true,
-          defaultTimezone: true,
+          defaultTimeZone: true,
+          bookingLink: true,
+          supportEmail: true,
+          // Brand & Voice
+          brandVoiceStyle: true,
+          riskBoldness: true,
+          voiceExampleGood: true,
+          voiceExamplesAvoid: true,
+          contentLinks: true,
+          // Compliance
           isRegulated: true,
-          regulatedIndustryType: true,
+          regulatedIndustry: true,
           forbiddenWords: true,
           disclaimers: true,
-          brandVoiceStyle: true,
-          riskBoldnessLevel: true,
+          // HR Defaults
+          defaultWeeklyHours: true,
+          defaultManagementStyle: true,
+          defaultEnglishLevel: true,
+          // Proof & Credibility
+          proofAssets: true,
+          // Additional Context
+          pipeLineStages: true,
+          emailSignOff: true,
+          // Versioning
+          lastEditedBy: true,
+          lastEditedAt: true,
+          contributors: true,
+          // Enrichment tracking
+          lastEnrichedAt: true,
+          enrichmentVersion: true,
         },
       });
-      organizationProfile = profileResponse;
+
+      if (knowledgeBase) {
+        knowledgeBaseVersion = knowledgeBase.version;
+        console.log(`[SOP Generate] Found KB for org ${userOrg.organizationId}, version: ${knowledgeBaseVersion}`);
+        
+        // Populate organizationProfile from knowledgeBase (for backward compatibility with buildUserPrompt)
+        organizationProfile = {
+          businessName: knowledgeBase.businessName,
+          website: knowledgeBase.website,
+          industry: knowledgeBase.industry,
+          industryOther: knowledgeBase.industryOther,
+          primaryTools: knowledgeBase.toolStack?.join(", ") || null,
+          primaryCRM: knowledgeBase.primaryCRM,
+          managementStyle: knowledgeBase.defaultManagementStyle,
+          defaultTimezone: knowledgeBase.defaultTimeZone,
+          isRegulated: knowledgeBase.isRegulated ? "yes" : "no",
+          regulatedIndustryType: knowledgeBase.regulatedIndustry,
+          forbiddenWords: knowledgeBase.forbiddenWords,
+          disclaimers: knowledgeBase.disclaimers,
+          brandVoiceStyle: knowledgeBase.brandVoiceStyle,
+          riskBoldnessLevel: knowledgeBase.riskBoldness,
+        };
+        
+        // Create snapshot of KB state (non-Json fields only, similar to JD flow)
+        knowledgeBaseSnapshot = {
+          version: knowledgeBase.version,
+          businessName: knowledgeBase.businessName,
+          website: knowledgeBase.website,
+          industry: knowledgeBase.industry,
+          industryOther: knowledgeBase.industryOther,
+          whatYouSell: knowledgeBase.whatYouSell,
+          monthlyRevenue: knowledgeBase.monthlyRevenue,
+          teamSize: knowledgeBase.teamSize,
+          primaryGoal: knowledgeBase.primaryGoal,
+          biggestBottleNeck: knowledgeBase.biggestBottleNeck,
+          idealCustomer: knowledgeBase.idealCustomer,
+          topObjection: knowledgeBase.topObjection,
+          coreOffer: knowledgeBase.coreOffer,
+          customerJourney: knowledgeBase.customerJourney,
+          toolStack: knowledgeBase.toolStack,
+          primaryCRM: knowledgeBase.primaryCRM,
+          defaultTimeZone: knowledgeBase.defaultTimeZone,
+          bookingLink: knowledgeBase.bookingLink,
+          supportEmail: knowledgeBase.supportEmail,
+          brandVoiceStyle: knowledgeBase.brandVoiceStyle,
+          riskBoldness: knowledgeBase.riskBoldness,
+          voiceExampleGood: knowledgeBase.voiceExampleGood,
+          voiceExamplesAvoid: knowledgeBase.voiceExamplesAvoid,
+          contentLinks: knowledgeBase.contentLinks,
+          isRegulated: knowledgeBase.isRegulated,
+          regulatedIndustry: knowledgeBase.regulatedIndustry,
+          forbiddenWords: knowledgeBase.forbiddenWords,
+          disclaimers: knowledgeBase.disclaimers,
+          defaultWeeklyHours: knowledgeBase.defaultWeeklyHours,
+          defaultManagementStyle: knowledgeBase.defaultManagementStyle,
+          defaultEnglishLevel: knowledgeBase.defaultEnglishLevel,
+          proofAssets: knowledgeBase.proofAssets,
+          pipeLineStages: knowledgeBase.pipeLineStages,
+          emailSignOff: knowledgeBase.emailSignOff,
+          lastEditedBy: knowledgeBase.lastEditedBy,
+          lastEditedAt: knowledgeBase.lastEditedAt,
+          contributors: knowledgeBase.contributors,
+          lastEnrichedAt: knowledgeBase.lastEnrichedAt,
+          enrichmentVersion: knowledgeBase.enrichmentVersion,
+        };
+      }
     } catch (error) {
-      console.error("Error fetching organization profile:", error);
-      // Continue without org profile - it's optional
+      console.error("[SOP Generate] Error fetching knowledge base:", error);
+      // Continue without KB - learning events are optional
     }
 
     // 4. Parse request body
@@ -677,6 +842,7 @@ export async function POST(request: NextRequest) {
 
     // 7. Call OpenAI API
     let generatedSOP: string = "";
+    let generatedSOPHtml: string = "";
     let promptTokens: number = 0;
     let completionTokens: number = 0;
     let totalTokens: number = 0;
@@ -709,6 +875,49 @@ export async function POST(request: NextRequest) {
         console.warn("OpenAI response was truncated due to token limit");
         generatedSOP += "\n\n[Note: This SOP may have been truncated. Consider refining specific sections if needed.]";
       }
+
+      // Convert markdown to HTML for frontend display
+      // Try library-based conversion first (fast and free), fallback to OpenAI if needed
+      try {
+        console.log("[SOP Generate] Converting markdown to HTML, markdown length:", generatedSOP.length);
+        
+        // First, try the library-based conversion
+        try {
+          generatedSOPHtml = await markdownToHtml(generatedSOP);
+          console.log("[SOP Generate] Library conversion successful, HTML length:", generatedSOPHtml.length);
+          
+          // Verify we got valid HTML
+          if (!generatedSOPHtml || generatedSOPHtml.trim().length === 0) {
+            throw new Error("Library conversion returned empty result");
+          }
+          
+          // Check if it actually looks like HTML (has tags)
+          if (!generatedSOPHtml.includes("<")) {
+            throw new Error("Library conversion did not produce HTML tags");
+          }
+          
+          // Check if it still contains markdown syntax (indicates conversion failed)
+          if (generatedSOPHtml.includes("```") && !generatedSOPHtml.includes("<code>")) {
+            throw new Error("Library conversion may have failed (contains markdown code fences)");
+          }
+        } catch (libraryError: any) {
+          console.warn("[SOP Generate] Library conversion failed or produced poor results, falling back to OpenAI:", libraryError.message);
+          
+          // Fallback to OpenAI conversion
+          generatedSOPHtml = await convertMarkdownToHtmlWithOpenAI(generatedSOP);
+          console.log("[SOP Generate] OpenAI fallback conversion successful, HTML length:", generatedSOPHtml.length);
+        }
+        
+        // Final verification
+        if (!generatedSOPHtml || generatedSOPHtml.trim().length === 0) {
+          console.error("[SOP Generate] All HTML conversion methods failed");
+          generatedSOPHtml = ""; // Will fallback to markdown on frontend
+        }
+      } catch (htmlError: any) {
+        console.error("[SOP Generate] Error converting markdown to HTML (non-blocking):", htmlError);
+        // If all conversion methods fail, we'll still return markdown and let frontend handle it
+        generatedSOPHtml = ""; // Ensure it's empty if conversion fails
+      }
     } catch (openaiError: any) {
       console.error("[SOP Generate] OpenAI API error:", openaiError);
       return NextResponse.json(
@@ -720,20 +929,53 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 7.5. Extract insights from generated SOP (non-blocking)
+    let contributedInsights: any[] = [];
+    try {
+      const sopDataForExtraction = {
+        sopContent: generatedSOP,
+        content: {
+          markdown: generatedSOP,
+        },
+        intakeData: formData,
+        organizationProfile: organizationProfile,
+        metadata: {
+          title: formData.sopTitle,
+          generatedAt: new Date().toISOString(),
+          tokens: {
+            prompt: promptTokens,
+            completion: completionTokens,
+            total: totalTokens,
+          },
+        },
+      };
+
+      contributedInsights = extractInsights("SOP_GENERATION", sopDataForExtraction);
+      
+      console.log(`[SOP Generate] Extracted ${contributedInsights.length} insights from SOP`);
+    } catch (insightError: any) {
+      console.error("[SOP Generate] Error extracting insights (non-blocking):", insightError);
+      // Continue without insights - SOP generation should still succeed
+    }
+
     // 8. Save SOP to database
     let savedSOP = null;
     try {
       savedSOP = await prisma.sOP.create({
         data: {
           userOrganizationId: userOrg.id,
+          organizationId: userOrg.organizationId, // Add organizationId
           title: formData.sopTitle,
           content: {
             markdown: generatedSOP,
+            html: generatedSOPHtml || undefined, // Store HTML if available
             version: "1.0",
             generatedAt: new Date().toISOString(),
           },
-          intakeData: formData,
-          organizationProfileSnapshot: organizationProfile || null,
+          intakeData: formData as any,
+          usedKnowledgeBaseVersion: knowledgeBaseVersion ?? undefined,
+          knowledgeBaseSnapshot: knowledgeBaseSnapshot ?? undefined,
+          contributedInsights: contributedInsights.length > 0 ? contributedInsights : undefined,
           metadata: {
             tokens: {
               prompt: promptTokens,
@@ -745,6 +987,7 @@ export async function POST(request: NextRequest) {
             maxTokens: 8000,
             finishReason: finishReason,
             organizationProfileUsed: organizationProfile !== null,
+            organizationProfileSnapshot: organizationProfile || null, // Store in metadata
             generatedAt: new Date().toISOString(),
           },
         },
@@ -754,16 +997,85 @@ export async function POST(request: NextRequest) {
           createdAt: true,
         },
       });
+
+      // Log KB metadata that was saved
+      if (knowledgeBaseVersion || knowledgeBaseSnapshot || contributedInsights.length > 0) {
+        console.log(`[SOP Generate] Saved SOP ${savedSOP.id} with KB metadata:`, {
+          usedKnowledgeBaseVersion: knowledgeBaseVersion,
+          hasSnapshot: !!knowledgeBaseSnapshot,
+          insightsCount: contributedInsights.length,
+        });
+      }
     } catch (dbError: any) {
       console.error("[SOP Generate] Database save error:", dbError);
       // Don't fail the request if save fails - still return the SOP
       // Log the error for monitoring
     }
 
-    // 9. Return success response
+    // 9. Create learning events and apply to knowledge base (non-blocking)
+    if (
+      savedSOP &&
+      contributedInsights.length > 0 &&
+      knowledgeBase
+    ) {
+      try {
+        const learningEventsResult = await createLearningEvents({
+          knowledgeBaseId: knowledgeBase.id,
+          sourceType: "SOP_GENERATION",
+          sourceId: savedSOP.id,
+          insights: contributedInsights,
+          triggeredBy: userOrg.id,
+        });
+
+        if (learningEventsResult.success) {
+          console.log(
+            `[SOP Generate] Created ${learningEventsResult.eventsCreated} LearningEvents for SOP ${savedSOP.id}`
+          );
+
+          // Apply learning events to KB immediately (light enrichment for MVP)
+          try {
+            const enrichmentResult = await applyLearningEventsToKB({
+              knowledgeBaseId: knowledgeBase.id,
+              minConfidence: 80, // MVP: only high confidence insights
+            });
+
+            if (enrichmentResult.success) {
+              console.log(
+                `[SOP Generate] Applied ${enrichmentResult.eventsApplied} learning events to KB ${knowledgeBase.id}. ` +
+                `Updated fields: ${enrichmentResult.fieldsUpdated.join(", ") || "none"}. ` +
+                `Enrichment version: ${enrichmentResult.enrichmentVersion}`
+              );
+            } else {
+              console.warn(
+                `[SOP Generate] Failed to apply some learning events:`,
+                enrichmentResult.errors
+              );
+            }
+          } catch (enrichmentError) {
+            // Don't fail the request if enrichment fails (non-critical)
+            console.error(
+              "[SOP Generate] Error applying learning events to KB (non-critical):",
+              enrichmentError
+            );
+          }
+        } else {
+          console.warn(
+            `[SOP Generate] Failed to create some LearningEvents:`,
+            learningEventsResult.errors
+          );
+        }
+      } catch (learningEventError) {
+        // Don't fail the request if learning events fail (non-critical)
+        console.error("[SOP Generate] Error creating LearningEvents (non-critical):", learningEventError);
+      }
+    }
+
+    // 10. Return success response with HTML
+    console.log("[SOP Generate] Returning response, sopHtml length:", generatedSOPHtml?.length || 0);
     return NextResponse.json({
       success: true,
-      sop: generatedSOP,
+      sop: generatedSOP, // Keep markdown for editing purposes
+      sopHtml: generatedSOPHtml || null, // Return HTML for display
       sopId: savedSOP?.id || null,
       metadata: {
         title: formData.sopTitle,
@@ -787,4 +1099,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

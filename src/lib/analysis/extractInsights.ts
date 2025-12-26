@@ -1,14 +1,6 @@
 import { LearningEventType } from "@prisma/client";
 import { ExtractedInsight } from "../learning-events";
 
-/**
- * Generic function to extract insights from any source type.
- * Routes to source-specific extractors based on sourceType.
- * 
- * @param sourceType - Type of source (JD, SOP, Conversation, etc.)
- * @param sourceData - The source data to extract insights from
- * @returns Array of extracted insights
- */
 export function extractInsights(
   sourceType: "JOB_DESCRIPTION" | "SOP_GENERATION" | "CHAT_CONVERSATION",
   sourceData: any
@@ -27,9 +19,41 @@ export function extractInsights(
 }
 
 /**
- * Extracts insights from JD Analysis result.
- * Extracts from: discovery, serviceClassification, validation, architecture
+ * Validate extracted insight before adding to results
  */
+function validateInsight(insight: ExtractedInsight): boolean {
+  // Check required fields
+  if (!insight.insight || !insight.category || !insight.eventType) {
+    return false;
+  }
+
+  // Validate insight text length
+  if (insight.insight.trim().length < 10 || insight.insight.trim().length > 1000) {
+    return false;
+  }
+
+  // Validate category
+  const validCategories = [
+    "business_context",
+    "workflow_patterns",
+    "process_optimization",
+    "service_patterns",
+    "risk_management",
+  ];
+  if (!validCategories.includes(insight.category)) {
+    return false;
+  }
+
+  // Validate confidence range
+  if (insight.confidence !== undefined) {
+    if (insight.confidence < 0 || insight.confidence > 100) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function extractFromJdAnalysis(analysisData: any): ExtractedInsight[] {
   const insights: ExtractedInsight[] = [];
 
@@ -47,7 +71,7 @@ function extractFromJdAnalysis(analysisData: any): ExtractedInsight[] {
     const bc = discovery.business_context;
     
     if (bc.company_stage) {
-      insights.push({
+      const insight: ExtractedInsight = {
         insight: `Company stage identified: ${bc.company_stage}`,
         category: "business_context",
         eventType: LearningEventType.INSIGHT_GENERATED,
@@ -56,7 +80,10 @@ function extractFromJdAnalysis(analysisData: any): ExtractedInsight[] {
           sourceSection: "discovery.business_context",
           companyStage: bc.company_stage,
         },
-      });
+      };
+      if (validateInsight(insight)) {
+        insights.push(insight);
+      }
     }
 
     if (bc.primary_bottleneck) {
@@ -214,7 +241,6 @@ function extractFromJdAnalysis(analysisData: any): ExtractedInsight[] {
     const sta = serviceClassification.service_type_analysis;
 
     if (sta.recommended_service) {
-      // Use analysis confidence if available, otherwise default to high confidence
       const analysisConfidence = sta.confidence === "High" ? 85 : 
                                  sta.confidence === "Medium" ? 80 : 
                                  sta.confidence === "Low" ? 75 : 82;
@@ -238,7 +264,6 @@ function extractFromJdAnalysis(analysisData: any): ExtractedInsight[] {
       Object.keys(scores).forEach((serviceType: string) => {
         const score = scores[serviceType];
         if (score?.score) {
-          // Convert score (0-10) to confidence, but keep minimum at 75 for low scores
           const scoreConfidence = score.score >= 8 ? 85 : 
                                   score.score >= 6 ? 80 : 
                                   75;
@@ -302,7 +327,7 @@ function extractFromJdAnalysis(analysisData: any): ExtractedInsight[] {
             insight: `Critical assumption requiring validation: ${assumption.assumption}`,
             category: "risk_management",
             eventType: LearningEventType.INSIGHT_GENERATED,
-            confidence: 85, // High confidence - critical assumption
+            confidence: 85,
             metadata: {
               sourceSection: "validation.assumptions_to_validate",
               criticality: assumption.criticality,
@@ -318,7 +343,7 @@ function extractFromJdAnalysis(analysisData: any): ExtractedInsight[] {
           insight: `Red flag identified: ${flag.flag}`,
           category: "risk_management",
           eventType: LearningEventType.INCONSISTENCY_FIXED,
-          confidence: 90, // Very high confidence - critical red flag
+          confidence: 90,
           metadata: {
             sourceSection: "validation.red_flags",
             evidence: flag.evidence,
@@ -333,24 +358,327 @@ function extractFromJdAnalysis(analysisData: any): ExtractedInsight[] {
   return insights;
 }
 
-/**
- * Extracts insights from SOP Generation result.
- * TODO: Implement when SOP generation structure is finalized
- */
+
 function extractFromSopGeneration(sopData: any): ExtractedInsight[] {
   const insights: ExtractedInsight[] = [];
 
-  // TODO: Implement SOP insight extraction
-  // Extract from: sop content, intakeData, process patterns, tool usage, etc.
+  if (!sopData) {
+    return insights;
+  }
 
-  return insights;
+  // Extract data from sopData structure
+  const sopContent = sopData.sopContent || sopData.content?.markdown || "";
+  const intakeData = sopData.intakeData || {};
+  const organizationProfile = sopData.organizationProfile || null;
+
+  // Helper function to validate tool names (similar to apply-learning-events)
+  const isValidToolName = (name: string): boolean => {
+    const trimmed = name.trim();
+    if (trimmed.length < 2 || trimmed.length > 50) return false;
+
+    const commonWords = new Set([
+      "the", "this", "that", "these", "those",
+      "company", "business", "organization",
+      "we", "they", "our", "your", "their",
+      "using", "with", "through", "via",
+      "system", "process", "procedure", "step",
+    ]);
+
+    const lower = trimmed.toLowerCase();
+    if (commonWords.has(lower)) return false;
+
+    if (!/[a-zA-Z]/.test(trimmed)) return false;
+
+    return true;
+  };
+
+  // Helper to extract tools from text (markdown or plain text)
+  const extractToolsFromText = (text: string): string[] => {
+    const tools: Set<string> = new Set();
+    
+    if (!text) return [];
+
+    // Pattern 1: Look for "Tools & Resources" section in markdown
+    const toolsSectionMatch = text.match(/##\s*(?:12|TOOLS?\s*(?:&|AND)\s*RESOURCES?)[\s\S]*?(?=##|$)/i);
+    if (toolsSectionMatch) {
+      const toolsSection = toolsSectionMatch[0];
+      // Extract bullet points or list items
+      const listItems = toolsSection.match(/[-*•]\s*(.+?)(?:\n|$)/g) || [];
+      for (const item of listItems) {
+        const toolName = item.replace(/[-*•]\s*/, "").trim();
+        if (isValidToolName(toolName)) {
+          tools.add(toolName);
+        }
+      }
+    }
+
+    // Pattern 2: Look for capitalized tool names (Slack, Monday.com, etc.)
+    const toolPattern = /\b([A-Z][a-zA-Z0-9]+(?:\.[a-zA-Z0-9]+)?(?:\s+[A-Z][a-zA-Z0-9]+)*)\b/g;
+    const matches = text.match(toolPattern);
+    if (matches) {
+      for (const match of matches) {
+        const trimmed = match.trim();
+        if (isValidToolName(trimmed) && trimmed.length >= 3 && /^[A-Za-z]/.test(trimmed)) {
+          tools.add(trimmed);
+        }
+      }
+    }
+
+    return Array.from(tools);
+  };
+
+  // 1. Extract tools from intakeData.toolsUsed
+  if (intakeData.toolsUsed && typeof intakeData.toolsUsed === "string") {
+    const toolsFromIntake = intakeData.toolsUsed
+      .split(",")
+      .map((tool: string) => tool.trim())
+      .filter((tool: string) => tool.length > 0 && isValidToolName(tool));
+
+    for (const tool of toolsFromIntake) {
+      insights.push({
+        insight: `Tool used in process: ${tool}`,
+        category: "workflow_patterns",
+        eventType: LearningEventType.PATTERN_DETECTED,
+        confidence: 90, // High confidence - explicitly provided by user
+        metadata: {
+          sourceSection: "intakeData.toolsUsed",
+          tools: [tool],
+          newTool: tool,
+        },
+      });
+    }
+  }
+
+  // 2. Extract tools from SOP content
+  if (sopContent) {
+    const toolsFromContent = extractToolsFromText(sopContent);
+    for (const tool of toolsFromContent) {
+      // Skip if already added from intakeData
+      const alreadyAdded = insights.some(
+        (insight) =>
+          insight.category === "workflow_patterns" &&
+          insight.metadata?.tools?.includes(tool)
+      );
+
+      if (!alreadyAdded) {
+        insights.push({
+          insight: `Tool mentioned in SOP: ${tool}`,
+          category: "workflow_patterns",
+          eventType: LearningEventType.PATTERN_DETECTED,
+          confidence: 85, // High confidence - found in generated SOP
+          metadata: {
+            sourceSection: "sopContent.tools",
+            tools: [tool],
+            newTool: tool,
+          },
+        });
+      }
+    }
+  }
+
+  // 3. Extract tools from organization profile
+  if (organizationProfile?.primaryTools) {
+    const orgTools = organizationProfile.primaryTools
+      .split(",")
+      .map((tool: string) => tool.trim())
+      .filter((tool: string) => tool.length > 0 && isValidToolName(tool));
+
+    for (const tool of orgTools) {
+      const alreadyAdded = insights.some(
+        (insight) =>
+          insight.category === "workflow_patterns" &&
+          insight.metadata?.tools?.includes(tool)
+      );
+
+      if (!alreadyAdded) {
+        insights.push({
+          insight: `Organization tool used: ${tool}`,
+          category: "workflow_patterns",
+          eventType: LearningEventType.PATTERN_DETECTED,
+          confidence: 88, // High confidence - from org profile
+          metadata: {
+            sourceSection: "organizationProfile.primaryTools",
+            tools: [tool],
+            newTool: tool,
+          },
+        });
+      }
+    }
+  }
+
+  if (organizationProfile?.primaryCRM) {
+    const crmTool = organizationProfile.primaryCRM.trim();
+    if (isValidToolName(crmTool)) {
+      const alreadyAdded = insights.some(
+        (insight) =>
+          insight.category === "workflow_patterns" &&
+          insight.metadata?.tools?.includes(crmTool)
+      );
+
+      if (!alreadyAdded) {
+        insights.push({
+          insight: `Primary CRM/Platform: ${crmTool}`,
+          category: "workflow_patterns",
+          eventType: LearningEventType.PATTERN_DETECTED,
+          confidence: 90, // Very high confidence - from org profile
+          metadata: {
+            sourceSection: "organizationProfile.primaryCRM",
+            tools: [crmTool],
+            newTool: crmTool,
+          },
+        });
+      }
+    }
+  }
+
+  // 4. Extract process optimization insights from common mistakes
+  if (intakeData.commonMistakes && typeof intakeData.commonMistakes === "string") {
+    const mistakes = intakeData.commonMistakes
+      .split(/[.;\n]/)
+      .map((mistake: string) => mistake.trim())
+      .filter((mistake: string) => mistake.length > 10);
+
+    for (const mistake of mistakes) {
+      insights.push({
+        insight: `Process pain point identified: ${mistake}`,
+        category: "process_optimization",
+        eventType: LearningEventType.OPTIMIZATION_FOUND,
+        confidence: 85, // High confidence - explicitly identified by user
+        metadata: {
+          sourceSection: "intakeData.commonMistakes",
+          painPoint: mistake,
+        },
+      });
+    }
+  }
+
+  // 5. Extract process complexity from intake data
+  if (intakeData.mainSteps && typeof intakeData.mainSteps === "string") {
+    const stepsCount = intakeData.mainSteps.split(/\n|\./).filter((s: string) => s.trim().length > 5).length;
+    if (stepsCount > 10) {
+      insights.push({
+        insight: `Complex process identified: ${stepsCount} main steps in SOP`,
+        category: "process_optimization",
+        eventType: LearningEventType.OPTIMIZATION_FOUND,
+        confidence: 75, // Medium confidence - inferred from step count
+        metadata: {
+          sourceSection: "intakeData.mainSteps",
+          processComplexity: stepsCount > 15 ? "high" : "medium",
+          stepCount: stepsCount,
+        },
+      });
+    }
+  }
+
+  // 6. Extract workflow patterns from frequency and triggers
+  if (intakeData.frequency && typeof intakeData.frequency === "string" && intakeData.frequency.trim().length > 3) {
+    insights.push({
+      insight: `Process frequency pattern: ${intakeData.frequency}`,
+      category: "workflow_patterns",
+      eventType: LearningEventType.PATTERN_DETECTED,
+      confidence: 80, // High confidence - explicitly provided
+      metadata: {
+        sourceSection: "intakeData.frequency",
+        frequency: intakeData.frequency,
+      },
+    });
+  }
+
+  if (intakeData.trigger && typeof intakeData.trigger === "string" && intakeData.trigger.trim().length > 5) {
+    insights.push({
+      insight: `Process trigger pattern: ${intakeData.trigger}`,
+      category: "workflow_patterns",
+      eventType: LearningEventType.PATTERN_DETECTED,
+      confidence: 80, // High confidence - explicitly provided
+      metadata: {
+        sourceSection: "intakeData.trigger",
+        trigger: intakeData.trigger,
+      },
+    });
+  }
+
+  // 7. Extract business context from department
+  if (intakeData.department && typeof intakeData.department === "string" && intakeData.department.trim().length > 2) {
+    insights.push({
+      insight: `Department/Team context: ${intakeData.department}`,
+      category: "business_context",
+      eventType: LearningEventType.INSIGHT_GENERATED,
+      confidence: 85, // High confidence - explicitly provided
+      metadata: {
+        sourceSection: "intakeData.department",
+        department: intakeData.department,
+      },
+    });
+  }
+
+  // 8. Extract risk management from compliance requirements
+  if (intakeData.complianceRequirements && typeof intakeData.complianceRequirements === "string") {
+    const complianceText = intakeData.complianceRequirements.trim();
+    if (complianceText.length > 10) {
+      insights.push({
+        insight: `Compliance requirement identified: ${complianceText.substring(0, 200)}${complianceText.length > 200 ? "..." : ""}`,
+        category: "risk_management",
+        eventType: LearningEventType.INSIGHT_GENERATED,
+        confidence: 90, // Very high confidence - compliance is critical
+        metadata: {
+          sourceSection: "intakeData.complianceRequirements",
+          complianceRequirement: complianceText,
+        },
+      });
+    }
+  }
+
+  // 9. Extract process optimization from decision points
+  if (intakeData.decisionPoints && typeof intakeData.decisionPoints === "string") {
+    const decisionText = intakeData.decisionPoints.trim();
+    if (decisionText.length > 10) {
+      insights.push({
+        insight: `Process decision points identified: ${decisionText.substring(0, 150)}${decisionText.length > 150 ? "..." : ""}`,
+        category: "process_optimization",
+        eventType: LearningEventType.OPTIMIZATION_FOUND,
+        confidence: 82, // High confidence - indicates process complexity
+        metadata: {
+          sourceSection: "intakeData.decisionPoints",
+          decisionPoints: decisionText,
+        },
+      });
+    }
+  }
+
+  // 10. Extract workflow patterns from required resources
+  if (intakeData.requiredResources && typeof intakeData.requiredResources === "string") {
+    const resourcesText = intakeData.requiredResources.trim();
+    if (resourcesText.length > 10) {
+      // Check if resources mention tools
+      const toolsFromResources = extractToolsFromText(resourcesText);
+      for (const tool of toolsFromResources) {
+        const alreadyAdded = insights.some(
+          (insight) =>
+            insight.category === "workflow_patterns" &&
+            insight.metadata?.tools?.includes(tool)
+        );
+
+        if (!alreadyAdded) {
+          insights.push({
+            insight: `Tool from required resources: ${tool}`,
+            category: "workflow_patterns",
+            eventType: LearningEventType.PATTERN_DETECTED,
+            confidence: 80, // Medium-high confidence - inferred from resources
+            metadata: {
+              sourceSection: "intakeData.requiredResources",
+              tools: [tool],
+              newTool: tool,
+            },
+          });
+        }
+      }
+    }
+  }
+
+  // Validate all insights before returning
+  return insights.filter((insight) => validateInsight(insight));
 }
 
-/**
- * Extracts insights from Business Conversation.
- * If structuredInsights (AI-extracted) is provided, uses that for higher quality extraction.
- * Otherwise falls back to basic keyword matching.
- */
 function extractFromConversation(conversationData: any): ExtractedInsight[] {
   const insights: ExtractedInsight[] = [];
 
@@ -359,12 +687,8 @@ function extractFromConversation(conversationData: any): ExtractedInsight[] {
   }
 
   const { userMessage, assistantMessage, structuredInsights } = conversationData;
-
-  // If AI-extracted structured insights are provided, use those (higher quality)
   if (structuredInsights && structuredInsights.has_insights) {
     const baseConfidence = structuredInsights.confidence || 75;
-
-    // Business Context insights
     if (structuredInsights.business_context) {
       const bc = structuredInsights.business_context;
       
@@ -593,7 +917,6 @@ function extractFromConversation(conversationData: any): ExtractedInsight[] {
       }
     }
 
-    // Detect pain points or problems mentioned
     const painPointPatterns = [
       /(?:struggling|problem|issue|challenge|difficulty|pain|frustrated|stuck|blocked|can't|unable to)\s+(.+?)(?:\.|$)/gi,
     ];
@@ -607,7 +930,7 @@ function extractFromConversation(conversationData: any): ExtractedInsight[] {
             insight: `Pain point mentioned: ${painPoint}`,
             category: "process_optimization",
             eventType: LearningEventType.OPTIMIZATION_FOUND,
-            confidence: 82, // High confidence - direct user feedback
+            confidence: 82,
             metadata: {
               sourceSection: "conversation.user_message",
               painPoint: painPoint,
@@ -617,9 +940,7 @@ function extractFromConversation(conversationData: any): ExtractedInsight[] {
       }
     }
 
-    // Detect new information shared (statements that aren't questions)
     if (!userMsgLower.includes("?") && userMsgLower.length > 20) {
-      // Check if it's a statement (not a command)
       const isStatement = !userMsgLower.startsWith("/") && 
                           !userMsgLower.match(/^(?:help|what|how|when|where|why|who|can|do|is|are|will)/);
       
@@ -639,11 +960,8 @@ function extractFromConversation(conversationData: any): ExtractedInsight[] {
     }
   }
 
-  // Extract insights from assistant response (topics discussed, patterns)
   if (assistantMessage) {
     const assistantMsgLower = assistantMessage.toLowerCase();
-
-    // Detect if assistant references specific KB fields
     const kbFieldPatterns = [
       { pattern: /(?:brand voice|voice style|tone)/i, field: "brandVoiceStyle" },
       { pattern: /(?:ideal customer|target audience|icp)/i, field: "idealCustomer" },

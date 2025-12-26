@@ -16,17 +16,10 @@ const CONFIG = {
   MODEL: "gpt-4o",
   CONTEXT_SUMMARY_THRESHOLD: 10,
   CONTEXT_SUMMARY_INTERVAL: 5,
-  MIN_MESSAGE_LENGTH_FOR_EXTRACTION: 20, // Skip trivial messages
-  INSIGHT_EXTRACTION_MODEL: "gpt-4o-mini", // Use cheaper model for extraction
+  MIN_MESSAGE_LENGTH_FOR_EXTRACTION: 20,
+  INSIGHT_EXTRACTION_MODEL: "gpt-4o-mini", 
 } as const;
 
-// ============================================================================
-// SLASH COMMAND HANDLERS
-// ============================================================================
-
-/**
- * Handle slash command execution
- */
 async function handleSlashCommand(
   command: string,
   openai: OpenAI,
@@ -69,9 +62,6 @@ async function handleSlashCommand(
   };
 }
 
-/**
- * /calibrate-voice → Generates brand voice guidelines
- */
 async function handleCalibrateVoice(
   openai: OpenAI,
   context: any
@@ -117,9 +107,6 @@ Generate comprehensive brand voice guidelines in markdown format.`;
   return result.choices[0].message.content || "Failed to generate brand voice guidelines.";
 }
 
-/**
- * /ad-kit → Creates 10 hooks, 6 angles, 5 ad scripts
- */
 async function handleAdKit(openai: OpenAI, context: any): Promise<string> {
   const systemPrompt = `You are a direct response copywriter specializing in high-converting ad copy. Generate a complete ad kit based on the business profile.
 
@@ -160,9 +147,6 @@ Generate the complete ad kit in markdown format with clear sections.`;
   return result.choices[0].message.content || "Failed to generate ad kit.";
 }
 
-/**
- * /email-kit → Generates 5 email templates with subject lines
- */
 async function handleEmailKit(openai: OpenAI, context: any): Promise<string> {
   const systemPrompt = `You are an email marketing specialist. Generate 5 email templates with subject lines based on the business profile.
 
@@ -207,9 +191,6 @@ Generate 5 complete email templates in markdown format.`;
   return result.choices[0].message.content || "Failed to generate email kit.";
 }
 
-/**
- * /offers-map → Lists all offers with objections/rebuttals
- */
 async function handleOffersMap(openai: OpenAI, context: any): Promise<string> {
   const systemPrompt = `You are a sales strategist. Create a comprehensive offers map that lists all offers with their objections and rebuttals.
 
@@ -250,9 +231,6 @@ Generate a comprehensive offers map in markdown format.`;
   return result.choices[0].message.content || "Failed to generate offers map.";
 }
 
-/**
- * /summarize-sops → Creates 1-page SOP summary
- */
 async function handleSummarizeSops(openai: OpenAI, context: any): Promise<string> {
   const systemPrompt = `You are an operations specialist. Create a concise 1-page SOP summary based on the business operations data.
 
@@ -294,9 +272,6 @@ Generate a concise 1-page SOP summary in markdown format.`;
   return result.choices[0].message.content || "Failed to generate SOP summary.";
 }
 
-/**
- * /content-brief → Generates creative brief for content
- */
 async function handleContentBrief(openai: OpenAI, context: any): Promise<string> {
   const systemPrompt = `You are a content strategist. Generate a comprehensive creative brief for content creation.
 
@@ -349,10 +324,6 @@ Generate a comprehensive creative brief in markdown format.`;
   return result.choices[0].message.content || "Failed to generate content brief.";
 }
 
-/**
- * AI-powered insight extraction from conversation exchanges
- * Uses AI to extract structured insights from messy user input and assistant responses
- */
 async function extractStructuredInsightsFromConversation(
   openai: OpenAI,
   userMessage: string,
@@ -360,7 +331,6 @@ async function extractStructuredInsightsFromConversation(
   conversationHistory: Array<{ role: string; content: string }>,
   knowledgeBase: any
 ): Promise<any | null> {
-  // Smart filtering: Skip trivial messages
   const userMsgLower = userMessage.toLowerCase().trim();
   const trivialPatterns = [
     /^(thanks?|thank you|thx|ty|ok|okay|got it|sure|yep|yes|no|nope|bye|goodbye|hi|hello|hey)$/i,
@@ -375,7 +345,6 @@ async function extractStructuredInsightsFromConversation(
     return null;
   }
 
-  // Build context from recent conversation history (last 3-5 messages)
   const recentHistory = conversationHistory.slice(-5).map(msg => ({
     role: msg.role,
     content: msg.content.substring(0, 500), // Limit context length
@@ -473,9 +442,6 @@ Extract structured insights that would enrich the knowledge base. Focus on NEW i
   }
 }
 
-/**
- * Build system prompt from OrganizationKnowledgeBase fields
- */
 function buildSystemPrompt(knowledgeBase: any, contextSummary: string | null): string {
   const businessName = knowledgeBase.businessName || "this business";
 
@@ -638,7 +604,6 @@ export async function POST(
       );
     }
 
-    // Fetch conversation and knowledge base
     const conversation = await prisma.businessConversation.findFirst({
       where: {
         id: conversationId,
@@ -672,12 +637,10 @@ export async function POST(
 
     const nextSequenceNumber = conversation.messageCount + 1;
 
-    // Initialize OpenAI client early (needed for commands)
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    // Check if message is a slash command
     const isSlashCommand = content.startsWith("/");
     let commandName: string | null = null;
     
@@ -688,10 +651,8 @@ export async function POST(
       }
     }
 
-    // Handle slash commands
     if (isSlashCommand && commandName) {
       try {
-        // Execute command handler
         const commandResult = await handleSlashCommand(
           commandName,
           openai,
@@ -700,7 +661,6 @@ export async function POST(
           nextSequenceNumber
         );
 
-        // Save user message
         const userMessage = await prisma.businessMessage.create({
           data: {
             conversationId: conversationId,
@@ -714,7 +674,6 @@ export async function POST(
           },
         });
 
-        // Save assistant response
         const assistantSequenceNumber = nextSequenceNumber + 1;
         const assistantMessage = await prisma.businessMessage.create({
           data: {
@@ -725,12 +684,11 @@ export async function POST(
             metadata: {
               ...commandResult.metadata,
               command: `/${commandName}`,
-              tokenCount: commandResult.content.length / 4, // Rough estimate
+              tokenCount: commandResult.content.length / 4,
             },
           },
         });
 
-        // Update conversation
         await prisma.businessConversation.update({
           where: { id: conversationId },
           data: {
@@ -745,7 +703,7 @@ export async function POST(
           assistantMessage: {
             id: assistantMessage.id,
             content: commandResult.content,
-            confidence: 90, // Commands have high confidence
+            confidence: 90,
           },
           conversationHistory: [],
           conversation: {
@@ -766,8 +724,6 @@ export async function POST(
       }
     }
 
-    // Normal chat flow continues below
-    // Get conversation history
     const conversationHistory = await prisma.businessMessage.findMany({
       where: { conversationId: conversationId },
       orderBy: { sequenceNumber: "desc" },
@@ -783,16 +739,14 @@ export async function POST(
 
     const historyChronological = conversationHistory.reverse();
 
-    // Build system prompt
     const systemPrompt = buildSystemPrompt(knowledgeBase, conversation.contextSummary);
 
-    // Build messages array for OpenAI
     const messages: Array<{
       role: "system" | "user" | "assistant";
       content: string;
     }> = [{ role: "system", content: systemPrompt }];
 
-    // Add conversation history
+
     for (const msg of historyChronological) {
       if (msg.role === "user" || msg.role === "assistant") {
         messages.push({
@@ -802,13 +756,11 @@ export async function POST(
       }
     }
 
-    // Add current user message
     messages.push({
       role: "user",
       content: content,
     });
 
-    // Save user message
     const userMessage = await prisma.businessMessage.create({
       data: {
         conversationId: conversationId,
@@ -818,7 +770,7 @@ export async function POST(
       },
     });
 
-    // Call OpenAI API
+
     let aiResponse: string = "";
     let promptTokens: number = 0;
     let completionTokens: number = 0;
@@ -849,7 +801,6 @@ export async function POST(
       );
     }
 
-    // Save assistant message and update conversation
     const result = await prisma.$transaction(async (tx) => {
       const assistantSequenceNumber = nextSequenceNumber + 1;
       const assistantMessage = await tx.businessMessage.create({
@@ -870,7 +821,7 @@ export async function POST(
       const updatedConversation = await tx.businessConversation.update({
         where: { id: conversationId },
         data: {
-          messageCount: { increment: 2 }, // User message + assistant message
+          messageCount: { increment: 2 }, 
           lastMessageAt: new Date(),
         },
       });
@@ -881,9 +832,7 @@ export async function POST(
       };
     });
 
-    // Extract insights from conversation using AI-powered extraction
     try {
-      // Use AI to extract structured insights from the conversation exchange
       const structuredInsights = await extractStructuredInsightsFromConversation(
         openai,
         content,
@@ -893,15 +842,13 @@ export async function POST(
       );
 
       if (structuredInsights && structuredInsights.has_insights) {
-        // Pass structured insights to existing extractInsights function
-        // This will convert them to the ExtractedInsight format with proper confidence scores
         const conversationData = {
           userMessage: content,
           assistantMessage: aiResponse,
           conversationId: conversationId,
           knowledgeBaseId: knowledgeBase.id,
           organizationId: knowledgeBase.organizationId,
-          structuredInsights: structuredInsights, // Pass AI-extracted structured data
+          structuredInsights: structuredInsights,
         };
 
         const insights = extractInsights("CHAT_CONVERSATION", conversationData);
@@ -920,7 +867,6 @@ export async function POST(
               `Created ${learningEventsResult.eventsCreated} LearningEvents for conversation ${conversationId}`
             );
 
-            // Apply learning events to KB immediately (light enrichment for MVP)
             try {
               const enrichmentResult = await applyLearningEventsToKB({
                 knowledgeBaseId: knowledgeBase.id,

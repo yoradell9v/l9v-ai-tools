@@ -21,6 +21,8 @@ import {
     Briefcase,
     ArrowRight,
     Lightbulb,
+    ChevronRight,
+    ChevronLeft,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -45,6 +47,14 @@ type OrganizationKnowledgeBase = {
     organizationId: string;
     businessName: string | null;
     [key: string]: any;
+};
+
+type ConversationSummary = {
+    id: string;
+    title: string | null;
+    lastMessageAt: string;
+    messageCount: number;
+    status: string;
 };
 
 const slashCommands = [
@@ -89,6 +99,12 @@ export default function AIBusinessBrainPage() {
     const [inputValue, setInputValue] = useState("");
     const [isSending, setIsSending] = useState(false);
     const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+    const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+    const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+    const [conversationsLoading, setConversationsLoading] = useState(false);
+    const [conversationsError, setConversationsError] = useState<string | null>(null);
+    const [isConversationLoading, setIsConversationLoading] = useState(false);
+    const [isCreatingConversation, setIsCreatingConversation] = useState(false);
     const [showSlashCommands, setShowSlashCommands] = useState(false);
     const [slashCommandFilter, setSlashCommandFilter] = useState("");
     const [isConversationSidebarOpen, setIsConversationSidebarOpen] = useState(false);
@@ -100,7 +116,6 @@ export default function AIBusinessBrainPage() {
         router.push("/dashboard/organization-profile");
     };
 
-    // Fetch knowledge base on mount
     useEffect(() => {
         const fetchKnowledgeBase = async () => {
             if (!user) {
@@ -116,7 +131,6 @@ export default function AIBusinessBrainPage() {
                     if (result.organizationProfile) {
                         setKnowledgeBase(result.organizationProfile);
                     } else {
-                        // No KB exists - will show onboarding form
                         setKnowledgeBase(null);
                     }
                 }
@@ -126,11 +140,9 @@ export default function AIBusinessBrainPage() {
                 setIsLoading(false);
             }
         };
-
         fetchKnowledgeBase();
     }, [user]);
 
-    // Scroll to bottom when messages change
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [chatMessages]);
@@ -145,6 +157,94 @@ export default function AIBusinessBrainPage() {
         if (hour < 12) return "Good morning!";
         if (hour < 18) return "Good afternoon!";
         return "Good evening!";
+    };
+
+    const formatShortDate = (dateString: string) => {
+        const date = new Date(dateString);
+        if (Number.isNaN(date.getTime())) return "";
+        return date.toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+        });
+    };
+
+    const fetchConversations = async () => {
+        if (!knowledgeBase) return;
+        setConversationsLoading(true);
+        setConversationsError(null);
+        try {
+            const res = await fetch("/api/organization-knowledge-base/conversation?list=true");
+            const data = await res.json();
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || "Failed to load conversations");
+            }
+
+            setConversations(data.conversations || []);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Failed to load conversations";
+            setConversationsError(message);
+        } finally {
+            setConversationsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (isConversationSidebarOpen) {
+            fetchConversations();
+        }
+    }, [isConversationSidebarOpen, knowledgeBase]);
+
+    const loadConversation = async (conversationId: string) => {
+        setIsConversationLoading(true);
+        setConversationsError(null);
+        setSelectedConversationId(conversationId);
+        setCurrentConversationId(conversationId);
+
+        try {
+            const res = await fetch(
+                `/api/organization-knowledge-base/conversation?conversationId=${conversationId}`
+            );
+            const data = await res.json();
+            if (!res.ok || !data.success || !data.conversation) {
+                throw new Error(data.error || "Failed to load conversation");
+            }
+
+            const mappedMessages: ChatMessage[] = (data.conversation.messages || []).map(
+                (msg: any) => ({
+                    id: msg.id,
+                    role: msg.role === "assistant" ? "assistant" : "user",
+                    content: msg.content,
+                    timestamp: new Date(msg.createdAt || msg.updatedAt || Date.now()),
+                    citations: msg.metadata?.citations || msg.citations,
+                    confidence: msg.metadata?.confidence,
+                })
+            );
+
+            setChatMessages(mappedMessages);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Failed to load conversation";
+            setConversationsError(message);
+        } finally {
+            setIsConversationLoading(false);
+        }
+    };
+
+    const handleStartNewConversation = () => {
+        setSelectedConversationId(null);
+        setCurrentConversationId(null);
+        setChatMessages([]);
+        setInputValue("");
+    };
+
+    const handleCreateConversation = async () => {
+        if (isCreatingConversation) return;
+        setIsCreatingConversation(true);
+        // Do not create on server until first message; just reset UI state
+        handleStartNewConversation();
+        setIsCreatingConversation(false);
     };
 
     const handleSendMessage = async () => {
@@ -165,7 +265,6 @@ export default function AIBusinessBrainPage() {
         try {
             let conversationId = currentConversationId;
             if (!conversationId) {
-                // Create conversation using new endpoint
                 const convResponse = await fetch(
                     `/api/organization-knowledge-base/conversation`,
                     {
@@ -184,9 +283,19 @@ export default function AIBusinessBrainPage() {
                 const convResult = await convResponse.json();
                 conversationId = convResult.conversation.id;
                 setCurrentConversationId(conversationId);
+                setSelectedConversationId(conversationId);
+                setConversations((prev) => [
+                    {
+                        id: convResult.conversation.id,
+                        title: convResult.conversation.title,
+                        lastMessageAt: convResult.conversation.lastMessageAt,
+                        messageCount: convResult.conversation.messageCount || 0,
+                        status: convResult.conversation.status || "ACTIVE",
+                    },
+                    ...prev.filter((c) => c.id !== convResult.conversation.id),
+                ]);
             }
 
-            // Send message using new endpoint
             const messageResponse = await fetch(
                 `/api/organization-knowledge-base/conversation/${conversationId}/message`,
                 {
@@ -215,6 +324,9 @@ export default function AIBusinessBrainPage() {
             };
 
             setChatMessages((prev) => [...prev, assistantMessage]);
+            if (isConversationSidebarOpen) {
+                fetchConversations();
+            }
         } catch (error) {
             console.error("Error sending message:", error);
             let errorContent = "Sorry, I encountered an error while processing your message.";
@@ -264,7 +376,6 @@ export default function AIBusinessBrainPage() {
         );
     }
 
-    // Show onboarding form if KB doesn't exist
     if (!knowledgeBase) {
         return (
             <>
@@ -364,232 +475,307 @@ export default function AIBusinessBrainPage() {
         );
     }
 
-    // Show chat interface if KB exists
     return (
-        <div className="flex flex-col h-screen">
-            <div className="flex items-center gap-2 p-4 border-b flex-shrink-0">
-                <SidebarTrigger />
-                <div className="flex-1 flex items-center justify-between">
-                    <div>
-                        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
-                            AI Business Brain
-                        </h1>
-                        {knowledgeBase.businessName && (
-                            <p className="text-sm text-[var(--text-secondary)]">
-                                {knowledgeBase.businessName}
-                            </p>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => setIsConversationSidebarOpen((prev) => !prev)}
-                            title="Conversation History"
-                        >
-                            <History size={18} className="text-[var(--accent-strong)]" />
-                        </Button>
+        <>
+            <div className="flex flex-col h-screen">
+                <div className="flex items-center gap-2 p-4 border-b flex-shrink-0">
+                    <SidebarTrigger />
+                    <div className="flex-1 flex items-center justify-between">
+                        <div>
+                            <h1 className="text-lg font-semibold text-[var(--text-primary)]">
+                                AI Business Brain
+                            </h1>
+                            {knowledgeBase.businessName && (
+                                <p className="text-sm text-[var(--text-secondary)]">
+                                    {knowledgeBase.businessName}
+                                </p>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                size="sm"
+                                onClick={handleCreateConversation}
+                                disabled={isCreatingConversation}
+                                className="gap-2"
+                            >
+                                <Plus size={16} />
+                                {isCreatingConversation ? "Creating..." : "New Chat"}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => setIsConversationSidebarOpen((prev) => !prev)}
+                                title="Conversation History"
+                            >
+                                <History size={18} className="text-[var(--accent-strong)]" />
+                            </Button>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-                {/* Chat Area */}
                 <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-                    {/* Messages */}
-                    <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 min-h-0">
-                        {chatMessages.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full text-center">
-                                <div className="w-16 h-16 rounded-lg bg-[var(--accent)]/20 flex items-center justify-center mb-4">
-                                    <Bot size={48} className="text-[var(--accent)]" />
+                    <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                        <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 min-h-0">
+                            {chatMessages.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center h-full text-center">
+                                    <div className="w-16 h-16 rounded-lg bg-[var(--accent)]/20 flex items-center justify-center mb-4">
+                                        <Bot size={48} className="text-[var(--accent)]" />
+                                    </div>
+                                    <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
+                                        {getCurrentGreeting()}
+                                    </h3>
+                                    <p className="text-sm text-[var(--text-secondary)] mb-6 max-w-md">
+                                        Ask me anything about your business, or use a slash command to get started.
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2 max-w-md">
+                                        {slashCommands.slice(0, 4).map((cmd) => (
+                                            <button
+                                                key={cmd.command}
+                                                onClick={() => {
+                                                    setInputValue(cmd.command);
+                                                    setShowSlashCommands(false);
+                                                }}
+                                                className="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-left transition-colors"
+                                            >
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <cmd.icon size={16} className="text-[var(--primary)]" />
+                                                    <span className="text-xs font-medium text-[var(--text-primary)]">
+                                                        {cmd.command}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-[var(--text-secondary)]">
+                                                    {cmd.description}
+                                                </p>
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
-                                    {getCurrentGreeting()}
-                                </h3>
-                                <p className="text-sm text-[var(--text-secondary)] mb-6 max-w-md">
-                                    Ask me anything about your business, or use a slash command to get started.
-                                </p>
-                                <div className="grid grid-cols-2 gap-2 max-w-md">
-                                    {slashCommands.slice(0, 4).map((cmd) => (
-                                        <button
-                                            key={cmd.command}
-                                            onClick={() => {
-                                                setInputValue(cmd.command);
-                                                setShowSlashCommands(false);
-                                            }}
-                                            className="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-left transition-colors"
-                                        >
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <cmd.icon size={16} className="text-[var(--primary)]" />
-                                                <span className="text-xs font-medium text-[var(--text-primary)]">
-                                                    {cmd.command}
-                                                </span>
-                                            </div>
-                                            <p className="text-xs text-[var(--text-secondary)]">
-                                                {cmd.description}
-                                            </p>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {chatMessages.map((message) => (
-                                    <div
-                                        key={message.id}
-                                        className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                                    >
+                            ) : (
+                                <div className="space-y-4">
+                                    {chatMessages.map((message) => (
                                         <div
-                                            className={`max-w-[80%] rounded-lg ${message.role === "user"
-                                                ? "bg-[var(--primary)] text-white px-4 py-2"
-                                                : "bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-primary)] p-4"
-                                                }`}
+                                            key={message.id}
+                                            className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                                         >
-                                            <div className={`prose prose-sm max-w-none break-words ${message.role === "user" ? "prose-invert" : ""}`}>
-                                                <ReactMarkdown
-                                                    remarkPlugins={[remarkGfm]}
-                                                    components={{
-                                                        p: ({ node, ...props }) => (
-                                                            <p className="mb-3 leading-relaxed last:mb-0" {...props} />
-                                                        ),
-                                                        strong: ({ node, ...props }) => (
-                                                            <strong className="font-semibold" {...props} />
-                                                        ),
-                                                        ul: ({ node, ...props }: any) => (
-                                                            <ul className="mb-3 ml-4 list-disc space-y-1 last:mb-0" {...props} />
-                                                        ),
-                                                        ol: ({ node, ...props }: any) => (
-                                                            <ol className="mb-3 ml-4 list-decimal space-y-1 last:mb-0" {...props} />
-                                                        ),
-                                                        li: ({ node, ...props }) => (
-                                                            <li className="leading-relaxed" {...props} />
-                                                        ),
-                                                        code: (props: any) => {
-                                                            const { inline, children, ...rest } = props;
-                                                            if (inline) {
+                                            <div
+                                                className={`max-w-[80%] rounded-lg ${message.role === "user"
+                                                    ? "bg-[var(--primary)] text-white px-4 py-2"
+                                                    : "bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-primary)] p-4"
+                                                    }`}
+                                            >
+                                                <div className={`prose prose-xs max-w-none break-words text-sm ${message.role === "user" ? "prose-invert" : ""}`}>
+                                                    <ReactMarkdown
+                                                        remarkPlugins={[remarkGfm]}
+                                                        components={{
+                                                            p: ({ node, ...props }) => (
+                                                                <p className="mb-2 leading-relaxed last:mb-0 text-sm" {...props} />
+                                                            ),
+                                                            strong: ({ node, ...props }) => (
+                                                                <strong className="font-semibold text-sm" {...props} />
+                                                            ),
+                                                            ul: ({ node, ...props }: any) => (
+                                                                <ul className="mb-2 ml-4 list-disc space-y-0.5 last:mb-0 text-sm" {...props} />
+                                                            ),
+                                                            ol: ({ node, ...props }: any) => (
+                                                                <ol className="mb-2 ml-4 list-decimal space-y-0.5 last:mb-0 text-sm" {...props} />
+                                                            ),
+                                                            li: ({ node, ...props }) => (
+                                                                <li className="leading-relaxed text-sm" {...props} />
+                                                            ),
+                                                            code: (props: any) => {
+                                                                const { inline, children, ...rest } = props;
+                                                                if (inline) {
+                                                                    return (
+                                                                        <code
+                                                                            className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono break-words"
+                                                                            {...rest}
+                                                                        >
+                                                                            {children}
+                                                                        </code>
+                                                                    );
+                                                                }
                                                                 return (
                                                                     <code
-                                                                        className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono break-words"
+                                                                        className="block rounded bg-muted p-3 text-xs font-mono whitespace-pre-wrap break-words overflow-auto"
                                                                         {...rest}
                                                                     >
                                                                         {children}
                                                                     </code>
                                                                 );
-                                                            }
-                                                            return (
-                                                                <code
-                                                                    className="block rounded bg-muted p-3 text-xs font-mono whitespace-pre-wrap break-words overflow-auto"
-                                                                    {...rest}
-                                                                >
-                                                                    {children}
-                                                                </code>
-                                                            );
-                                                        },
-                                                    }}
-                                                >
-                                                    {message.content}
-                                                </ReactMarkdown>
+                                                            },
+                                                        }}
+                                                    >
+                                                        {message.content}
+                                                    </ReactMarkdown>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
-                                {isSending && (
-                                    <div className="flex justify-start">
-                                        <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg p-4">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce" />
-                                                <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce delay-75" />
-                                                <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce delay-150" />
+                                    ))}
+                                    {isSending && (
+                                        <div className="flex justify-start">
+                                            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg p-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce" />
+                                                    <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce delay-75" />
+                                                    <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce delay-150" />
+                                                </div>
                                             </div>
+                                        </div>
+                                    )}
+                                    <div ref={messagesEndRef} />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Input Area */}
+                        <div className="flex-shrink-0 px-4 md:px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-color)]">
+                            <div className="relative">
+                                {showSlashCommands && (
+                                    <div className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg shadow-lg max-h-64 overflow-y-auto z-10">
+                                        <div className="p-2 border-b border-[var(--border-color)]">
+                                            <Input
+                                                type="text"
+                                                placeholder="Search commands..."
+                                                value={slashCommandFilter}
+                                                onChange={(e) => setSlashCommandFilter(e.target.value)}
+                                                className="text-sm"
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <div className="p-2">
+                                            {filteredSlashCommands.map((cmd) => (
+                                                <Button
+                                                    variant="ghost"
+                                                    key={cmd.command}
+                                                    onClick={() => {
+                                                        setInputValue(cmd.command);
+                                                        setShowSlashCommands(false);
+                                                        setSlashCommandFilter("");
+                                                    }}
+                                                    className="w-full justify-start gap-3 px-2 py-2"
+                                                >
+                                                    <cmd.icon
+                                                        size={18}
+                                                        className="text-[var(--primary)] flex-shrink-0"
+                                                    />
+                                                    <div className="flex-1 min-w-0 text-left">
+                                                        <div className="text-sm font-medium text-[var(--text-primary)]">
+                                                            {cmd.command}
+                                                        </div>
+                                                        <div className="text-xs text-[var(--text-secondary)]">
+                                                            {cmd.description}
+                                                        </div>
+                                                    </div>
+                                                </Button>
+                                            ))}
                                         </div>
                                     </div>
                                 )}
-                                <div ref={messagesEndRef} />
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Input Area */}
-                    <div className="flex-shrink-0 px-4 md:px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-color)]">
-                        <div className="relative">
-                            {showSlashCommands && (
-                                <div className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg shadow-lg max-h-64 overflow-y-auto z-10">
-                                    <div className="p-2 border-b border-[var(--border-color)]">
-                                        <Input
-                                            type="text"
-                                            placeholder="Search commands..."
-                                            value={slashCommandFilter}
-                                            onChange={(e) => setSlashCommandFilter(e.target.value)}
-                                            className="text-sm"
-                                            autoFocus
-                                        />
-                                    </div>
-                                    <div className="p-2">
-                                        {filteredSlashCommands.map((cmd) => (
-                                            <Button
-                                                variant="ghost"
-                                                key={cmd.command}
-                                                onClick={() => {
-                                                    setInputValue(cmd.command);
-                                                    setShowSlashCommands(false);
-                                                    setSlashCommandFilter("");
-                                                }}
-                                                className="w-full justify-start gap-3 px-2 py-2"
-                                            >
-                                                <cmd.icon
-                                                    size={18}
-                                                    className="text-[var(--primary)] flex-shrink-0"
-                                                />
-                                                <div className="flex-1 min-w-0 text-left">
-                                                    <div className="text-sm font-medium text-[var(--text-primary)]">
-                                                        {cmd.command}
-                                                    </div>
-                                                    <div className="text-xs text-[var(--text-secondary)]">
-                                                        {cmd.description}
-                                                    </div>
-                                                </div>
-                                            </Button>
-                                        ))}
-                                    </div>
+                                <div className="flex items-end gap-2">
+                                    <Textarea
+                                        ref={chatInputRef}
+                                        value={inputValue}
+                                        onChange={(e) => {
+                                            setInputValue(e.target.value);
+                                            if (e.target.value.startsWith("/")) {
+                                                setShowSlashCommands(true);
+                                            }
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter" && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleSendMessage();
+                                            }
+                                            if (e.key === "Escape") {
+                                                setShowSlashCommands(false);
+                                            }
+                                        }}
+                                        placeholder="Type a message or use / for commands..."
+                                        className="flex-1 min-h-[52px] max-h-32"
+                                        rows={1}
+                                    />
+                                    <Button
+                                        onClick={handleSendMessage}
+                                        disabled={!inputValue.trim() || isSending}
+                                        className="p-3"
+                                        size="icon"
+                                    >
+                                        <Send size={20} />
+                                    </Button>
                                 </div>
-                            )}
-                            <div className="flex items-end gap-2">
-                                <Textarea
-                                    ref={chatInputRef}
-                                    value={inputValue}
-                                    onChange={(e) => {
-                                        setInputValue(e.target.value);
-                                        if (e.target.value.startsWith("/")) {
-                                            setShowSlashCommands(true);
-                                        }
-                                    }}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter" && !e.shiftKey) {
-                                            e.preventDefault();
-                                            handleSendMessage();
-                                        }
-                                        if (e.key === "Escape") {
-                                            setShowSlashCommands(false);
-                                        }
-                                    }}
-                                    placeholder="Type a message or use / for commands..."
-                                    className="flex-1 min-h-[52px] max-h-32"
-                                    rows={1}
-                                />
-                                <Button
-                                    onClick={handleSendMessage}
-                                    disabled={!inputValue.trim() || isSending}
-                                    className="p-3"
-                                    size="icon"
-                                >
-                                    <Send size={20} />
-                                </Button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+
+            <div
+                className={`fixed top-0 right-0 h-full w-80 bg-[var(--card-bg)] border-l border-[var(--border-color)] shadow-lg transform transition-transform duration-300 ${isConversationSidebarOpen ? "translate-x-0" : "translate-x-full"
+                    }`}
+                style={{ zIndex: 30 }}
+            >
+                <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)]">
+                    <div className="space-y-0.5">
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">Conversation History</p>
+
+                    </div>
+                    <Button
+                        size="icon"
+                        variant="ghost"
+                        className="bg-gray-100 hover:bg-gray-200 text-[var(--text-primary)]"
+                        onClick={() => setIsConversationSidebarOpen((prev) => !prev)}
+                        title={isConversationSidebarOpen ? "Collapse" : "Expand"}
+                    >
+                        {isConversationSidebarOpen ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+                    </Button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto">
+                    {conversationsLoading && (
+                        <div className="px-4 py-3 text-sm text-[var(--text-secondary)]">Loading...</div>
+                    )}
+                    {conversationsError && (
+                        <div className="px-4 py-3 text-sm text-red-500">{conversationsError}</div>
+                    )}
+                    {!conversationsLoading && !conversationsError && conversations.length === 0 && (
+                        <div className="px-4 py-6 text-sm text-[var(--text-secondary)]">
+                            No conversations yet. Start a new one to see it here.
+                        </div>
+                    )}
+
+                    <div>
+                        {conversations.map((conv) => (
+                            <button
+                                key={conv.id}
+                                onClick={() => loadConversation(conv.id)}
+                                className={`w-full text-left px-4 py-3 hover:bg-[var(--hover-bg)] transition-colors ${selectedConversationId === conv.id ? "bg-[var(--hover-bg)]" : ""
+                                    }`}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                                            {conv.title || "Untitled conversation"}
+                                        </p>
+                                        <p className="text-xs text-[var(--text-secondary)]">
+                                            {formatShortDate(conv.lastMessageAt)}
+                                        </p>
+                                    </div>
+                                    <div className="ml-3 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                                        <History size={14} />
+                                        <span>{conv.messageCount}</span>
+                                    </div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {isConversationLoading && (
+                    <div className="absolute inset-x-0 bottom-0 p-2 text-center text-xs text-[var(--text-secondary)] bg-[var(--card-bg)] border-t border-[var(--border-color)]">
+                        Loading conversation...
+                    </div>
+                )}
+            </div>
+        </>
     );
 }
-
