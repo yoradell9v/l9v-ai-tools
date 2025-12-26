@@ -12,7 +12,7 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Job Description Builder AI",
+  title: "L9V AI Business Tools",
 };
 
 export default function RootLayout({

@@ -65,8 +65,8 @@ export async function GET() {
                 totalOrganizations,
                 totalUsers,
                 totalAnalyses,
-                totalBusinessBrains,
                 totalSOPs,
+                totalKnowledgeBases,
                 pendingInvitations,
             ] = await Promise.all([
                 prisma.organization.count({
@@ -74,8 +74,8 @@ export async function GET() {
                 }),
                 prisma.user.count(),
                 prisma.savedAnalysis.count(),
-                prisma.businessBrain.count(),
                 prisma.sOP.count(),
+                prisma.organizationKnowledgeBase.count(),
                 prisma.invitationToken.count({
                     where: {
                         acceptedAt: null,
@@ -89,8 +89,8 @@ export async function GET() {
                 totalOrganizations,
                 totalUsers,
                 totalAnalyses,
-                totalBusinessBrains,
                 totalSOPs,
+                totalKnowledgeBases,
                 pendingInvitations,
             };
         } else if (userOrganizations.some((uo) => uo.role === "ADMIN")) {
@@ -98,8 +98,8 @@ export async function GET() {
             const [
                 organizationMembers,
                 organizationAnalyses,
-                organizationBusinessBrains,
                 organizationSOPs,
+                organizationKnowledgeBases,
                 pendingInvitations,
             ] = await Promise.all([
                 prisma.userOrganization.count({
@@ -112,14 +112,14 @@ export async function GET() {
                         userOrganizationId: { in: userOrganizationIds },
                     },
                 }),
-                prisma.businessBrain.count({
+                prisma.sOP.count({
                     where: {
                         userOrganizationId: { in: userOrganizationIds },
                     },
                 }),
-                prisma.sOP.count({
+                prisma.organizationKnowledgeBase.count({
                     where: {
-                        userOrganizationId: { in: userOrganizationIds },
+                        organizationId: { in: organizationIds },
                     },
                 }),
                 prisma.invitationToken.count({
@@ -135,19 +135,14 @@ export async function GET() {
             stats = {
                 organizationMembers,
                 organizationAnalyses,
-                organizationBusinessBrains,
                 organizationSOPs,
+                organizationKnowledgeBases,
                 pendingInvitations,
             };
         } else {
             // MEMBER sees only their own stats
-            const [myAnalyses, myBusinessBrains, mySOPs] = await Promise.all([
+            const [myAnalyses, mySOPs] = await Promise.all([
                 prisma.savedAnalysis.count({
-                    where: {
-                        userOrganizationId: { in: userOrganizationIds },
-                    },
-                }),
-                prisma.businessBrain.count({
                     where: {
                         userOrganizationId: { in: userOrganizationIds },
                     },
@@ -161,7 +156,6 @@ export async function GET() {
 
             stats = {
                 myAnalyses,
-                myBusinessBrains,
                 mySOPs,
             };
         }

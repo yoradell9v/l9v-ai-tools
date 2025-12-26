@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useUser } from "@/context/UserContext";
 import AnalysisCard, { SavedAnalysis } from "@/components/ui/AnalysisCard";
 import RefinementForm from "@/components/forms/RefinementForm";
@@ -25,9 +25,20 @@ export default function SavedPage() {
     const [error, setError] = useState<string | null>(null);
     const [isRefinementModalOpen, setIsRefinementModalOpen] = useState(false);
     const [selectedAnalysis, setSelectedAnalysis] = useState<SavedAnalysis | null>(null);
+    const hasFetchedRef = useRef(false);
+    const lastUserIdRef = useRef<string | undefined>(undefined);
 
     useEffect(() => {
+        // Only fetch if we have a user ID and either:
+        // 1. We haven't fetched yet, or
+        // 2. The user ID has changed
         if (!user?.id) return;
+        
+        // Skip if we've already fetched for this user ID
+        if (hasFetchedRef.current && lastUserIdRef.current === user.id) return;
+
+        hasFetchedRef.current = true;
+        lastUserIdRef.current = user.id;
 
         const fetchSavedAnalyses = async () => {
             try {
@@ -59,6 +70,8 @@ export default function SavedPage() {
                 console.error("Error fetching saved analyses:", err);
                 setError(err.message || "Unable to load saved analyses. Please try again.");
                 setSavedItems([]);
+                // Reset ref on error so we can retry
+                hasFetchedRef.current = false;
             } finally {
                 setIsLoading(false);
             }
@@ -195,7 +208,7 @@ export default function SavedPage() {
             <div className="flex items-center gap-2 p-4 border-b">
                 <SidebarTrigger />
             </div>
-            <div className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden">
+            <div className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden overflow-x-hidden">
                 <div className="w-full p-4 md:p-8 pt-6 flex flex-col h-full">
                     {/* Fixed Header */}
                     <div className="flex-shrink-0 pt-0">
@@ -231,7 +244,7 @@ export default function SavedPage() {
                     </div>
 
                     {/* Scrollable Analyses List */}
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden">
                         <Card className="p-0">
                             <CardContent className="p-2">
                                 <div className="space-y-3">

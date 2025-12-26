@@ -17,6 +17,14 @@ model Organization {
   
   users     UserOrganization[]
   invitations InvitationToken[]
+
+  knowledgeBase OrganizationKnowledgeBase?
+
+   // Tool outputs (read from knowledge base, write insights back)
+  jobDescriptions SavedAnalysis[]
+  sops           SOP[]
+  conversations  BusinessConversation[]
+  enhancementAnalyses EnhancementAnalysis[]
 }
 
 model User {
@@ -62,7 +70,6 @@ model UserOrganization {
   savedAnalyses SavedAnalysis[]
   refinementMessages RefinementMessage[]
   sops          SOP[]
-  businessBrains BusinessBrain[]
   businessConversations BusinessConversation[]
   
   @@unique([userId, organizationId])
@@ -109,16 +116,193 @@ model InvitationToken {
   @@index([organizationId])
 }
 
+model OrganizationKnowledgeBase{
+  id String @id @default(cuid())
+  organizationId String @unique
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  //Core Identity Tier 1 Required
+  businessName String?
+  website String?
+  industry String?
+  industryOther String?
+  whatYouSell String? @db.Text
+
+  //Business Context Tier 1
+  monthlyRevenue String?
+  teamSize String?
+  primaryGoal String?
+  biggestBottleNeck String?
+
+  //Customer and Market Tier 2
+  idealCustomer String? @db.Text
+  topObjection String?
+  coreOffer String? @db.Text
+  customerJourney String @db.Text
+
+  //Operations and Tools Tier 2
+  toolStack String[]
+  primaryCRM String?
+  defaultTimeZone String?
+  bookingLink String?
+  supportEmail String?
+
+  //Brand & Voice (Tier 2)
+  brandVoiceStyle String?
+  riskBoldness String?
+  voiceExampleGood String? @db.Text
+  voiceExamplesAvoid String? @db.Text
+  contentLinks String? @db.Text
+
+  //Compliance Tier 2
+  isRegulated Boolean? @default(false)
+  regulatedIndustry String?
+  forbiddenWords String? @db.Text
+  disclaimers String? @db.Text
+
+  //HR Defaults
+  defaultWeeklyHours String?
+  defaultManagementStyle String?
+  defaultEnglishLevel String?
+
+  //Proof & Credibility
+  proofAssets String? @db.Text
+  proofFiles Json?
+
+  //Additional Context
+  pipeLineStages String?
+  emailSignOff String?
+
+  //AI-Generated Insights
+  aiInsights     Json? // {
+    // "customerPatterns": [...],
+    // "successfulMessaging": [...],
+    // "industryBenchmarks": {...},
+    // "recommendedTools": [...],
+    // "optimizationSuggestions": [...]
+  // }
+
+  //KnowledgeExtraction (data extracted from tool usage)
+  extractedKnowledge Json? // {
+    // "commonTasks": [...], // From JD builder
+    // "standardProcesses": [...], // From SOP generator
+    // "frequentQuestions": [...], // From chat
+    // "successPatterns": {...}
+  // }
+
+  //Completion and Quality (deterministic)
+  completeness Int? // 0-100 overall score
+  completenessBreakdown Json? // Tier breakdowns, tool readiness
+
+  //AI Quality Analysis (will add later)
+  aiQualityScore Int?
+  aiQualityAnalysis Json?
+  aiQualityAnalyzedAt DateTime?
+
+  //Versioning
+  version Int @default(1)
+  lastEditedBy String //userId
+  lastEditedAt DateTime?
+  contributors String[]
+
+  //Enrichment tracking
+  lastEnrichedAt DateTime?
+  enrichmentVersion Int 
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contributingSources KnowledgeSource[]
+  learningEvents LearningEvent[]
+  conversations BusinessConversation[]
+  enhancementAnalyses EnhancementAnalysis[]
+}
+
+model KnowledgeSource {
+  id String @id @default(cuid())
+  knowledgeBaseId String
+  knowledgeBase OrganizationKnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+
+  sourceType KnowledgeSourceType
+  sourceId String //Id of the jd, sop, or conversation
+
+  //What was learned
+  contributeFields String[]
+  extractedData Json?
+  confidence Int
+
+  //Metadata
+  contributedBy String
+  contributedAt DateTime @default(now())
+
+  @@index([knowledgeBaseId])
+  @@index([sourceType])
+  @@index([contributedAt])
+}
+
+enum KnowledgeSourceType {
+  INITIAL_ONBOARDING
+  JOB_DESCRIPTION
+  SOP_GENERATION
+  CHAT_CONVERSATION
+  MANUAL_UPDATE
+  FILE_UPLOAD
+  AI_ENRICHMENT
+}
+
+model LearningEvent {
+  id String @id @default(cuid())
+  knowledgeBaseId String
+  knowledgeBase OrganizationKnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+
+  eventType LearningEventType
+
+  insight String @db.Text
+  category String
+  confidence Int
+
+  triggeredBy String?
+  sourceIds String[]
+  metadata Json? // Structured metadata from ExtractedInsight for mapping to KB fields
+
+  applied Boolean @default(false)
+  appliedAt DateTime?
+  appliedToFields String[]
+
+  createdAt DateTime @default(now())
+
+  @@index([knowledgeBaseId])
+  @@index([eventType])
+  @@index([category])
+  @@index([createdAt])
+}
+
+enum LearningEventType{
+  PATTERN_DETECTED
+  OPTIMIZATION_FOUND
+  INSIGHT_GENERATED
+  INCONSISTENCY_FIXED
+  KNOWLEDGE_EXPANDED
+}
+
+
 model SavedAnalysis {
   id                    String   @id @default(cuid())
   userOrganizationId    String
   userOrganization      UserOrganization @relation(fields: [userOrganizationId], references: [id], onDelete: Cascade)
   
+  organizationId String
+  organization Organization @relation(fields:[organizationId], references:[id], onDelete: Cascade)
+
   title                 String
   intakeData            Json
   analysis              Json
 
-  
+  //Knowledge Base Integration
+  usedKnowledgeBaseVersion Int?
+  knowledgeBaseSnapshot Json?
+  contributedInsights Json?
+
   parentAnalysisId      String?
   parentAnalysis        SavedAnalysis? @relation("AnalysisRefinements", fields: [parentAnalysisId], references: [id], onDelete: Cascade)
   refinedVersions       SavedAnalysis[] @relation("AnalysisRefinements")
@@ -171,95 +355,42 @@ model SOP {
   userOrganizationId String
   userOrganization   UserOrganization @relation(fields: [userOrganizationId], references: [id], onDelete: Cascade)
   
+  organizationId String
+  organization Organization @relation(fields:[organizationId], references:[id], onDelete: Cascade)
+
   title              String
-  content            Json
+  content            Json       
+  intakeData         Json
+
+  //Knowledge Base Integration
+  usedKnowledgeBaseVersion Int?
+  knowledgeBaseSnapshot Json?
+  contributedInsights Json?
+
+  metadata           Json?
   
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   
   @@index([userOrganizationId])
-}
-
-model BusinessCard {
-  id             String   @id @default(cuid())
-  brainId        String
-  brain          BusinessBrain @relation(fields: [brainId], references: [id], onDelete: Cascade)
-
-  type           String            // e.g. "marketing", "operations", "financial", "strategy"
-  title          String
-  description    String @db.Text   // long explanation
-  priority       Int?              // optional (1–5)
-  metadata       Json?             // flexible for future AI fields
-  orderIndex     Int               // for UI ordering
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  
-  @@index([brainId])
-  @@index([type])
-}
-
-
-model BusinessBrain {
-  id                 String   @id @default(cuid())
-  userOrganizationId String
-  userOrganization   UserOrganization @relation(fields: [userOrganizationId], references: [id], onDelete: Cascade)
-  
-  // intake form
-  intakeData         Json              // raw submitted form values
-  fileUploads        Json?             // file URLs (images, pdfs, documents)
-
-  // AI-related
-  knowledgeBase      Json?
-
-  cards              BusinessCard[]
-  conversations     BusinessConversation[]
-  enhancementAnalyses EnhancementAnalysis[]
-  
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  
-  
-  completionScore    Int?
-  completionData     Json?
-  
-  // Completion data structure:
-  // {
-  //   tierOneComplete: boolean,
-  //   tierTwoSections: {
-  //     compliance: boolean,
-  //     proof: boolean,
-  //     voice: boolean,
-  //     operations: boolean
-  //   },
-  //   quickWins: [
-  //     {
-  //       id: string,
-  //       label: string,
-  //       completed: boolean,
-  //       impact: number, // +10%, +15%, etc.
-  //       category: string
-  //     }
-  //   ],
-  //   lastCalculated: timestamp
-  // }
-  
-  
-  @@index([userOrganizationId])
+  @@index([organizationId])
+  @@index([createdAt])
 }
 
 model EnhancementAnalysis {
   id              String   @id @default(cuid())
-  brainId         String
-  brain           BusinessBrain @relation(fields: [brainId], references: [id], onDelete: Cascade)
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  knowledgeBaseId String
+  knowledgeBase   OrganizationKnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
   
   // The analysis result
-  analysis        Json     // The full enhancementAnalysis object
+  analysis        Json     // Analysis of knowledge base completeness/quality
   
   // Cache invalidation
-  dataHash        String   // Hash of cards + intakeData + fileUploads to detect changes
-  cardIds         String[] // Which cards were analyzed
-  cardConfidences Int[]    // Confidence scores at time of analysis
+  dataHash        String   // Hash of knowledge base fields to detect changes
+  analyzedFields  String[] // Which fields were analyzed
+  fieldConfidences Json?   // Confidence scores per field: { "businessName": 95, "idealCustomer": 60, ... }
   
   // Metadata
   generatedAt     DateTime @default(now())
@@ -268,28 +399,33 @@ model EnhancementAnalysis {
   // Version tracking
   version         Int      @default(1)
   
-  @@index([brainId])
+  @@index([organizationId])
+  @@index([knowledgeBaseId])
   @@index([generatedAt])
   @@index([dataHash])
 }
 
 model BusinessConversation {
   id                 String   @id @default(cuid())
-  brainId            String
-  brain              BusinessBrain @relation(fields: [brainId], references: [id], onDelete: Cascade)
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  knowledgeBaseId     String
+  knowledgeBase      OrganizationKnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
   
   userOrganizationId String
   userOrganization   UserOrganization @relation(fields: [userOrganizationId], references: [id], onDelete: Cascade)
   
-  title              String   @default("New Conversation")  // Auto-generated from first message
+  title              String   @default("New Conversation") 
   
-  // Conversation state
+  // KNOWLEDGE BASE INTEGRATION
+  usedKnowledgeBaseVersion Int?
+  contributedInsights      Json? // Questions asked, topics discussed, pain points mentioned
+
   status             ConversationStatus @default(ACTIVE)
   lastMessageAt      DateTime @default(now())
   messageCount       Int      @default(0)
   
-  // Context tracking
-  activeCardIds      String[]          // Which cards are currently relevant
+  activeTopics       String[] // Topics/sections from knowledge base being discussed
   contextSummary     String? @db.Text  // AI-generated summary of conversation so far
   
   createdAt          DateTime @default(now())
@@ -297,7 +433,8 @@ model BusinessConversation {
   
   messages           BusinessMessage[]
   
-  @@index([brainId])
+  @@index([organizationId])
+  @@index([knowledgeBaseId])
   @@index([userOrganizationId])
   @@index([status])
   @@index([lastMessageAt])
@@ -319,7 +456,6 @@ model BusinessMessage {
   
   // Rich metadata for AI responses
   metadata           Json?    // {
-                              //   cardsReferenced: ["card_id_1", "card_id_2"],
                               //   confidenceScore: 85,
                               //   citedSources: [...],
                               //   tokenCount: 450,
@@ -332,8 +468,8 @@ model BusinessMessage {
   attachments        Json?    // Array of file references if user uploads files
   
   // For assistant messages
-  cardCitations      Json?    // Structured citations: { cardId, excerpts, confidence }
-  generatedArtifacts Json?    // If AI generates content based on cards
+  knowledgeBaseCitations Json? // Structured citations: { field: "businessName", excerpt: "...", confidence: 95 }
+  generatedArtifacts Json?    // If AI generates content based on knowledge base
   
   sequenceNumber     Int
   createdAt          DateTime @default(now())

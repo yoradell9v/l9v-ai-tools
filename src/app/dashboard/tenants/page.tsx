@@ -662,39 +662,77 @@ export default function TenantsPage() {
                                                             </p>
                                                         </div>
                                                     ) : (
-                                                        <div className="rounded-lg border">
-                                                            <Table>
-                                                                <TableHeader>
-                                                                    <TableRow>
-                                                                        <TableHead>Name</TableHead>
-                                                                        <TableHead>Email</TableHead>
-                                                                        <TableHead>Role</TableHead>
-                                                                        <TableHead>Joined</TableHead>
-                                                                    </TableRow>
-                                                                </TableHeader>
-                                                                <TableBody>
-                                                                    {currentTenantDetails.collaborators.map((collaborator) => (
-                                                                        <TableRow key={collaborator.id}>
-                                                                            <TableCell className="font-medium">
+                                                        <div className="space-y-4">
+                                                            {/* Mobile layout: stacked cards instead of wide table */}
+                                                            <div className="md:hidden space-y-2">
+                                                                {currentTenantDetails.collaborators.map((collaborator) => (
+                                                                    <div
+                                                                        key={collaborator.id}
+                                                                        className="rounded-lg border px-3 py-2 text-xs space-y-1"
+                                                                    >
+                                                                        <div className="flex items-center justify-between gap-2">
+                                                                            <div className="font-medium truncate">
                                                                                 {collaborator.firstname} {collaborator.lastname}
-                                                                            </TableCell>
-                                                                            <TableCell>{collaborator.email}</TableCell>
-                                                                            <TableCell>
-                                                                                <Badge variant={collaborator.role === "ADMIN" ? "default" : "secondary"}>
-                                                                                    {collaborator.role}
-                                                                                </Badge>
-                                                                            </TableCell>
-                                                                            <TableCell className="text-muted-foreground">
-                                                                                {new Date(collaborator.joinedAt).toLocaleDateString("en-US", {
-                                                                                    month: "short",
-                                                                                    day: "numeric",
-                                                                                    year: "numeric",
-                                                                                })}
-                                                                            </TableCell>
+                                                                            </div>
+                                                                            <Badge
+                                                                                variant={collaborator.role === "ADMIN" ? "default" : "secondary"}
+                                                                                className="shrink-0"
+                                                                            >
+                                                                                {collaborator.role}
+                                                                            </Badge>
+                                                                        </div>
+                                                                        <div className="text-muted-foreground truncate" title={collaborator.email}>
+                                                                            {collaborator.email}
+                                                                        </div>
+                                                                        <div className="text-[11px] text-muted-foreground">
+                                                                            Joined{" "}
+                                                                            {new Date(collaborator.joinedAt).toLocaleDateString("en-US", {
+                                                                                month: "short",
+                                                                                day: "numeric",
+                                                                                year: "numeric",
+                                                                            })}
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+
+                                                            {/* Desktop / tablet layout: table */}
+                                                            <div className="hidden md:block rounded-lg border">
+                                                                <Table className="w-full text-sm">
+                                                                    <TableHeader>
+                                                                        <TableRow>
+                                                                            <TableHead>Name</TableHead>
+                                                                            <TableHead>Email</TableHead>
+                                                                            <TableHead>Role</TableHead>
+                                                                            <TableHead>Joined</TableHead>
                                                                         </TableRow>
-                                                                    ))}
-                                                                </TableBody>
-                                                            </Table>
+                                                                    </TableHeader>
+                                                                    <TableBody>
+                                                                        {currentTenantDetails.collaborators.map((collaborator) => (
+                                                                            <TableRow key={collaborator.id}>
+                                                                                <TableCell className="font-medium">
+                                                                                    {collaborator.firstname} {collaborator.lastname}
+                                                                                </TableCell>
+                                                                                <TableCell className="max-w-xs truncate" title={collaborator.email}>
+                                                                                    {collaborator.email}
+                                                                                </TableCell>
+                                                                                <TableCell>
+                                                                                    <Badge variant={collaborator.role === "ADMIN" ? "default" : "secondary"}>
+                                                                                        {collaborator.role}
+                                                                                    </Badge>
+                                                                                </TableCell>
+                                                                                <TableCell className="text-muted-foreground">
+                                                                                    {new Date(collaborator.joinedAt).toLocaleDateString("en-US", {
+                                                                                        month: "short",
+                                                                                        day: "numeric",
+                                                                                        year: "numeric",
+                                                                                    })}
+                                                                                </TableCell>
+                                                                            </TableRow>
+                                                                        ))}
+                                                                    </TableBody>
+                                                                </Table>
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>

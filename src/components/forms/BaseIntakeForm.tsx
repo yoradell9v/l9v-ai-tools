@@ -36,6 +36,7 @@ interface BaseIntakeFormProps {
     initialData?: Record<string, any>;
     hideClearButton?: boolean;
     secondaryButton?: React.ReactNode;
+    hideTitleAndDescription?: boolean;
 }
 
 export interface BaseIntakeFormRef {
@@ -54,6 +55,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
     initialData,
     hideClearButton = false,
     secondaryButton,
+    hideTitleAndDescription = false,
 }, ref) => {
     const [formData, setFormData] = useState<Record<string, any>>(config.defaultValues);
     const [files, setFiles] = useState<Record<string, File[]>>({});
@@ -97,7 +99,9 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                     if (field.type === 'array') {
                         const arrayMinItems = field.minItems || 0;
                         const arrayValue = Array.isArray(value) ? value : [];
-                        if (arrayValue.slice(0, arrayMinItems).every((item: string) => item?.trim())) {
+                        // Check that there are at least minItems AND all minItems are filled
+                        if (arrayValue.length >= arrayMinItems &&
+                            arrayValue.slice(0, arrayMinItems).every((item: string) => item?.trim())) {
                             filledRequired++;
                         }
                     } else if (field.type === 'repeater') {
@@ -157,17 +161,21 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
         });
         setExpandedSections(initialExpanded);
 
-        // Priority: initialData > localStorage
+        // Priority: initialData (merged with defaults) > localStorage > defaults
         if (initialData) {
-            setFormData(initialData);
-            onFormChange?.(initialData);
+            // Merge initialData with defaultValues to ensure all fields have defaults
+            const mergedData = { ...config.defaultValues, ...initialData };
+            setFormData(mergedData);
+            onFormChange?.(mergedData);
         } else {
             try {
                 const saved = localStorage.getItem(`${config.storageKey}-${userId}`);
                 if (saved) {
                     const parsed = JSON.parse(saved);
-                    setFormData(parsed);
-                    onFormChange?.(parsed);
+                    // Merge saved data with defaults to ensure all fields exist
+                    const mergedData = { ...config.defaultValues, ...parsed };
+                    setFormData(mergedData);
+                    onFormChange?.(mergedData);
                 }
             } catch (error) {
                 console.error('Failed to load saved form data:', error);
@@ -294,18 +302,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
             }
 
             const { presignedUrl, fileUrl, key } = await presignedResponse.json();
-            
-            // Debug: Log the fileUrl received from the API
-            console.log("Received fileUrl from presigned URL API:", {
-                fileUrl,
-                fileUrlType: typeof fileUrl,
-                fileUrlLength: fileUrl?.length,
-                fileUrlStartsWith: fileUrl?.substring(0, 50),
-                isHttpUrl: fileUrl?.startsWith("http://") || fileUrl?.startsWith("https://"),
-            });
 
-            // Upload file directly to S3
-            // Note: credentials must be 'omit' for S3 presigned URLs to work with CORS wildcard
             const uploadResponse = await fetch(presignedUrl, {
                 method: "PUT",
                 body: file,
@@ -345,7 +342,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
         } catch (error) {
             console.error("Error uploading file to S3:", error);
             const errorMessage = error instanceof Error ? error.message : "Failed to upload file";
-            
+
             // Set error for this specific file
             setFileUploadErrors((prev) => ({
                 ...prev,
@@ -354,7 +351,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                     [fileIndex]: errorMessage,
                 },
             }));
-            
+
             return null;
         }
     };
@@ -423,7 +420,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
             validFiles.forEach((file, index) => {
                 const fileIndex = startIndex + index;
                 const fileKey = `${file.name}-${file.size}`;
-                
+
                 uploadFileToS3(file, fieldId, fileIndex, field).then((uploadResult) => {
                     // Remove from uploading state
                     setUploadingFiles((prev) => {
@@ -478,7 +475,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
     const handleFileRemove = (fieldId: string, index: number) => {
         // Get the file being removed to match by name
         const fileToRemove = files[fieldId]?.[index];
-        
+
         // Remove from files state
         setFiles((prev) => {
             const currentFiles = prev[fieldId] || [];
@@ -614,6 +611,32 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
         );
         if (hasUploadErrors) {
             setSubmitError("Please resolve file upload errors before submitting.");
+            return;
+        }
+
+        // Validate required array fields with minItems
+        const validationErrors: string[] = [];
+        config.sections.forEach((section) => {
+            section.fields.forEach((field) => {
+                if (!shouldShowField(field)) return;
+
+                if (field.required && field.type === 'array') {
+                    const arrayMinItems = field.minItems || 0;
+                    const arrayValue = Array.isArray(formData[field.id]) ? formData[field.id] : [];
+                    const filledItems = arrayValue.filter((item: string) => item?.trim()).length;
+
+                    if (filledItems < arrayMinItems) {
+                        validationErrors.push(
+                            `${field.label} requires at least ${arrayMinItems} ${arrayMinItems === 1 ? 'item' : 'items'}. You have ${filledItems}.`
+                        );
+                    }
+                }
+            });
+        });
+
+        if (validationErrors.length > 0) {
+            setSubmitError(validationErrors.join(' '));
+            setIsSubmitting(false);
             return;
         }
 
@@ -909,7 +932,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                 const fileError = fileErrors[field.id];
                 const isDragOver = dragOver[field.id] || false;
                 const hasUploading = Object.values(fieldUploading).some((uploading) => uploading);
-                
+
                 return (
                     <div key={field.id} className="space-y-3">
                         <Label>
@@ -956,13 +979,12 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                                     const isUploading = fieldUploading[index] || false;
                                     const uploadError = fieldUploadErrors[index];
                                     const isUploaded = fieldUrls.some((url) => url.name === file.name);
-                                    
+
                                     return (
                                         <div
                                             key={`${file.name}-${index}`}
-                                            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-xs ${
-                                                uploadError ? "border-destructive bg-destructive/5" : ""
-                                            }`}
+                                            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-xs ${uploadError ? "border-destructive bg-destructive/5" : ""
+                                                }`}
                                         >
                                             <div className="flex items-center gap-2 flex-1 min-w-0">
                                                 {isUploading ? (
@@ -1141,7 +1163,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
             <div className="flex flex-col max-h-[calc(100vh-12rem)]">
                 {/* Progress Bar */}
                 <div className="pb-4 border-b">
-                    {(config.title || config.description) && (
+                    {!hideTitleAndDescription && (config.title || config.description) && (
                         <div className="flex items-center justify-between ">
                             <div>
                                 {config.title && (
