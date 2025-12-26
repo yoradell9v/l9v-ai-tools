@@ -127,13 +127,26 @@ export default function SopPage() {
       setAiReviewSuggestions(null);
       setShowReviewResults(false);
 
-      toast.success("SOP modifications saved!", {
-        description: `Your changes have been saved successfully (version ${result.sop.version}).`,
+      toast.success("SOP updated successfully!", {
+        description: `Your changes have been saved. The SOP is now at version ${result.sop.version}.`,
       });
     } catch (error: any) {
       console.error("Error saving SOP modifications:", error);
-      toast.error("Failed to save modifications", {
-        description: error.message || "An error occurred while saving.",
+
+      // User-friendly error messages
+      let errorMessage = "We couldn't save your changes. Please try again.";
+      if (error.message?.includes("not found")) {
+        errorMessage = "The SOP could not be found. Please refresh the page and try again.";
+      } else if (error.message?.includes("permission") || error.message?.includes("authorized")) {
+        errorMessage = "You don't have permission to edit this SOP. Please contact your administrator.";
+      } else if (error.message?.includes("network") || error.message?.includes("fetch")) {
+        errorMessage = "Connection issue. Please check your internet connection and try again.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      toast.error("Unable to save changes", {
+        description: errorMessage,
       });
       throw error;
     } finally {
@@ -180,6 +193,12 @@ export default function SopPage() {
             // New: content is an object with markdown and html fields
             markdownContent = content.markdown || "";
             htmlContent = content.html || undefined;
+
+            // Ensure HTML is actually HTML, not markdown
+            if (htmlContent && (!htmlContent.includes("<") || htmlContent.includes("```"))) {
+              console.warn("[SOP Page] HTML content appears to be markdown, will convert");
+              htmlContent = undefined; // Force conversion
+            }
           }
 
           console.log("[SOP Page] Loaded SOP:", {
@@ -187,6 +206,7 @@ export default function SopPage() {
             hasHtml: !!htmlContent,
             markdownLength: markdownContent.length,
             htmlLength: htmlContent?.length || 0,
+            htmlPreview: htmlContent?.substring(0, 100) || "none",
           });
 
           setGeneratedSOP({
@@ -208,9 +228,16 @@ export default function SopPage() {
         } else {
           setHasNoSavedSOPs(true);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error loading latest SOP:", error);
         setHasNoSavedSOPs(true);
+
+        // Only show error toast if it's not just "no SOPs found"
+        if (error.message && !error.message.includes("No SOPs")) {
+          toast.error("Unable to load SOP", {
+            description: "We couldn't load your saved SOP. Please refresh the page and try again.",
+          });
+        }
       } finally {
         setIsLoadingLatest(false);
       }
@@ -223,25 +250,31 @@ export default function SopPage() {
   useEffect(() => {
     if (generatedSOP) {
       // Prefer HTML from API response, fallback to converting markdown
-      if (generatedSOP.sopHtml) {
+      if (generatedSOP.sopHtml && generatedSOP.sopHtml.trim().length > 0) {
+        console.log("[SOP Page] Using provided HTML, length:", generatedSOP.sopHtml.length);
         setSopHtml(generatedSOP.sopHtml);
-      } else if (generatedSOP.sop) {
+      } else if (generatedSOP.sop && generatedSOP.sop.trim().length > 0) {
         // Fallback: convert markdown if HTML not provided
+        console.log("[SOP Page] HTML not available, converting markdown to HTML, markdown length:", generatedSOP.sop.length);
         const convertToHtml = async () => {
           try {
             const html = await markdownToHtml(generatedSOP.sop);
-            if (html && html.trim()) {
+            if (html && html.trim().length > 0) {
+              console.log("[SOP Page] Markdown conversion successful, HTML length:", html.length);
               setSopHtml(html);
             } else {
+              console.warn("[SOP Page] Markdown conversion returned empty HTML, using escaped markdown");
               setSopHtml(`<pre>${generatedSOP.sop.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`);
             }
           } catch (error) {
-            console.error("Error converting markdown to HTML:", error);
+            console.error("[SOP Page] Error converting markdown to HTML:", error);
+            // Show escaped markdown as fallback
             setSopHtml(`<pre>${generatedSOP.sop.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`);
           }
         };
         convertToHtml();
       } else {
+        console.warn("[SOP Page] No SOP content available");
         setSopHtml("");
       }
     } else {
@@ -290,12 +323,25 @@ export default function SopPage() {
         document.body.removeChild(a);
         setIsDownloading(false);
         setIsPreviewDialogOpen(false);
-        toast.success("PDF downloaded successfully!");
+        toast.success("PDF downloaded successfully!", {
+          description: `Your SOP "${generatedSOP.metadata.title}" has been saved to your downloads folder.`,
+        });
       }, 100);
     } catch (error: any) {
       console.error("Download error:", error);
-      toast.error("Failed to download PDF", {
-        description: error.message || "An error occurred while generating the PDF.",
+
+      // User-friendly error messages
+      let errorMessage = "We couldn't generate the PDF. Please try again.";
+      if (error.message?.includes("network") || error.message?.includes("fetch")) {
+        errorMessage = "Connection issue. Please check your internet connection and try again.";
+      } else if (error.message?.includes("content") || error.message?.includes("markdown")) {
+        errorMessage = "The SOP content couldn't be processed. Please try refreshing the page.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      toast.error("Unable to download PDF", {
+        description: errorMessage,
       });
       setIsDownloading(false);
     }
@@ -775,16 +821,25 @@ export default function SopPage() {
                         text-decoration: none;
                       }
                     `}} />
-                    <div
-                      className="sop-content-display w-full max-w-full"
-                      style={{
-                        wordWrap: 'break-word',
-                        overflowWrap: 'break-word',
-                        overflowX: 'hidden',
-                        maxWidth: '100%'
-                      }}
-                      dangerouslySetInnerHTML={{ __html: sopHtml }}
-                    />
+                    {sopHtml && sopHtml.trim().length > 0 ? (
+                      <div
+                        className="sop-content-display w-full max-w-full"
+                        style={{
+                          wordWrap: 'break-word',
+                          overflowWrap: 'break-word',
+                          overflowX: 'hidden',
+                          maxWidth: '100%'
+                        }}
+                        dangerouslySetInnerHTML={{ __html: sopHtml }}
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="text-center space-y-2">
+                          <Loader2 className="h-5 w-5 animate-spin text-primary mx-auto" />
+                          <p className="text-sm text-muted-foreground">Converting SOP to HTML...</p>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </CardContent>
@@ -876,7 +931,7 @@ export default function SopPage() {
                     setIsModalOpen(false);
                     setIsProcessing(false);
                     toast.success("SOP generated successfully!", {
-                      description: `Your SOP "${result.metadata.title}" has been created.`,
+                      description: `Your Standard Operating Procedure "${result.metadata.title}" is ready to review and use.`,
                     });
 
                     return {
@@ -886,9 +941,23 @@ export default function SopPage() {
                   } catch (error: any) {
                     console.error("SOP generation error:", error);
                     setIsProcessing(false);
-                    const errorMessage = error.message || "Failed to generate SOP";
+
+                    // User-friendly error messages
+                    let errorMessage = "We couldn't generate your SOP. Please try again.";
+                    if (error.message?.includes("network") || error.message?.includes("fetch")) {
+                      errorMessage = "Connection issue. Please check your internet connection and try again.";
+                    } else if (error.message?.includes("required") || error.message?.includes("missing")) {
+                      errorMessage = "Please fill in all required fields and try again.";
+                    } else if (error.message?.includes("token") || error.message?.includes("authenticated")) {
+                      errorMessage = "Your session has expired. Please refresh the page and try again.";
+                    } else if (error.message?.includes("OpenAI") || error.message?.includes("API")) {
+                      errorMessage = "The AI service is temporarily unavailable. Please try again in a moment.";
+                    } else if (error.message) {
+                      errorMessage = error.message;
+                    }
+
                     setError(errorMessage);
-                    toast.error("Failed to generate SOP", {
+                    toast.error("Unable to generate SOP", {
                       description: errorMessage,
                     });
                     throw error;
@@ -896,7 +965,12 @@ export default function SopPage() {
                 }}
                 onError={(error) => {
                   console.error("SOP generation error:", error);
-                  toast.error(error || "Failed to generate SOP");
+                  const errorMessage = typeof error === "string"
+                    ? error
+                    : "We couldn't generate your SOP. Please try again.";
+                  toast.error("Unable to generate SOP", {
+                    description: errorMessage,
+                  });
                 }}
               />
             </div>

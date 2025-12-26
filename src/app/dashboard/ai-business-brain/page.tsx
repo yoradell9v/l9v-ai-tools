@@ -562,25 +562,112 @@ export default function AIBusinessBrainPage() {
                                                     ? "bg-[var(--primary)] text-white px-4 py-2"
                                                     : "bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-primary)] p-4"
                                                     }`}
+                                                style={{
+                                                    wordWrap: 'break-word',
+                                                    overflowWrap: 'break-word',
+                                                    overflowX: 'hidden',
+                                                }}
                                             >
-                                                <div className={`prose prose-xs max-w-none break-words text-sm ${message.role === "user" ? "prose-invert" : ""}`}>
+                                                <div 
+                                                    className={`prose prose-xs max-w-none break-words text-sm ${message.role === "user" ? "prose-invert" : ""}`}
+                                                    style={{
+                                                        wordWrap: 'break-word',
+                                                        overflowWrap: 'break-word',
+                                                        overflowX: 'hidden',
+                                                    }}
+                                                >
                                                     <ReactMarkdown
                                                         remarkPlugins={[remarkGfm]}
                                                         components={{
                                                             p: ({ node, ...props }) => (
-                                                                <p className="mb-2 leading-relaxed last:mb-0 text-sm" {...props} />
+                                                                <p 
+                                                                    className="mb-2 leading-relaxed last:mb-0 text-sm" 
+                                                                    style={{
+                                                                        wordWrap: 'break-word',
+                                                                        overflowWrap: 'break-word',
+                                                                    }}
+                                                                    {...props} 
+                                                                />
+                                                            ),
+                                                            h1: ({ node, ...props }: any) => (
+                                                                <h1 
+                                                                    className="text-lg font-bold mb-2 mt-4 first:mt-0" 
+                                                                    style={{
+                                                                        wordWrap: 'break-word',
+                                                                        overflowWrap: 'break-word',
+                                                                    }}
+                                                                    {...props} 
+                                                                />
+                                                            ),
+                                                            h2: ({ node, ...props }: any) => (
+                                                                <h2 
+                                                                    className="text-base font-bold mb-2 mt-4 first:mt-0" 
+                                                                    style={{
+                                                                        wordWrap: 'break-word',
+                                                                        overflowWrap: 'break-word',
+                                                                    }}
+                                                                    {...props} 
+                                                                />
+                                                            ),
+                                                            h3: ({ node, ...props }: any) => (
+                                                                <h3 
+                                                                    className="text-sm font-semibold mb-2 mt-3 first:mt-0" 
+                                                                    style={{
+                                                                        wordWrap: 'break-word',
+                                                                        overflowWrap: 'break-word',
+                                                                    }}
+                                                                    {...props} 
+                                                                />
                                                             ),
                                                             strong: ({ node, ...props }) => (
-                                                                <strong className="font-semibold text-sm" {...props} />
+                                                                <strong 
+                                                                    className="font-semibold text-sm" 
+                                                                    style={{
+                                                                        wordWrap: 'break-word',
+                                                                        overflowWrap: 'break-word',
+                                                                    }}
+                                                                    {...props} 
+                                                                />
                                                             ),
                                                             ul: ({ node, ...props }: any) => (
-                                                                <ul className="mb-2 ml-4 list-disc space-y-0.5 last:mb-0 text-sm" {...props} />
+                                                                <ul 
+                                                                    className="mb-2 ml-4 list-disc space-y-0.5 last:mb-0 text-sm" 
+                                                                    style={{
+                                                                        wordWrap: 'break-word',
+                                                                        overflowWrap: 'break-word',
+                                                                    }}
+                                                                    {...props} 
+                                                                />
                                                             ),
                                                             ol: ({ node, ...props }: any) => (
-                                                                <ol className="mb-2 ml-4 list-decimal space-y-0.5 last:mb-0 text-sm" {...props} />
+                                                                <ol 
+                                                                    className="mb-2 ml-4 list-decimal space-y-0.5 last:mb-0 text-sm" 
+                                                                    style={{
+                                                                        wordWrap: 'break-word',
+                                                                        overflowWrap: 'break-word',
+                                                                    }}
+                                                                    {...props} 
+                                                                />
                                                             ),
                                                             li: ({ node, ...props }) => (
-                                                                <li className="leading-relaxed text-sm" {...props} />
+                                                                <li 
+                                                                    className="leading-relaxed text-sm" 
+                                                                    style={{
+                                                                        wordWrap: 'break-word',
+                                                                        overflowWrap: 'break-word',
+                                                                    }}
+                                                                    {...props} 
+                                                                />
+                                                            ),
+                                                            blockquote: ({ node, ...props }: any) => (
+                                                                <blockquote 
+                                                                    className="border-l-4 border-muted pl-4 italic my-2 text-sm" 
+                                                                    style={{
+                                                                        wordWrap: 'break-word',
+                                                                        overflowWrap: 'break-word',
+                                                                    }}
+                                                                    {...props} 
+                                                                />
                                                             ),
                                                             code: (props: any) => {
                                                                 const { inline, children, ...rest } = props;
@@ -588,6 +675,10 @@ export default function AIBusinessBrainPage() {
                                                                     return (
                                                                         <code
                                                                             className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono break-words"
+                                                                            style={{
+                                                                                wordWrap: 'break-word',
+                                                                                overflowWrap: 'break-word',
+                                                                            }}
                                                                             {...rest}
                                                                         >
                                                                             {children}
@@ -596,13 +687,29 @@ export default function AIBusinessBrainPage() {
                                                                 }
                                                                 return (
                                                                     <code
-                                                                        className="block rounded bg-muted p-3 text-xs font-mono whitespace-pre-wrap break-words overflow-auto"
+                                                                        className="block rounded bg-muted p-3 text-xs font-mono whitespace-pre-wrap break-words overflow-x-auto"
+                                                                        style={{
+                                                                            wordWrap: 'break-word',
+                                                                            overflowWrap: 'break-word',
+                                                                            maxWidth: '100%',
+                                                                        }}
                                                                         {...rest}
                                                                     >
                                                                         {children}
                                                                     </code>
                                                                 );
                                                             },
+                                                            pre: ({ node, ...props }: any) => (
+                                                                <pre
+                                                                    className="block rounded bg-muted p-3 text-xs font-mono whitespace-pre-wrap break-words overflow-x-auto"
+                                                                    style={{
+                                                                        wordWrap: 'break-word',
+                                                                        overflowWrap: 'break-word',
+                                                                        maxWidth: '100%',
+                                                                    }}
+                                                                    {...props}
+                                                                />
+                                                            ),
                                                         }}
                                                     >
                                                         {message.content}
