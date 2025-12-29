@@ -269,81 +269,82 @@ export default function DashboardPage() {
     return (
         <>
             <Dialog open={showOnboardingModal} onOpenChange={setShowOnboardingModal}>
-                <DialogContent className="sm:max-w-[550px]">
-                    <DialogHeader>
+                <DialogContent className="sm:max-w-[550px] max-h-[90vh] flex flex-col p-0">
+                    <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-lg">
                             <Brain className="h-5 w-5 text-[color:var(--accent-strong)]" />
                             Complete Your Organization Knowledge Base
                         </DialogTitle>
-
                     </DialogHeader>
                     {onboardingStatus && onboardingStatus.needsOnboarding && (
-                        <div className="space-y-5">
-                            <div className="bg-gradient-to-r from-[color:var(--accent-strong)]/10 to-[color:var(--accent-strong)]/5 border border-[color:var(--accent-strong)]/20 rounded-lg p-4">
-                                <div className="flex items-start gap-3">
-                                    <Lightbulb className="h-5 w-5 text-[color:var(--accent-strong)] mt-0.5 flex-shrink-0" />
-                                    <div className="flex-1">
-                                        <p className="text-sm font-semibold text-[color:var(--text-primary)] mb-1">
-                                            Your Knowledge Base powers everything
-                                        </p>
-                                        <p className="text-xs text-[color:var(--text-secondary)] leading-relaxed">
-                                            This single source of truth feeds all your tools—Job Descriptions, SOPs, Business Brain conversations, and more. The more complete it is, the smarter your results become.
-                                        </p>
+                        <>
+                            <div className="flex-1 overflow-y-auto px-6 space-y-5 min-h-0">
+                                <div className="bg-gradient-to-r from-[color:var(--accent-strong)]/10 to-[color:var(--accent-strong)]/5 border border-[color:var(--accent-strong)]/20 rounded-lg p-4">
+                                    <div className="flex items-start gap-3">
+                                        <Lightbulb className="h-5 w-5 text-[color:var(--accent-strong)] mt-0.5 flex-shrink-0" />
+                                        <div className="flex-1">
+                                            <p className="text-sm font-semibold text-[color:var(--text-primary)] mb-1">
+                                                Your Knowledge Base powers everything
+                                            </p>
+                                            <p className="text-xs text-[color:var(--text-secondary)] leading-relaxed">
+                                                This single source of truth feeds all your tools—Job Descriptions, SOPs, Business Brain conversations, and more. The more complete it is, the smarter your results become.
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-muted-foreground font-medium">Knowledge Base Completion</span>
-                                    <span className="font-semibold">
-                                        {onboardingStatus.completionStatus.filled} of {onboardingStatus.completionStatus.total} required fields
-                                    </span>
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-muted-foreground font-medium">Knowledge Base Completion</span>
+                                        <span className="font-semibold">
+                                            {onboardingStatus.completionStatus.filled} of {onboardingStatus.completionStatus.total} required fields
+                                        </span>
+                                    </div>
+                                    <Progress
+                                        value={onboardingStatus.completionStatus.percentage}
+                                        className="h-2.5"
+                                    />
                                 </div>
-                                <Progress
-                                    value={onboardingStatus.completionStatus.percentage}
-                                    className="h-2.5"
-                                />
-                            </div>
 
-                            {onboardingStatus.completionStatus.missingFields.length > 0 && (
-                                <div className="space-y-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Missing Required Fields:</p>
-                                    <ul className="list-disc list-inside space-y-1 text-sm text-amber-800 dark:text-amber-200">
-                                        {onboardingStatus.completionStatus.missingFields.map((field) => (
-                                            <li key={field}>{field}</li>
-                                        ))}
+                                {onboardingStatus.completionStatus.missingFields.length > 0 && (
+                                    <div className="space-y-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                                        <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Missing Required Fields:</p>
+                                        <ul className="list-disc list-inside space-y-1 text-sm text-amber-800 dark:text-amber-200">
+                                            {onboardingStatus.completionStatus.missingFields.map((field) => (
+                                                <li key={field}>{field}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                <div className="bg-muted/50 p-4 rounded-lg space-y-3 border border-[color:var(--border-color)]">
+                                    <p className="text-sm font-semibold text-[color:var(--text-primary)]">Why complete your Knowledge Base?</p>
+                                    <ul className="text-sm text-[color:var(--text-secondary)] space-y-2 list-none">
+                                        <li className="flex items-start gap-2">
+                                            <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
+                                            <span><strong>Auto-fill forms</strong> across all tools—save hours of repetitive data entry</span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                            <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
+                                            <span><strong>Smarter AI responses</strong> in Business Brain conversations with full context</span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                            <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
+                                            <span><strong>Personalized outputs</strong> for Job Descriptions and SOPs that match your brand</span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                            <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
+                                            <span><strong>Consistent messaging</strong> across your entire organization</span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                            <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
+                                            <span><strong>Continuous learning</strong>—the system gets smarter as you use it</span>
+                                        </li>
                                     </ul>
                                 </div>
-                            )}
-
-                            <div className="bg-muted/50 p-4 rounded-lg space-y-3 border border-[color:var(--border-color)]">
-                                <p className="text-sm font-semibold text-[color:var(--text-primary)]">Why complete your Knowledge Base?</p>
-                                <ul className="text-sm text-[color:var(--text-secondary)] space-y-2 list-none">
-                                    <li className="flex items-start gap-2">
-                                        <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
-                                        <span><strong>Auto-fill forms</strong> across all tools—save hours of repetitive data entry</span>
-                                    </li>
-                                    <li className="flex items-start gap-2">
-                                        <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
-                                        <span><strong>Smarter AI responses</strong> in Business Brain conversations with full context</span>
-                                    </li>
-                                    <li className="flex items-start gap-2">
-                                        <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
-                                        <span><strong>Personalized outputs</strong> for Job Descriptions and SOPs that match your brand</span>
-                                    </li>
-                                    <li className="flex items-start gap-2">
-                                        <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
-                                        <span><strong>Consistent messaging</strong> across your entire organization</span>
-                                    </li>
-                                    <li className="flex items-start gap-2">
-                                        <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
-                                        <span><strong>Continuous learning</strong>—the system gets smarter as you use it</span>
-                                    </li>
-                                </ul>
                             </div>
 
-                            <div className="flex gap-2 pt-2">
+                            <div className="flex gap-2 pt-4 pb-6 px-6 border-t flex-shrink-0">
                                 <Button
                                     onClick={handleCompleteKnowledgeBase}
                                     className="flex-1 bg-[color:var(--accent-strong)] hover:bg-[color:var(--accent-strong)]/90"
@@ -356,7 +357,7 @@ export default function DashboardPage() {
                                     Maybe Later
                                 </Button>
                             </div>
-                        </div>
+                        </>
                     )}
                 </DialogContent>
             </Dialog>

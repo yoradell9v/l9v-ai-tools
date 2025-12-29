@@ -282,3 +282,62 @@ export const jdFormConfig: FormConfig = {
     apiEndpoint: '/api/jd/analyze',
 };
 
+/**
+ * Generates a dynamic form config based on whether Organization Knowledge Base exists
+ * When KB is not set up, removes "__ORG_DEFAULT__" options and updates defaults
+ */
+export function getJDFormConfigWithKB(hasOrgKB: boolean): FormConfig {
+    // Deep clone the config to avoid mutating the original
+    const config: FormConfig = JSON.parse(JSON.stringify(jdFormConfig));
+
+    if (!hasOrgKB) {
+        // When KB doesn't exist, remove "__ORG_DEFAULT__" options and update defaults
+        config.defaultValues.businessGoal = 'Growth & Scale';
+        config.defaultValues.englishLevel = 'Excellent';
+        config.defaultValues.managementStyle = 'Async';
+
+        // Update sections to remove "__ORG_DEFAULT__" options and update descriptions
+        config.sections.forEach((section) => {
+            // Update section descriptions
+            if (section.id === 'company-info') {
+                section.description = 'Enter your company information for this role.';
+            } else if (section.id === 'business-goals') {
+                section.description = 'Specify the primary business goal and 90-day outcome for this role.';
+            } else if (section.id === 'work-details') {
+                section.description = 'Specify the weekly hours and work details for this role.';
+            } else if (section.id === 'tools-skills') {
+                section.description = 'Specify role-specific tools and English level requirements.';
+            }
+
+            // Update fields
+            section.fields.forEach((field) => {
+                if (field.options && field.id === 'businessGoal') {
+                    field.options = field.options.filter(
+                        (opt) => opt.value !== '__ORG_DEFAULT__'
+                    );
+                    // Update helpText to indicate KB is not set up
+                    field.helpText = 'Select the primary goal for this role';
+                    field.label = 'Primary Goal'; // Remove "(Override)" since there's no KB to override
+                } else if (field.options && field.id === 'englishLevel') {
+                    field.options = field.options.filter(
+                        (opt) => opt.value !== '__ORG_DEFAULT__'
+                    );
+                    field.helpText = 'Select the English proficiency level required for this role';
+                    field.label = 'English Level'; // Remove "(Override)"
+                } else if (field.options && field.id === 'managementStyle') {
+                    field.options = field.options.filter(
+                        (opt) => opt.value !== '__ORG_DEFAULT__'
+                    );
+                    field.helpText = 'Select the management style for this role';
+                    field.label = 'Management Style'; // Remove "(Override)")
+                } else if (field.id === 'businessName') {
+                    field.label = 'Company Name'; // Remove "(Override)"
+                    field.helpText = 'Enter the company name for this role';
+                }
+            });
+        });
+    }
+
+    return config;
+}
+

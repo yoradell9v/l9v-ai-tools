@@ -878,46 +878,78 @@ export async function POST(request: NextRequest) {
 
       // Convert markdown to HTML for frontend display
       // Try library-based conversion first (fast and free), fallback to OpenAI if needed
+      // HTML conversion is REQUIRED - we must have HTML for display
+      console.log("[SOP Generate] Converting markdown to HTML, markdown length:", generatedSOP.length);
+      
+      // First, try the library-based conversion
       try {
-        console.log("[SOP Generate] Converting markdown to HTML, markdown length:", generatedSOP.length);
+        generatedSOPHtml = await markdownToHtml(generatedSOP);
+        console.log("[SOP Generate] Library conversion successful, HTML length:", generatedSOPHtml.length);
         
-        // First, try the library-based conversion
+        // Verify we got valid HTML
+        if (!generatedSOPHtml || generatedSOPHtml.trim().length === 0) {
+          throw new Error("Library conversion returned empty result");
+        }
+        
+        // Check if it actually looks like HTML (has tags)
+        if (!generatedSOPHtml.includes("<")) {
+          throw new Error("Library conversion did not produce HTML tags");
+        }
+        
+        // Check if it still contains markdown syntax (indicates conversion failed)
+        if (generatedSOPHtml.includes("```") && !generatedSOPHtml.includes("<code>")) {
+          throw new Error("Library conversion may have failed (contains markdown code fences)");
+        }
+        
+        // Check if the entire content is wrapped in a code block (conversion failed)
+        const trimmed = generatedSOPHtml.trim();
+        if (trimmed.startsWith('<pre><code') && trimmed.includes('language-markdown')) {
+          throw new Error("Library conversion failed - entire content wrapped in code block");
+        }
+        
+        // Check if it's just escaped markdown (conversion failed)
+        if (trimmed.startsWith('<pre>') && !trimmed.includes('<h') && !trimmed.includes('<p>') && !trimmed.includes('<ul>')) {
+          throw new Error("Library conversion failed - result is escaped markdown, not HTML");
+        }
+      } catch (libraryError: any) {
+        console.warn("[SOP Generate] Library conversion failed or produced poor results, falling back to OpenAI:", libraryError.message);
+        
+        // Fallback to OpenAI conversion - this MUST succeed
         try {
-          generatedSOPHtml = await markdownToHtml(generatedSOP);
-          console.log("[SOP Generate] Library conversion successful, HTML length:", generatedSOPHtml.length);
-          
-          // Verify we got valid HTML
-          if (!generatedSOPHtml || generatedSOPHtml.trim().length === 0) {
-            throw new Error("Library conversion returned empty result");
-          }
-          
-          // Check if it actually looks like HTML (has tags)
-          if (!generatedSOPHtml.includes("<")) {
-            throw new Error("Library conversion did not produce HTML tags");
-          }
-          
-          // Check if it still contains markdown syntax (indicates conversion failed)
-          if (generatedSOPHtml.includes("```") && !generatedSOPHtml.includes("<code>")) {
-            throw new Error("Library conversion may have failed (contains markdown code fences)");
-          }
-        } catch (libraryError: any) {
-          console.warn("[SOP Generate] Library conversion failed or produced poor results, falling back to OpenAI:", libraryError.message);
-          
-          // Fallback to OpenAI conversion
           generatedSOPHtml = await convertMarkdownToHtmlWithOpenAI(generatedSOP);
           console.log("[SOP Generate] OpenAI fallback conversion successful, HTML length:", generatedSOPHtml.length);
+          
+          // Verify OpenAI conversion result
+          if (!generatedSOPHtml || generatedSOPHtml.trim().length === 0) {
+            throw new Error("OpenAI conversion returned empty result");
+          }
+        } catch (openaiError: any) {
+          console.error("[SOP Generate] Both HTML conversion methods failed:", openaiError);
+          // This is a critical error - we need HTML for display
+          throw new Error(`Failed to convert markdown to HTML: ${openaiError.message || "Unknown error"}`);
         }
-        
-        // Final verification
-        if (!generatedSOPHtml || generatedSOPHtml.trim().length === 0) {
-          console.error("[SOP Generate] All HTML conversion methods failed");
-          generatedSOPHtml = ""; // Will fallback to markdown on frontend
-        }
-      } catch (htmlError: any) {
-        console.error("[SOP Generate] Error converting markdown to HTML (non-blocking):", htmlError);
-        // If all conversion methods fail, we'll still return markdown and let frontend handle it
-        generatedSOPHtml = ""; // Ensure it's empty if conversion fails
       }
+      
+      // Final verification - HTML is required and must be valid HTML (not markdown)
+      if (!generatedSOPHtml || generatedSOPHtml.trim().length === 0) {
+        throw new Error("HTML conversion failed - no HTML content generated");
+      }
+      
+      // Critical validation: ensure it's actually HTML, not markdown
+      if (!generatedSOPHtml.includes("<")) {
+        console.error("[SOP Generate] Generated HTML does not contain HTML tags - appears to be markdown");
+        console.error("[SOP Generate] Preview:", generatedSOPHtml.substring(0, 500));
+        throw new Error("HTML conversion failed - output is not valid HTML (missing HTML tags)");
+      }
+      
+      // Check for markdown syntax that shouldn't be in HTML
+      if (generatedSOPHtml.includes("```") && !generatedSOPHtml.includes("<code>")) {
+        console.error("[SOP Generate] Generated HTML contains markdown code fences - conversion may have failed");
+        console.error("[SOP Generate] Preview:", generatedSOPHtml.substring(0, 500));
+        throw new Error("HTML conversion failed - output contains markdown syntax");
+      }
+      
+      console.log("[SOP Generate] HTML validation passed - valid HTML generated, length:", generatedSOPHtml.length);
     } catch (openaiError: any) {
       console.error("[SOP Generate] OpenAI API error:", openaiError);
       return NextResponse.json(
@@ -967,8 +999,7 @@ export async function POST(request: NextRequest) {
           organizationId: userOrg.organizationId, // Add organizationId
           title: formData.sopTitle,
           content: {
-            markdown: generatedSOP,
-            html: generatedSOPHtml || undefined, // Store HTML if available
+            html: generatedSOPHtml, // Store only HTML (primary format)
             version: "1.0",
             generatedAt: new Date().toISOString(),
           },
@@ -1070,12 +1101,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 10. Return success response with HTML
+    // 10. Return success response with HTML only
     console.log("[SOP Generate] Returning response, sopHtml length:", generatedSOPHtml?.length || 0);
     return NextResponse.json({
       success: true,
-      sop: generatedSOP, // Keep markdown for editing purposes
-      sopHtml: generatedSOPHtml || null, // Return HTML for display
+      sopHtml: generatedSOPHtml, // Return only HTML (primary format)
       sopId: savedSOP?.id || null,
       metadata: {
         title: formData.sopTitle,

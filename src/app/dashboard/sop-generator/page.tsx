@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { FileText, Plus, Loader2, CheckCircle2, Edit, Save, X, Sparkles, Download, History } from "lucide-react";
+import { FileText, Plus, Loader2, CheckCircle2, Edit, Save, X, Sparkles, Download, History, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,11 +26,10 @@ import {
 import BaseIntakeForm from "@/components/forms/BaseIntakeForm";
 import { sopGeneratorConfig } from "@/components/forms/configs/sopGeneratorConfig";
 import { useUser } from "@/context/UserContext";
-import { markdownToHtml } from "@/lib/markdown-to-html";
+import { htmlToMarkdown } from "@/lib/html-to-markdown";
 
 interface GeneratedSOP {
-  sop: string; // Markdown content (for editing)
-  sopHtml?: string; // HTML content (for display)
+  sopHtml: string; // HTML content (primary format)
   sopId: string | null;
   metadata: {
     title: string;
@@ -51,7 +50,6 @@ export default function SopPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [generatedSOP, setGeneratedSOP] = useState<GeneratedSOP | null>(null);
-  const [sopHtml, setSopHtml] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedSOPContent, setEditedSOPContent] = useState("");
@@ -93,31 +91,18 @@ export default function SopPage() {
         throw new Error(result.message || "Failed to save SOP modifications");
       }
 
-      // Update local state with the updated SOP
-      // Handle both string content (legacy) and object with markdown/html fields
+      // Update local state with the updated SOP (HTML only)
       const responseContent = result.sop.content;
-      let markdownContent = "";
-      let htmlContent = undefined;
+      const htmlContent = typeof responseContent === "object" 
+        ? (responseContent.html || result.sopHtml) 
+        : result.sopHtml || "";
 
-      if (typeof responseContent === "string") {
-        // Legacy: content is just a string (markdown)
-        markdownContent = responseContent;
-      } else if (responseContent && typeof responseContent === "object") {
-        // New: content is an object with markdown and html fields
-        markdownContent = responseContent.markdown || "";
-        htmlContent = responseContent.html || undefined;
+      if (!htmlContent) {
+        throw new Error("No HTML content received from server");
       }
-
-      console.log("[SOP Page] Updated SOP:", {
-        hasMarkdown: !!markdownContent,
-        hasHtml: !!htmlContent,
-        markdownLength: markdownContent.length,
-        htmlLength: htmlContent?.length || 0,
-      });
 
       setGeneratedSOP({
         ...generatedSOP,
-        sop: markdownContent,
         sopHtml: htmlContent,
         sopId: result.sop.id,
       });
@@ -182,35 +167,30 @@ export default function SopPage() {
           const content = latestSOP.content as any;
           const metadata = latestSOP.metadata as any;
 
-          // FIX: Properly extract markdown and HTML from content object
-          let markdownContent = "";
-          let htmlContent = undefined;
-
+          // Extract HTML from content (primary format)
+          let htmlContent = "";
+          
           if (typeof content === "string") {
-            // Legacy: content is just a string (markdown)
-            markdownContent = content;
-          } else if (content && typeof content === "object") {
-            // New: content is an object with markdown and html fields
-            markdownContent = content.markdown || "";
-            htmlContent = content.html || undefined;
-
-            // Ensure HTML is actually HTML, not markdown
-            if (htmlContent && (!htmlContent.includes("<") || htmlContent.includes("```"))) {
-              console.warn("[SOP Page] HTML content appears to be markdown, will convert");
-              htmlContent = undefined; // Force conversion
+            // Legacy: content is a string (treat as HTML if it has tags, otherwise it's markdown - should be rare)
+            if (content.includes("<") && content.includes(">")) {
+              htmlContent = content;
+            } else {
+              // Legacy markdown - this shouldn't happen with new SOPs
+              console.warn("[SOP Page] Legacy SOP with markdown content detected");
+              htmlContent = ""; // Will need conversion, but skip for now
             }
+          } else if (content && typeof content === "object") {
+            // New format: content is an object with html field
+            htmlContent = content.html || "";
           }
 
-          console.log("[SOP Page] Loaded SOP:", {
-            hasMarkdown: !!markdownContent,
-            hasHtml: !!htmlContent,
-            markdownLength: markdownContent.length,
-            htmlLength: htmlContent?.length || 0,
-            htmlPreview: htmlContent?.substring(0, 100) || "none",
-          });
+          if (!htmlContent || htmlContent.trim().length === 0) {
+            console.warn("[SOP Page] No HTML content found in SOP");
+            setHasNoSavedSOPs(true);
+            return;
+          }
 
           setGeneratedSOP({
-            sop: markdownContent,
             sopHtml: htmlContent,
             sopId: latestSOP.id,
             metadata: {
@@ -246,41 +226,7 @@ export default function SopPage() {
     loadLatestSOP();
   }, [user, generatedSOP, isLoadingLatest]);
 
-  // Use HTML from API response or convert markdown to HTML if needed
-  useEffect(() => {
-    if (generatedSOP) {
-      // Prefer HTML from API response, fallback to converting markdown
-      if (generatedSOP.sopHtml && generatedSOP.sopHtml.trim().length > 0) {
-        console.log("[SOP Page] Using provided HTML, length:", generatedSOP.sopHtml.length);
-        setSopHtml(generatedSOP.sopHtml);
-      } else if (generatedSOP.sop && generatedSOP.sop.trim().length > 0) {
-        // Fallback: convert markdown if HTML not provided
-        console.log("[SOP Page] HTML not available, converting markdown to HTML, markdown length:", generatedSOP.sop.length);
-        const convertToHtml = async () => {
-          try {
-            const html = await markdownToHtml(generatedSOP.sop);
-            if (html && html.trim().length > 0) {
-              console.log("[SOP Page] Markdown conversion successful, HTML length:", html.length);
-              setSopHtml(html);
-            } else {
-              console.warn("[SOP Page] Markdown conversion returned empty HTML, using escaped markdown");
-              setSopHtml(`<pre>${generatedSOP.sop.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`);
-            }
-          } catch (error) {
-            console.error("[SOP Page] Error converting markdown to HTML:", error);
-            // Show escaped markdown as fallback
-            setSopHtml(`<pre>${generatedSOP.sop.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`);
-          }
-        };
-        convertToHtml();
-      } else {
-        console.warn("[SOP Page] No SOP content available");
-        setSopHtml("");
-      }
-    } else {
-      setSopHtml("");
-    }
-  }, [generatedSOP]);
+  // No need for separate HTML state - use generatedSOP.sopHtml directly
 
   const handleDownloadPDF = async () => {
     if (!generatedSOP) return;
@@ -294,7 +240,7 @@ export default function SopPage() {
         },
         credentials: "include",
         body: JSON.stringify({
-          sopContent: generatedSOP.sop,
+          sopHtml: generatedSOP.sopHtml, // Use HTML directly
           title: generatedSOP.metadata.title,
         }),
       });
@@ -451,8 +397,10 @@ export default function SopPage() {
                         <Button
                           variant="outline"
                           onClick={() => {
+                            // Convert HTML to markdown for editing
+                            const markdown = htmlToMarkdown(generatedSOP.sopHtml);
                             setIsEditing(true);
-                            setEditedSOPContent(generatedSOP.sop);
+                            setEditedSOPContent(markdown);
                           }}
                         >
                           <Edit className="h-4 w-4 mr-2" />
@@ -821,7 +769,7 @@ export default function SopPage() {
                         text-decoration: none;
                       }
                     `}} />
-                    {sopHtml && sopHtml.trim().length > 0 ? (
+                    {generatedSOP.sopHtml && generatedSOP.sopHtml.trim().length > 0 ? (
                       <div
                         className="sop-content-display w-full max-w-full"
                         style={{
@@ -830,13 +778,23 @@ export default function SopPage() {
                           overflowX: 'hidden',
                           maxWidth: '100%'
                         }}
-                        dangerouslySetInnerHTML={{ __html: sopHtml }}
+                        dangerouslySetInnerHTML={{ __html: generatedSOP.sopHtml }}
                       />
                     ) : (
                       <div className="flex items-center justify-center py-12">
                         <div className="text-center space-y-2">
-                          <Loader2 className="h-5 w-5 animate-spin text-primary mx-auto" />
-                          <p className="text-sm text-muted-foreground">Converting SOP to HTML...</p>
+                          <AlertCircle className="h-5 w-5 text-muted-foreground mx-auto" />
+                          <p className="text-sm text-muted-foreground">
+                            HTML content not available. Please regenerate the SOP.
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-4"
+                            onClick={() => setIsModalOpen(true)}
+                          >
+                            Regenerate SOP
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -914,16 +872,12 @@ export default function SopPage() {
                       throw new Error(result.message || "Failed to generate SOP");
                     }
 
-                    console.log("[SOP Page] Received response:", {
-                      hasSop: !!result.sop,
-                      hasSopHtml: !!result.sopHtml,
-                      sopLength: result.sop?.length || 0,
-                      sopHtmlLength: result.sopHtml?.length || 0,
-                    });
+                    if (!result.sopHtml) {
+                      throw new Error("No HTML content received from server");
+                    }
 
                     setGeneratedSOP({
-                      sop: result.sop, // Markdown for editing
-                      sopHtml: result.sopHtml || undefined, // HTML from API
+                      sopHtml: result.sopHtml, // HTML only (primary format)
                       sopId: result.sopId || null,
                       metadata: result.metadata,
                     });
@@ -989,16 +943,27 @@ export default function SopPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="flex-1 overflow-y-auto px-6 pb-4">
-              <div
-                className="sop-content-display w-full max-w-full"
-                style={{
-                  wordWrap: 'break-word',
-                  overflowWrap: 'break-word',
-                  overflowX: 'hidden',
-                  maxWidth: '100%'
-                }}
-                dangerouslySetInnerHTML={{ __html: sopHtml }}
-              />
+              {generatedSOP.sopHtml && generatedSOP.sopHtml.trim().length > 0 ? (
+                <div
+                  className="sop-content-display w-full max-w-full"
+                  style={{
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word',
+                    overflowX: 'hidden',
+                    maxWidth: '100%'
+                  }}
+                  dangerouslySetInnerHTML={{ __html: generatedSOP.sopHtml }}
+                />
+              ) : (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center space-y-2">
+                    <AlertCircle className="h-5 w-5 text-muted-foreground mx-auto" />
+                    <p className="text-sm text-muted-foreground">
+                      HTML content not available. Cannot preview.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
             <DialogFooter className="px-6 py-4 flex-shrink-0 border-t">
               <Button

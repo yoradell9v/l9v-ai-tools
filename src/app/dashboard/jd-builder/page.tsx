@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import BaseIntakeForm, { BaseIntakeFormRef } from "@/components/forms/BaseIntakeForm";
-import { jdFormConfig } from "@/components/forms/configs/jdFormConfig";
+import { jdFormConfig, getJDFormConfigWithKB } from "@/components/forms/configs/jdFormConfig";
 import RefinementForm from "@/components/forms/RefinementForm";
 import { useUser } from "@/context/UserContext";
 import { OrganizationKnowledgeBase } from "@/lib/organizationKnowledgeBase";
@@ -506,6 +506,12 @@ export default function JdBuilderPage() {
     const intakeFormRef = useRef<BaseIntakeFormRef>(null);
     const hasAttemptedLoadRef = useRef(false);
     const lastLoadedUserIdRef = useRef<string | null>(null);
+
+    // Generate dynamic form config based on whether Organization KB exists
+    const dynamicFormConfig = useMemo(
+        () => getJDFormConfigWithKB(organizationKB !== null),
+        [organizationKB]
+    );
 
     const handleSuccess = async ({ apiResult, input }: { apiResult: any; input: IntakeFormData }) => {
         setCurrentStage("");
@@ -2664,10 +2670,30 @@ export default function JdBuilderPage() {
                                     <DialogTitle>Job Description Analysis</DialogTitle>
                                 </DialogHeader>
                                 <div className="flex-1 overflow-hidden p-4">
+                                    {/* Show alert when Organization KB is not set up */}
+                                    {!isLoadingOrgKB && !organizationKB && (
+                                        <Alert className="mb-4">
+                                            <AlertCircle className="h-4 w-4" />
+                                            <AlertTitle>Organization Knowledge Base Not Set Up</AlertTitle>
+                                            <AlertDescription>
+                                                Set up your Organization Knowledge Base to use defaults across roles. 
+                                                <Button
+                                                    variant="link"
+                                                    className="p-0 h-auto ml-1 text-primary"
+                                                    onClick={() => {
+                                                        setIsModalOpen(false);
+                                                        router.push("/dashboard/organization-profile");
+                                                    }}
+                                                >
+                                                    Set it up now
+                                                </Button>
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
                                     <BaseIntakeForm
                                         ref={intakeFormRef}
                                         userId={user.id}
-                                        config={jdFormConfig}
+                                        config={dynamicFormConfig}
                                         hideClearButton={true}
                                         initialData={mapOrgKBToJDForm(organizationKB)}
                                         onClose={() => {

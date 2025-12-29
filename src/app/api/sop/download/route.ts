@@ -40,10 +40,15 @@ Rules:
 /**
  * Convert markdown to HTML using OpenAI as a fallback
  */
-async function convertMarkdownToHtmlWithOpenAI(markdown: string): Promise<string> {
+async function convertMarkdownToHtmlWithOpenAI(
+  markdown: string
+): Promise<string> {
   try {
-    console.log("[SOP Download] Converting markdown to HTML with OpenAI, length:", markdown.length);
-    
+    console.log(
+      "[SOP Download] Converting markdown to HTML with OpenAI, length:",
+      markdown.length
+    );
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini", // Fast and cheap for conversion
       messages: [
@@ -55,15 +60,24 @@ async function convertMarkdownToHtmlWithOpenAI(markdown: string): Promise<string
     });
 
     let html = completion.choices[0].message.content || "";
-    
+
     // Remove any markdown code fences that might have slipped through
-    html = html.replace(/```html\n?/g, "").replace(/```\n?/g, "").trim();
-    
-    console.log("[SOP Download] OpenAI HTML conversion complete, length:", html.length);
-    
+    html = html
+      .replace(/```html\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
+
+    console.log(
+      "[SOP Download] OpenAI HTML conversion complete, length:",
+      html.length
+    );
+
     return html;
   } catch (error) {
-    console.error("[SOP Download] Error converting markdown to HTML with OpenAI:", error);
+    console.error(
+      "[SOP Download] Error converting markdown to HTML with OpenAI:",
+      error
+    );
     throw error;
   }
 }
@@ -71,63 +85,180 @@ async function convertMarkdownToHtmlWithOpenAI(markdown: string): Promise<string
 export async function POST(request: Request) {
   try {
     const data = await request.json();
-    const { sopContent, title: sopTitle } = data;
+    const { sopHtml, sopContent, title: sopTitle } = data;
 
-    if (!sopContent || typeof sopContent !== "string") {
+    // Prefer HTML if provided (new SOPs), fallback to markdown for legacy SOPs
+    let htmlContent: string;
+
+    if (
+      sopHtml &&
+      typeof sopHtml === "string" &&
+      sopHtml.trim().length > 0 &&
+      sopHtml.includes("<")
+    ) {
+      // Use provided HTML (preferred - no conversion needed)
+      console.log(
+        "[SOP Download] Using provided HTML, length:",
+        sopHtml.length
+      );
+      htmlContent = sopHtml;
+    } else if (sopContent && typeof sopContent === "string") {
+      // Legacy: convert markdown to HTML (for old SOPs that don't have HTML stored)
+      console.log(
+        "[SOP Download] HTML not provided, converting markdown to HTML, input length:",
+        sopContent.length
+      );
+
+      try {
+        // Try library-based conversion first
+        try {
+          htmlContent = await markdownToHtml(sopContent);
+          console.log(
+            "[SOP Download] Library conversion successful, output length:",
+            htmlContent.length
+          );
+
+          // Verify we got valid HTML
+          if (!htmlContent || htmlContent.trim().length === 0) {
+            throw new Error("Library conversion returned empty result");
+          }
+
+          // Check if it actually looks like HTML (has tags)
+          if (!htmlContent.includes("<")) {
+            throw new Error("Library conversion did not produce HTML tags");
+          }
+
+          // Check if it still contains markdown syntax (indicates conversion failed)
+          if (htmlContent.includes("```") && !htmlContent.includes("<code>")) {
+            throw new Error(
+              "Library conversion may have failed (contains markdown code fences)"
+            );
+          }
+        } catch (libraryError: any) {
+          console.warn(
+            "[SOP Download] Library conversion failed or produced poor results, falling back to OpenAI:",
+            libraryError.message
+          );
+
+          // Fallback to OpenAI conversion
+          htmlContent = await convertMarkdownToHtmlWithOpenAI(sopContent);
+          console.log(
+            "[SOP Download] OpenAI fallback conversion successful, output length:",
+            htmlContent.length
+          );
+        }
+
+        // Final verification
+        if (!htmlContent || htmlContent.trim().length === 0) {
+          throw new Error("All HTML conversion methods failed");
+        }
+      } catch (error) {
+        console.error(
+          "[SOP Download] Error converting markdown to HTML:",
+          error
+        );
+        return NextResponse.json(
+          {
+            error: `Failed to convert markdown to HTML: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`,
+          },
+          { status: 500 }
+        );
+      }
+    } else {
       return NextResponse.json(
-        { error: "sopContent is required and must be a string" },
+        { error: "Either sopHtml or sopContent is required" },
         { status: 400 }
       );
     }
 
     // Generate filename
     const title = sopTitle || "Standard_Operating_Procedure";
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").split("T")[0];
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .split("T")[0];
     const filename = `${title.replace(/[^a-zA-Z0-9]/g, "_")}_${timestamp}.pdf`;
 
-    // Convert markdown to HTML first
-    // Try library-based conversion first (fast and free), fallback to OpenAI if needed
-    let htmlContent: string;
-    try {
-      console.log("[SOP Download] Converting markdown to HTML, input length:", sopContent.length);
-      
-      // First, try the library-based conversion
-      try {
-        htmlContent = await markdownToHtml(sopContent);
-        console.log("[SOP Download] Library conversion successful, output length:", htmlContent.length);
-        
-        // Verify we got valid HTML
-        if (!htmlContent || htmlContent.trim().length === 0) {
-          throw new Error("Library conversion returned empty result");
-        }
-        
-        // Check if it actually looks like HTML (has tags)
-        if (!htmlContent.includes("<")) {
-          throw new Error("Library conversion did not produce HTML tags");
-        }
-        
-        // Check if it still contains markdown syntax (indicates conversion failed)
-        if (htmlContent.includes("```") && !htmlContent.includes("<code>")) {
-          throw new Error("Library conversion may have failed (contains markdown code fences)");
-        }
-      } catch (libraryError: any) {
-        console.warn("[SOP Download] Library conversion failed or produced poor results, falling back to OpenAI:", libraryError.message);
-        
-        // Fallback to OpenAI conversion
-        htmlContent = await convertMarkdownToHtmlWithOpenAI(sopContent);
-        console.log("[SOP Download] OpenAI fallback conversion successful, output length:", htmlContent.length);
-      }
-      
-      // Final verification
-      if (!htmlContent || htmlContent.trim().length === 0) {
-        throw new Error("All HTML conversion methods failed");
-      }
-    } catch (error) {
-      console.error("[SOP Download] Error converting markdown to HTML:", error);
-      return NextResponse.json(
-        { error: `Failed to convert markdown to HTML: ${error instanceof Error ? error.message : "Unknown error"}` },
-        { status: 500 }
+    // Check if HTML is wrapped in a code block (conversion issue)
+    // If so, extract the markdown and convert it properly
+    const trimmedHtml = htmlContent.trim();
+    if (
+      trimmedHtml.startsWith("<pre><code") &&
+      (trimmedHtml.includes("language-markdown") ||
+        trimmedHtml.includes('class="language-'))
+    ) {
+      console.warn(
+        "[SOP Download] HTML is wrapped in code block - extracting and converting markdown"
       );
+      const $temp = cheerio.load(htmlContent);
+      const markdownContent = $temp("code").text() || $temp("pre").text();
+
+      if (markdownContent && markdownContent.trim().length > 0) {
+        // Convert markdown to proper HTML
+        try {
+          htmlContent = await markdownToHtml(markdownContent);
+          // Verify conversion worked - must have HTML structure
+          if (!htmlContent || htmlContent.trim().length === 0) {
+            throw new Error("Conversion returned empty result");
+          }
+          if (
+            !htmlContent.includes("<h") &&
+            !htmlContent.includes("<p>") &&
+            !htmlContent.includes("<ul>")
+          ) {
+            throw new Error("Conversion did not produce proper HTML structure");
+          }
+          console.log(
+            "[SOP Download] Successfully converted markdown to HTML, length:",
+            htmlContent.length
+          );
+        } catch (convError: any) {
+          console.warn(
+            "[SOP Download] Library conversion failed, using OpenAI fallback:",
+            convError.message
+          );
+          htmlContent = await convertMarkdownToHtmlWithOpenAI(markdownContent);
+          // Verify OpenAI conversion
+          if (
+            !htmlContent ||
+            (!htmlContent.includes("<h") && !htmlContent.includes("<p>"))
+          ) {
+            throw new Error(
+              "OpenAI conversion also failed to produce proper HTML"
+            );
+          }
+          console.log(
+            "[SOP Download] OpenAI conversion successful, length:",
+            htmlContent.length
+          );
+        }
+      } else {
+        throw new Error("No markdown content found in code block");
+      }
+    }
+
+    // Final check: Ensure HTML is not wrapped in a code block before parsing
+    const finalTrimmed = htmlContent.trim();
+    if (
+      finalTrimmed.startsWith("<pre><code") &&
+      (finalTrimmed.includes("language-markdown") ||
+        finalTrimmed.includes('class="language-'))
+    ) {
+      console.error(
+        "[SOP Download] HTML is still wrapped in code block after conversion check - this should not happen"
+      );
+      // Extract and convert one more time
+      const $temp = cheerio.load(htmlContent);
+      const markdownContent = $temp("code").text() || $temp("pre").text();
+      if (markdownContent) {
+        htmlContent = await convertMarkdownToHtmlWithOpenAI(markdownContent);
+        console.log(
+          "[SOP Download] Emergency conversion completed, length:",
+          htmlContent.length
+        );
+      }
     }
 
     // Parse HTML using cheerio
@@ -140,7 +271,9 @@ export async function POST(request: Request) {
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
-    const fontBoldItalic = await pdfDoc.embedFont(StandardFonts.HelveticaBoldOblique);
+    const fontBoldItalic = await pdfDoc.embedFont(
+      StandardFonts.HelveticaBoldOblique
+    );
 
     const margin = 50;
     let y = height - margin;
@@ -149,45 +282,45 @@ export async function POST(request: Request) {
 
     // Helper function to sanitize text for PDF encoding (remove emojis and non-ASCII characters)
     const sanitizeText = (text: string): string => {
-      if (!text) return '';
-      
+      if (!text) return "";
+
       // First, replace common special characters with ASCII equivalents
       const replacements: { [key: string]: string } = {
-        '\u2014': '--',  // em dash
-        '\u2013': '-',   // en dash
-        '\u201C': '"',   // left double quote
-        '\u201D': '"',   // right double quote
-        '\u2018': "'",   // left single quote
-        '\u2019': "'",   // right single quote
-        '\u2026': '...', // ellipsis
-        '\u00A9': '(c)', // copyright
-        '\u00AE': '(R)', // registered
-        '\u2122': '(TM)', // trademark
-        '\u20AC': 'EUR', // euro
-        '\u00A3': 'GBP', // pound
-        '\u00A5': 'JPY', // yen
-        '\u00B0': 'deg', // degree
-        '\u00B1': '+/-', // plus-minus
-        '\u00D7': 'x',   // multiplication
-        '\u00F7': '/',   // division
-        '\u00BD': '1/2', // one half
-        '\u00BC': '1/4', // one quarter
-        '\u00BE': '3/4', // three quarters
-        '\u2153': '1/3', // one third
-        '\u2154': '2/3', // two thirds
+        "\u2014": "--", // em dash
+        "\u2013": "-", // en dash
+        "\u201C": '"', // left double quote
+        "\u201D": '"', // right double quote
+        "\u2018": "'", // left single quote
+        "\u2019": "'", // right single quote
+        "\u2026": "...", // ellipsis
+        "\u00A9": "(c)", // copyright
+        "\u00AE": "(R)", // registered
+        "\u2122": "(TM)", // trademark
+        "\u20AC": "EUR", // euro
+        "\u00A3": "GBP", // pound
+        "\u00A5": "JPY", // yen
+        "\u00B0": "deg", // degree
+        "\u00B1": "+/-", // plus-minus
+        "\u00D7": "x", // multiplication
+        "\u00F7": "/", // division
+        "\u00BD": "1/2", // one half
+        "\u00BC": "1/4", // one quarter
+        "\u00BE": "3/4", // three quarters
+        "\u2153": "1/3", // one third
+        "\u2154": "2/3", // two thirds
       };
-      
+
       let sanitized = text;
-      
+
       // Replace known special characters
       for (const [char, replacement] of Object.entries(replacements)) {
-        sanitized = sanitized.replace(new RegExp(char, 'g'), replacement);
+        sanitized = sanitized.replace(new RegExp(char, "g"), replacement);
       }
-      
+
       // Remove emojis and other non-ASCII characters that can't be encoded in WinAnsi
       // This regex matches any character outside the basic ASCII range (0-127)
-      sanitized = sanitized.replace(/[^\x00-\x7F]/g, '');
-      
+      sanitized = sanitized.replace(/[^\x00-\x7F]/g, "");
+
       return sanitized.trim();
     };
 
@@ -249,8 +382,13 @@ export async function POST(request: Request) {
         fontToUse = fontItalic;
       }
 
-      const lines = splitTextIntoLines(sanitizedText, width - margin * 2, size, fontToUse);
-      
+      const lines = splitTextIntoLines(
+        sanitizedText,
+        width - margin * 2,
+        size,
+        fontToUse
+      );
+
       for (const line of lines) {
         if (y < margin + size) {
           // New page if we run out of space
@@ -261,7 +399,13 @@ export async function POST(request: Request) {
         // Ensure line is safe for PDF encoding
         const safeLine = sanitizeText(line);
         if (safeLine) {
-          page.drawText(safeLine, { x: margin, y, size, font: fontToUse, color });
+          page.drawText(safeLine, {
+            x: margin,
+            y,
+            size,
+            font: fontToUse,
+            color,
+          });
         }
         y -= spacing;
       }
@@ -269,16 +413,39 @@ export async function POST(request: Request) {
 
     // Parse HTML and convert to PDF
     const parseHtml = () => {
+      // Check if the entire content is still in a pre/code block (conversion should have happened above)
+      const $pre = $("pre code, pre");
+      if ($pre.length === 1) {
+        const preText = $pre.text();
+        // If it looks like markdown (has # headers), conversion failed
+        if (preText && (preText.includes("# ") || preText.includes("## "))) {
+          console.error(
+            "[SOP Download] Found markdown in code block - conversion should have happened above"
+          );
+          // This shouldn't happen if conversion worked, but if it does, show error
+          drawText(
+            "Error: SOP content is in markdown format. Please regenerate the SOP.",
+            {
+              size: 12,
+              color: rgb(1, 0, 0),
+              spacing: 14,
+            }
+          );
+          return;
+        }
+      }
+
       // Extract text content from HTML elements
       // Handle both full documents and HTML fragments
-      const rootElements = $('body').length > 0 ? $('body').children() : $.root().children();
-      
-      rootElements.each((_, element) => {
-        const $el = $(element);
-        const tagName = element.tagName?.toLowerCase();
+      const rootElements =
+        $("body").length > 0 ? $("body").children() : $.root().children();
 
+      const processElement = (
+        $el: any,
+        tagName: string
+      ) => {
         // Handle headers
-        if (tagName === 'h1') {
+        if (tagName === "h1") {
           y -= 10;
           const text = sanitizeText($el.text());
           if (text) {
@@ -290,7 +457,7 @@ export async function POST(request: Request) {
             });
             y -= 5;
           }
-        } else if (tagName === 'h2') {
+        } else if (tagName === "h2") {
           y -= 8;
           const text = sanitizeText($el.text());
           if (text) {
@@ -302,7 +469,7 @@ export async function POST(request: Request) {
             });
             y -= 5;
           }
-        } else if (tagName === 'h3') {
+        } else if (tagName === "h3") {
           y -= 6;
           const text = sanitizeText($el.text());
           if (text) {
@@ -314,7 +481,7 @@ export async function POST(request: Request) {
             });
             y -= 4;
           }
-        } else if (tagName === 'h4' || tagName === 'h5' || tagName === 'h6') {
+        } else if (tagName === "h4" || tagName === "h5" || tagName === "h6") {
           y -= 4;
           const text = sanitizeText($el.text());
           if (text) {
@@ -326,7 +493,7 @@ export async function POST(request: Request) {
             });
             y -= 3;
           }
-        } else if (tagName === 'p') {
+        } else if (tagName === "p") {
           const text = sanitizeText($el.text());
           if (text) {
             drawText(text, {
@@ -335,32 +502,60 @@ export async function POST(request: Request) {
             });
           }
           y -= paragraphSpacing / 2;
-        } else if (tagName === 'ul' || tagName === 'ol') {
+        } else if (tagName === "ul" || tagName === "ol") {
           let listCounter = 1;
-          $el.find('li').each((_, li) => {
+          $el.find("li").each((_: any, li: any) => {
             const listItemText = sanitizeText($(li).text());
             if (listItemText) {
-              const prefix = tagName === 'ol' ? `${listCounter}. ` : '• ';
+              const prefix = tagName === "ol" ? `${listCounter}. ` : "• ";
               drawText(`${prefix}${listItemText}`, {
                 size: 11,
                 spacing: 13,
               });
-              if (tagName === 'ol') listCounter++;
+              if (tagName === "ol") listCounter++;
             }
           });
           y -= paragraphSpacing;
-        } else if (tagName === 'pre' || tagName === 'code') {
-          const codeText = sanitizeText($el.text());
-          if (codeText) {
+        } else if (tagName === "pre") {
+          // Check if this is markdown wrapped in a code block (should have been converted above)
+          const codeText = $el.text();
+          if (
+            codeText &&
+            (codeText.includes("# ") || codeText.includes("## "))
+          ) {
+            console.warn(
+              "[SOP Download] Found markdown in pre block - should have been converted above"
+            );
+            // Skip it - this shouldn't happen if conversion worked
+            return;
+          }
+          // Regular code block
+          const sanitizedCodeText = sanitizeText(codeText);
+          if (sanitizedCodeText) {
             y -= 5;
-            drawText(codeText, {
+            drawText(sanitizedCodeText, {
               size: 10,
               color: rgb(0.2, 0.2, 0.2),
               spacing: 12,
             });
             y -= 5;
           }
-        } else if (tagName === 'hr') {
+        } else if (tagName === "code") {
+          // Inline code or code in pre block
+          if ($el.parent().is("pre")) {
+            // This is part of a pre block, skip (handled by pre)
+            return;
+          }
+          // Inline code
+          const codeText = sanitizeText($el.text());
+          if (codeText) {
+            drawText(`\`${codeText}\``, {
+              size: 10,
+              color: rgb(0.2, 0.2, 0.2),
+              spacing: 12,
+            });
+          }
+        } else if (tagName === "hr") {
           y -= 10;
           page.drawLine({
             start: { x: margin, y },
@@ -369,7 +564,7 @@ export async function POST(request: Request) {
             color: rgb(0.7, 0.7, 0.7),
           });
           y -= 10;
-        } else if (tagName === 'blockquote') {
+        } else if (tagName === "blockquote") {
           const text = sanitizeText($el.text());
           if (text) {
             drawText(text, {
@@ -380,18 +575,20 @@ export async function POST(request: Request) {
             });
             y -= paragraphSpacing;
           }
-        } else if (tagName === 'table') {
+        } else if (tagName === "table") {
           // Handle tables - extract text from cells
-          $el.find('tr').each((_, row) => {
+          $el.find("tr").each((_: any, row: any) => {
             const cells: string[] = [];
-            $(row).find('td, th').each((_, cell) => {
-              const cellText = sanitizeText($(cell).text());
-              if (cellText) {
-                cells.push(cellText);
-              }
-            });
+            $(row)
+              .find("td, th")
+              .each((_, cell) => {
+                const cellText = sanitizeText($(cell).text());
+                if (cellText) {
+                  cells.push(cellText);
+                }
+              });
             if (cells.length > 0) {
-              drawText(cells.join(' | '), {
+              drawText(cells.join(" | "), {
                 size: 10,
                 spacing: 12,
               });
@@ -409,6 +606,29 @@ export async function POST(request: Request) {
             y -= paragraphSpacing / 2;
           }
         }
+      };
+
+      // Process each root element
+      rootElements.each((_, element) => {
+        const $el = $(element);
+        const tagName = element.tagName?.toLowerCase();
+
+        // Skip pre/code blocks that contain markdown (should have been converted above)
+        if (tagName === "pre") {
+          const codeText = $el.text();
+          // If it looks like markdown (has # headers), skip it - should have been converted
+          if (
+            codeText &&
+            (codeText.includes("# ") || codeText.includes("## "))
+          ) {
+            console.warn(
+              "[SOP Download] Skipping markdown code block - should have been converted above"
+            );
+            return;
+          }
+        }
+
+        processElement($el, tagName);
       });
     };
 
@@ -448,4 +668,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

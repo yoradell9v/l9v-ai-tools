@@ -181,47 +181,99 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Convert updated markdown to HTML
-    let updatedHtml: string | undefined = undefined;
+    // HTML conversion is REQUIRED - we must have HTML for display
+    let updatedHtml: string;
+    console.log("[SOP Update] Converting markdown to HTML, markdown length:", sopContent.length);
+    
+    // Try library-based conversion first (fast and free), fallback to OpenAI if needed
     try {
-      // Try library-based conversion first (fast and free), fallback to OpenAI if needed
+      updatedHtml = await markdownToHtml(sopContent);
+      console.log("[SOP Update] Library conversion successful, HTML length:", updatedHtml.length);
+      
+      // Verify we got valid HTML
+      if (!updatedHtml || updatedHtml.trim().length === 0) {
+        throw new Error("Library conversion returned empty result");
+      }
+      
+      // Check if it actually looks like HTML (has tags)
+      if (!updatedHtml.includes("<")) {
+        throw new Error("Library conversion did not produce HTML tags");
+      }
+      
+      // Check if it still contains markdown syntax (indicates conversion failed)
+      if (updatedHtml.includes("```") && !updatedHtml.includes("<code>")) {
+        throw new Error("Library conversion may have failed (contains markdown code fences)");
+      }
+    } catch (libraryError: any) {
+      console.warn("[SOP Update] Library conversion failed or produced poor results, falling back to OpenAI:", libraryError.message);
+      
+      // Fallback to OpenAI conversion - this MUST succeed
       try {
-        updatedHtml = await markdownToHtml(sopContent);
-        console.log("[SOP Update] Library conversion successful, HTML length:", updatedHtml.length);
-        
-        // Verify we got valid HTML
-        if (!updatedHtml || updatedHtml.trim().length === 0) {
-          throw new Error("Library conversion returned empty result");
-        }
-        
-        // Check if it actually looks like HTML (has tags)
-        if (!updatedHtml.includes("<")) {
-          throw new Error("Library conversion did not produce HTML tags");
-        }
-        
-        // Check if it still contains markdown syntax (indicates conversion failed)
-        if (updatedHtml.includes("```") && !updatedHtml.includes("<code>")) {
-          throw new Error("Library conversion may have failed (contains markdown code fences)");
-        }
-      } catch (libraryError: any) {
-        console.warn("[SOP Update] Library conversion failed or produced poor results, falling back to OpenAI:", libraryError.message);
-        
-        // Fallback to OpenAI conversion
         updatedHtml = await convertMarkdownToHtmlWithOpenAI(sopContent);
         console.log("[SOP Update] OpenAI fallback conversion successful, HTML length:", updatedHtml.length);
+        
+        // Verify OpenAI conversion result
+        if (!updatedHtml || updatedHtml.trim().length === 0) {
+          throw new Error("OpenAI conversion returned empty result");
+        }
+      } catch (openaiError: any) {
+        console.error("[SOP Update] Both HTML conversion methods failed:", openaiError);
+        // This is a critical error - we need HTML for display
+        return NextResponse.json(
+          {
+            success: false,
+            message: `Failed to convert markdown to HTML: ${openaiError.message || "Unknown error"}`,
+          },
+          { status: 500 }
+        );
       }
-    } catch (htmlError: any) {
-      console.error("[SOP Update] Error converting markdown to HTML (non-blocking):", htmlError);
-      // Continue without HTML - will use markdown on frontend
-      updatedHtml = undefined;
     }
+    
+    // Final verification - HTML is required and must be valid HTML (not markdown)
+    if (!updatedHtml || updatedHtml.trim().length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "HTML conversion failed - no HTML content generated",
+        },
+        { status: 500 }
+      );
+    }
+    
+    // Critical validation: ensure it's actually HTML, not markdown
+    if (!updatedHtml.includes("<")) {
+      console.error("[SOP Update] Generated HTML does not contain HTML tags - appears to be markdown");
+      console.error("[SOP Update] Preview:", updatedHtml.substring(0, 500));
+      return NextResponse.json(
+        {
+          success: false,
+          message: "HTML conversion failed - output is not valid HTML (missing HTML tags)",
+        },
+        { status: 500 }
+      );
+    }
+    
+    // Check for markdown syntax that shouldn't be in HTML
+    if (updatedHtml.includes("```") && !updatedHtml.includes("<code>")) {
+      console.error("[SOP Update] Generated HTML contains markdown code fences - conversion may have failed");
+      console.error("[SOP Update] Preview:", updatedHtml.substring(0, 500));
+      return NextResponse.json(
+        {
+          success: false,
+          message: "HTML conversion failed - output contains markdown syntax",
+        },
+        { status: 500 }
+      );
+    }
+    
+    console.log("[SOP Update] HTML validation passed - valid HTML generated, length:", updatedHtml.length);
 
     // 7. Update SOP record
     const updatedSOP = await prisma.sOP.update({
       where: { id: sopId },
       data: {
         content: {
-          markdown: sopContent,
-          html: updatedHtml || undefined, // Store HTML if available
+          html: updatedHtml, // Store only HTML (primary format)
           version: nextVersion,
           generatedAt: currentContent?.generatedAt || new Date().toISOString(),
           lastEditedAt: new Date().toISOString(),
@@ -315,17 +367,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 9. Return success response
+    // 9. Return success response with HTML only
     const responseContent = updatedSOP.content as any;
     return NextResponse.json({
       success: true,
       sop: {
         id: updatedSOP.id,
         title: updatedSOP.title,
-        content: responseContent, // Return full content object with markdown and html
+        content: responseContent, // Contains only HTML now
         version: nextVersion,
         updatedAt: updatedSOP.updatedAt,
       },
+      sopHtml: responseContent?.html || updatedHtml, // Return HTML directly for convenience
       aiReview: reviewWithAI
         ? {
             suggestions: aiReviewSuggestions,

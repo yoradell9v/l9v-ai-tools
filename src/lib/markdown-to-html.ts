@@ -19,23 +19,39 @@ export async function markdownToHtml(markdown: string): Promise<string> {
       .process(markdown);
 
     // Extract HTML content from the VFile
-    // String(file) should give us the HTML output
     const html = String(file);
     
+    // Check if conversion actually worked - if it's just wrapped in pre/code, it failed
+    const trimmed = html.trim();
+    if (trimmed.startsWith('<pre><code') && (trimmed.includes('language-markdown') || trimmed.includes('class="language-'))) {
+      console.error('[Markdown to HTML] Conversion resulted in code block wrapper - conversion failed');
+      throw new Error('Conversion resulted in code block wrapper - conversion likely failed');
+    }
+    
+    // Check if it's just escaped markdown (conversion failed)
+    if (trimmed.startsWith('<pre>') && !trimmed.includes('<h') && !trimmed.includes('<p>') && !trimmed.includes('<ul>') && !trimmed.includes('<ol>')) {
+      console.error('[Markdown to HTML] Result is escaped markdown, not HTML - conversion failed');
+      throw new Error('Result is escaped markdown, not HTML - conversion failed');
+    }
+    
     // If the HTML is wrapped in a document structure, extract body content
-    // Otherwise, return as-is (it should be just the content)
     if (html.includes('<body>')) {
       const cheerio = await import('cheerio');
       const $ = cheerio.load(html);
       const bodyContent = $('body').html() || '';
+      const bodyTrimmed = bodyContent.trim();
+      if (bodyTrimmed.startsWith('<pre><code') && (bodyTrimmed.includes('language-markdown') || bodyTrimmed.includes('class="language-'))) {
+        console.error('[Markdown to HTML] Body content is wrapped in code block - conversion failed');
+        throw new Error('Body content is wrapped in code block - conversion failed');
+      }
       return bodyContent.trim();
     }
     
     return html.trim();
   } catch (error) {
     console.error('[Markdown to HTML] Error:', error);
-    // Fallback: return escaped HTML if conversion fails
-    return `<pre>${markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
+    // Don't return fallback - throw error so OpenAI conversion can be used
+    throw error;
   }
 }
 

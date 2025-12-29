@@ -44,6 +44,7 @@ export interface ResolvedJDFormData {
 /**
  * Maps Organization Knowledge Base fields to JD Form default values
  * Used to pre-fill the JD form with organization defaults
+ * When KB is null, returns sensible defaults instead of __ORG_DEFAULT__ placeholders
  */
 export function mapOrgKBToJDForm(
   orgKB: OrganizationKnowledgeBase | null
@@ -51,12 +52,12 @@ export function mapOrgKBToJDForm(
   if (!orgKB) {
     return {
       businessName: "",
-      businessGoal: "__ORG_DEFAULT__",
+      businessGoal: "Growth & Scale", // Default when KB is not set up
       tools: "",
       timezone: "",
       weeklyHours: "40",
-      englishLevel: "__ORG_DEFAULT__",
-      managementStyle: "__ORG_DEFAULT__",
+      englishLevel: "Excellent", // Default when KB is not set up
+      managementStyle: "Async", // Default when KB is not set up
     };
   }
 
