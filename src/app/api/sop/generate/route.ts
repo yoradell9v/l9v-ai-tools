@@ -1007,6 +1007,12 @@ export async function POST(request: NextRequest) {
           usedKnowledgeBaseVersion: knowledgeBaseVersion ?? undefined,
           knowledgeBaseSnapshot: knowledgeBaseSnapshot ?? undefined,
           contributedInsights: contributedInsights.length > 0 ? contributedInsights : undefined,
+          // VERSIONING: New SOP starts at version 1
+          versionNumber: 1,
+          rootSOPId: null, // Will be set to its own id after creation
+          isCurrentVersion: true,
+          versionCreatedBy: decoded.userId,
+          versionCreatedAt: new Date(),
           metadata: {
             tokens: {
               prompt: promptTokens,
@@ -1027,6 +1033,12 @@ export async function POST(request: NextRequest) {
           title: true,
           createdAt: true,
         },
+      });
+
+      // Set rootSOPId to itself (first version is its own root)
+      await prisma.sOP.update({
+        where: { id: savedSOP.id },
+        data: { rootSOPId: savedSOP.id },
       });
 
       // Log KB metadata that was saved

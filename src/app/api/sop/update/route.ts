@@ -143,11 +143,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Get current version from content
+    // 4. Get current version information
     const currentContent = existingSOP.content as any;
-    const currentVersion = currentContent?.version || "1.0";
-    const versionNumber = parseFloat(currentVersion);
-    const nextVersion = (versionNumber + 0.1).toFixed(1); // Increment by 0.1 (e.g., 1.0 -> 1.1)
+    const currentVersionNumber = existingSOP.versionNumber || 1;
+    const rootSOPId = existingSOP.rootSOPId || existingSOP.id;
+    const nextVersionNumber = currentVersionNumber + 1; // Integer increment: 1 -> 2 -> 3
 
     // 5. AI Review (if requested)
     let aiReviewSuggestions: any[] = [];
@@ -268,16 +268,36 @@ export async function POST(request: NextRequest) {
     
     console.log("[SOP Update] HTML validation passed - valid HTML generated, length:", updatedHtml.length);
 
-    // 7. Update SOP record
-    const updatedSOP = await prisma.sOP.update({
-      where: { id: sopId },
+    // 7. Mark old version as not current (if it was current)
+    if (existingSOP.isCurrentVersion) {
+      await prisma.sOP.update({
+        where: { id: sopId },
+        data: { isCurrentVersion: false },
+      });
+    }
+
+    // 8. Create new version record
+    const updatedSOP = await prisma.sOP.create({
       data: {
+        userOrganizationId: existingSOP.userOrganizationId,
+        organizationId: existingSOP.organizationId,
+        title: existingSOP.title,
         content: {
           html: updatedHtml, // Store only HTML (primary format)
-          version: nextVersion,
+          version: nextVersionNumber.toString(),
           generatedAt: currentContent?.generatedAt || new Date().toISOString(),
           lastEditedAt: new Date().toISOString(),
         },
+        intakeData: existingSOP.intakeData ?? undefined,
+        usedKnowledgeBaseVersion: existingSOP.usedKnowledgeBaseVersion ?? undefined,
+        knowledgeBaseSnapshot: existingSOP.knowledgeBaseSnapshot ?? undefined,
+        contributedInsights: existingSOP.contributedInsights ?? undefined,
+        // VERSIONING: Create new version
+        versionNumber: nextVersionNumber,
+        rootSOPId: rootSOPId,
+        isCurrentVersion: true,
+        versionCreatedBy: decoded.userId,
+        versionCreatedAt: new Date(),
         metadata: {
           ...(existingSOP.metadata as any),
           lastEditedBy: decoded.userId,
@@ -285,20 +305,21 @@ export async function POST(request: NextRequest) {
           editHistory: [
             ...((existingSOP.metadata as any)?.editHistory || []),
             {
-              version: nextVersion,
+              version: nextVersionNumber,
               editedBy: decoded.userId,
               editedAt: new Date().toISOString(),
-              changesSummary: `Updated SOP content (version ${nextVersion})`,
+              changesSummary: `Updated SOP content (version ${nextVersionNumber})`,
             },
           ],
           aiReviewed: reviewWithAI || false,
           aiReviewSuggestionsCount: aiReviewSuggestions.length,
         },
-      },
+      } as any,
       select: {
         id: true,
         title: true,
         content: true,
+        versionNumber: true,
         updatedAt: true,
       },
     });
@@ -319,7 +340,7 @@ export async function POST(request: NextRequest) {
         metadata: {
           title: existingSOP.title,
           updatedAt: new Date().toISOString(),
-          version: nextVersion,
+          version: nextVersionNumber,
         },
       };
 
@@ -341,7 +362,7 @@ export async function POST(request: NextRequest) {
           const learningEventsResult = await createLearningEvents({
             knowledgeBaseId: knowledgeBase.id,
             sourceType: "SOP_GENERATION",
-            sourceId: sopId,
+            sourceId: updatedSOP.id, // Use new version ID
             insights: contributedInsights,
             triggeredBy: existingSOP.userOrganizationId,
           });
@@ -375,7 +396,8 @@ export async function POST(request: NextRequest) {
         id: updatedSOP.id,
         title: updatedSOP.title,
         content: responseContent, // Contains only HTML now
-        version: nextVersion,
+        version: nextVersionNumber,
+        versionNumber: nextVersionNumber,
         updatedAt: updatedSOP.updatedAt,
       },
       sopHtml: responseContent?.html || updatedHtml, // Return HTML directly for convenience

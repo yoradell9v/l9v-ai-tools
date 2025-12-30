@@ -369,12 +369,27 @@ model SOP {
 
   metadata           Json?
   
+  // VERSIONING FIELDS
+  versionNumber      Int      @default(1)  // Integer version: 1, 2, 3, etc.
+  rootSOPId          String?  // Points to the original SOP (first version)
+  rootSOP            SOP?     @relation("SOPVersions", fields: [rootSOPId], references: [id], onDelete: Cascade)
+  versions           SOP[]    @relation("SOPVersions")  // All versions of this SOP
+  isCurrentVersion   Boolean  @default(true)  // Only latest version is true
+  
+  // Version metadata
+  versionCreatedBy   String?  // userId who created this version
+  versionCreatedAt   DateTime? // When this version was created
+  
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   
   @@index([userOrganizationId])
   @@index([organizationId])
   @@index([createdAt])
+  @@index([rootSOPId])  // For finding all versions
+  @@index([isCurrentVersion])  // For filtering current versions
+  @@index([rootSOPId, versionNumber])  // Composite for version queries
+  @@index([rootSOPId, isCurrentVersion])  // Composite for finding current version
 }
 
 model EnhancementAnalysis {

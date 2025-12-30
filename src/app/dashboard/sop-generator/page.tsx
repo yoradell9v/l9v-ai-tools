@@ -3,11 +3,12 @@
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { FileText, Plus, Loader2, CheckCircle2, Edit, Save, X, Sparkles, Download, History, AlertCircle } from "lucide-react";
+import { FileText, Plus, Loader2, CheckCircle2, Edit, Save, X, Sparkles, Download, History, AlertCircle, RotateCcw, Info } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Card,
   CardContent,
@@ -23,6 +24,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import BaseIntakeForm from "@/components/forms/BaseIntakeForm";
 import { sopGeneratorConfig } from "@/components/forms/configs/sopGeneratorConfig";
 import { useUser } from "@/context/UserContext";
@@ -31,6 +37,8 @@ import { htmlToMarkdown } from "@/lib/html-to-markdown";
 interface GeneratedSOP {
   sopHtml: string; // HTML content (primary format)
   sopId: string | null;
+  versionNumber?: number;
+  isCurrentVersion?: boolean;
   metadata: {
     title: string;
     generatedAt: string;
@@ -41,6 +49,20 @@ interface GeneratedSOP {
     };
     organizationProfileUsed: boolean;
   };
+}
+
+interface SOPVersion {
+  id: string;
+  versionNumber: number;
+  isCurrentVersion: boolean;
+  createdBy: {
+    id: string;
+    firstname: string;
+    lastname: string;
+    email: string;
+  };
+  createdAt: string;
+  versionCreatedAt: string;
 }
 
 export default function SopPage() {
@@ -62,6 +84,10 @@ export default function SopPage() {
   const [hasNoSavedSOPs, setHasNoSavedSOPs] = useState(false);
   const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [versions, setVersions] = useState<SOPVersion[]>([]);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const hasAttemptedLoadRef = useRef(false);
   const lastLoadedUserIdRef = useRef<string | null>(null);
 
@@ -105,7 +131,15 @@ export default function SopPage() {
         ...generatedSOP,
         sopHtml: htmlContent,
         sopId: result.sop.id,
+        versionNumber: result.sop.versionNumber || generatedSOP.versionNumber || 1,
+        isCurrentVersion: true,
       });
+      setSelectedVersionId(result.sop.id);
+      
+      // Reload versions after update
+      if (result.sop.id) {
+        loadVersions(result.sop.id);
+      }
 
       setIsEditing(false);
       setReviewWithAI(false);
@@ -193,6 +227,8 @@ export default function SopPage() {
           setGeneratedSOP({
             sopHtml: htmlContent,
             sopId: latestSOP.id,
+            versionNumber: latestSOP.versionNumber || 1,
+            isCurrentVersion: true,
             metadata: {
               title: latestSOP.title,
               generatedAt: latestSOP.createdAt || new Date().toISOString(),
@@ -204,7 +240,13 @@ export default function SopPage() {
               organizationProfileUsed: metadata?.organizationProfileUsed || false,
             },
           });
+          setSelectedVersionId(latestSOP.id);
           setHasNoSavedSOPs(false);
+          
+          // Load versions for this SOP
+          if (latestSOP.id) {
+            loadVersions(latestSOP.id);
+          }
         } else {
           setHasNoSavedSOPs(true);
         }
@@ -225,6 +267,209 @@ export default function SopPage() {
 
     loadLatestSOP();
   }, [user, generatedSOP, isLoadingLatest]);
+
+  // Load versions for a SOP
+  const loadVersions = async (sopId: string) => {
+    setIsLoadingVersions(true);
+    try {
+      const response = await fetch(`/api/sop/${sopId}/versions`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to fetch versions");
+      }
+
+      const data = await response.json();
+      if (data.success && data.versions) {
+        setVersions(data.versions);
+        // Set selected version to current if not already set
+        const currentVersion = data.versions.find((v: SOPVersion) => v.isCurrentVersion);
+        if (currentVersion && !selectedVersionId) {
+          setSelectedVersionId(currentVersion.id);
+        } else if (data.versions.length > 0 && !selectedVersionId) {
+          // If no current version found, select the first one (latest)
+          setSelectedVersionId(data.versions[0].id);
+        }
+      } else {
+        // If no versions returned, create a single version entry for the current SOP
+        if (generatedSOP?.sopId) {
+          setVersions([{
+            id: generatedSOP.sopId,
+            versionNumber: generatedSOP.versionNumber || 1,
+            isCurrentVersion: true,
+            createdBy: {
+              id: user?.id || "",
+              firstname: user?.firstname || "",
+              lastname: user?.lastname || "",
+              email: user?.email || "",
+            },
+            createdAt: generatedSOP.metadata.generatedAt,
+            versionCreatedAt: generatedSOP.metadata.generatedAt,
+          }]);
+          setSelectedVersionId(generatedSOP.sopId);
+        }
+      }
+    } catch (error: any) {
+      console.error("Error loading versions:", error);
+      // If versions fail to load, create a single version entry for the current SOP
+      // This handles the case where migration hasn't been run yet
+      if (generatedSOP?.sopId) {
+        setVersions([{
+          id: generatedSOP.sopId,
+          versionNumber: generatedSOP.versionNumber || 1,
+          isCurrentVersion: true,
+          createdBy: {
+            id: user?.id || "",
+            firstname: user?.firstname || "",
+            lastname: user?.lastname || "",
+            email: user?.email || "",
+          },
+          createdAt: generatedSOP.metadata.generatedAt,
+          versionCreatedAt: generatedSOP.metadata.generatedAt,
+        }]);
+        setSelectedVersionId(generatedSOP.sopId);
+      }
+    } finally {
+      setIsLoadingVersions(false);
+    }
+  };
+
+  // Load a specific version
+  const loadVersion = async (versionId: string) => {
+    try {
+      // Try to fetch the specific SOP by ID first
+      let response = await fetch(`/api/sop/${versionId}`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      // If that fails, try fetching from saved endpoint
+      if (!response.ok) {
+        response = await fetch(`/api/sop/saved?page=1&limit=1000&includeAllVersions=true`, {
+          method: "GET",
+          credentials: "include",
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch SOP");
+      }
+
+      const data = await response.json();
+      let versionSOP: any = null;
+
+      if (data.success) {
+        // Handle response from /api/sop/[id]
+        if (data.sop) {
+          versionSOP = data.sop;
+        }
+        // Handle response from /api/sop/saved
+        else if (data.data?.sops) {
+          versionSOP = data.data.sops.find((s: any) => s.id === versionId);
+        }
+      }
+
+      if (versionSOP) {
+        const content = versionSOP.content as any;
+        const htmlContent = typeof content === "object" ? content.html || "" : "";
+        
+        if (htmlContent) {
+          setGeneratedSOP({
+            sopHtml: htmlContent,
+            sopId: versionSOP.id,
+            versionNumber: versionSOP.versionNumber || 1,
+            isCurrentVersion: versionSOP.isCurrentVersion ?? true,
+            metadata: {
+              title: versionSOP.title,
+              generatedAt: versionSOP.createdAt || new Date().toISOString(),
+              tokens: versionSOP.metadata?.tokens || {
+                prompt: 0,
+                completion: 0,
+                total: 0,
+              },
+              organizationProfileUsed: versionSOP.metadata?.organizationProfileUsed || false,
+            },
+          });
+          setSelectedVersionId(versionId);
+        } else {
+          throw new Error("SOP content not available");
+        }
+      } else {
+        throw new Error("SOP version not found");
+      }
+    } catch (error: any) {
+      console.error("Error loading version:", error);
+      toast.error("Failed to load version", {
+        description: error.message || "An error occurred while loading the version.",
+      });
+    }
+  };
+
+  // Restore a version
+  const restoreVersion = async (versionId: string) => {
+    setIsRestoring(true);
+    try {
+      const response = await fetch(`/api/sop/${versionId}/restore`, {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to restore version");
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        toast.success("Version restored successfully!", {
+          description: data.message || "The version has been restored as the current version.",
+        });
+        
+        // Reload the current SOP and versions
+        if (data.sop?.id) {
+          // Load the newly restored version (which is now current)
+          await loadVersion(data.sop.id);
+          
+          // Reload versions list
+          const rootSOPId = (generatedSOP as any)?.rootSOPId || generatedSOP?.sopId || data.sop.id;
+          await loadVersions(rootSOPId);
+        } else if (generatedSOP?.sopId) {
+          // Fallback: reload versions and find current
+          const rootSOPId = (generatedSOP as any)?.rootSOPId || generatedSOP.sopId;
+          await loadVersions(rootSOPId);
+          
+          // Find the new current version and load it
+          try {
+            const versionsResponse = await fetch(`/api/sop/${rootSOPId}/versions`, {
+              method: "GET",
+              credentials: "include",
+            });
+            if (versionsResponse.ok) {
+              const versionsData = await versionsResponse.json();
+              if (versionsData.success && versionsData.versions) {
+                const newCurrent = versionsData.versions.find((v: SOPVersion) => v.isCurrentVersion);
+                if (newCurrent) {
+                  await loadVersion(newCurrent.id);
+                }
+              }
+            }
+          } catch (e) {
+            // If versions endpoint fails, just reload the current SOP
+            await loadVersion(generatedSOP.sopId);
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error("Error restoring version:", error);
+      toast.error("Failed to restore version", {
+        description: error.message || "An error occurred while restoring the version.",
+      });
+    } finally {
+      setIsRestoring(false);
+    }
+  };
 
   // No need for separate HTML state - use generatedSOP.sopHtml directly
 
@@ -295,534 +540,699 @@ export default function SopPage() {
 
   return (
     <>
-      <div className="flex items-center gap-2 p-4 border-b">
+      <div className="flex items-center gap-2 p-4 border-b bg-background">
         <SidebarTrigger />
       </div>
-      <div className="transition-all duration-300 ease-in-out min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex flex-col gap-4 mb-6">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h1 className="text-2xl font-semibold">SOP Builder AI</h1>
-                <p className="text-sm text-muted-foreground">
-                  Automatically generate standard operating procedures for your business
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button onClick={() => setIsModalOpen(true)} className="sm:self-start">
-                  <Plus className="h-4 w-4 mr-2" />
-                  <span>Generate SOP</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => router.push("/dashboard/sop-generator/history")}
-                  className="sm:self-start"
-                >
-                  <History className="h-4 w-4 mr-2" />
-                  <span>History</span>
-                </Button>
-
-              </div>
-            </div>
-          </div>
-
-          {/* Loading Latest SOP */}
-          {isLoadingLatest && !generatedSOP && !isProcessing && (
+      <div className="transition-all duration-300 ease-in-out min-h-screen bg-background">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <div className="space-y-6">
+            {/* Header Section */}
             <Card>
-              <CardContent className="flex items-center gap-3 py-4">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <p className="text-sm font-medium">
-                  Loading your latest SOP...
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {isProcessing && (
-            <Card>
-              <CardContent className="flex items-center gap-3 py-4">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <p className="text-sm font-medium">
-                  {statusMessage || "Processing your SOP..."}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {error && !isProcessing && (
-            <Card className="border-destructive/30 bg-destructive/10">
-              <CardContent className="py-4">
-                <p className="text-sm text-destructive">{error}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3"
-                  onClick={() => {
-                    setError(null);
-                    setIsModalOpen(true);
-                  }}
-                >
-                  Try Again
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {generatedSOP && !isProcessing && (
-            <Card className="overflow-hidden">
               <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-xl mb-2 flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-500" />
-                      {generatedSOP.metadata.title}
-                    </CardTitle>
-                    <CardDescription>
-                      Generated on {new Date(generatedSOP.metadata.generatedAt).toLocaleString()}
-                      {generatedSOP.metadata.organizationProfileUsed && (
-                        <span className="ml-2">• Using organization profile</span>
-                      )}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="text-2xl sm:text-3xl">SOP Builder AI</CardTitle>
+                    <CardDescription className="text-sm sm:text-base">
+                      Automatically generate standard operating procedures for your business
                     </CardDescription>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {!isEditing ? (
-                      <>
-                        <Button
-                          variant="outline"
-                          onClick={() => setIsPreviewDialogOpen(true)}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Download PDF
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            // Convert HTML to markdown for editing
-                            const markdown = htmlToMarkdown(generatedSOP.sopHtml);
-                            setIsEditing(true);
-                            setEditedSOPContent(markdown);
-                          }}
-                        >
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit SOP
-                        </Button>
-                      </>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setIsEditing(false);
-                            setEditedSOPContent("");
-                            setReviewWithAI(false);
-                            setAiReviewSuggestions(null);
-                            setShowReviewResults(false);
-                          }}
-                          disabled={isSubmitting || isReviewing}
-                        >
-                          <X className="h-4 w-4 mr-2" />
-                          Cancel
-                        </Button>
-                        <Button
-                          onClick={async () => {
-                            if (reviewWithAI) {
-                              // AI Review flow
-                              setIsReviewing(true);
-                              try {
-                                // TODO: Backend API call for AI review
-                                // For now, simulate AI review
-                                const response = await fetch("/api/sop/review", {
-                                  method: "POST",
-                                  headers: {
-                                    "Content-Type": "application/json",
-                                  },
-                                  credentials: "include",
-                                  body: JSON.stringify({
-                                    sopContent: editedSOPContent,
-                                  }),
-                                });
-
-                                if (response.ok) {
-                                  const result = await response.json();
-                                  if (result.suggestions && result.suggestions.length > 0) {
-                                    setAiReviewSuggestions(result);
-                                    setShowReviewResults(true);
-                                    toast.info("AI review complete", {
-                                      description: `Found ${result.suggestions.length} suggestion(s). Review them below.`,
-                                    });
-                                  } else {
-                                    // No suggestions, proceed to save
-                                    await saveSOPModifications(editedSOPContent);
-                                  }
-                                } else {
-                                  throw new Error("AI review failed");
-                                }
-                              } catch (error: any) {
-                                console.error("Error during AI review:", error);
-                                // If review fails, still allow saving
-                                toast.warning("AI review unavailable", {
-                                  description: "Proceeding with save. You can still submit your changes.",
-                                });
-                                await saveSOPModifications(editedSOPContent);
-                              } finally {
-                                setIsReviewing(false);
-                              }
-                            } else {
-                              // Direct save without review
-                              await saveSOPModifications(editedSOPContent);
-                            }
-                          }}
-                          disabled={isSubmitting || isReviewing || !editedSOPContent.trim()}
-                        >
-                          {isReviewing ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Reviewing...
-                            </>
-                          ) : (
-                            <>
-                              <Save className="h-4 w-4 mr-2" />
-                              {isSubmitting ? "Saving..." : "Submit Modifications"}
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    )}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <Button 
+                      onClick={() => setIsModalOpen(true)} 
+                      size="default"
+                      className="w-full sm:w-auto"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      <span>Generate SOP</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => router.push("/dashboard/sop-generator/history")}
+                      size="default"
+                      className="w-full sm:w-auto"
+                    >
+                      <History className="h-4 w-4 mr-2" />
+                      <span>History</span>
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="w-full max-w-full overflow-x-hidden">
-                {isEditing ? (
-                  <div className="space-y-4 w-full max-w-full">
-                    {showReviewResults && aiReviewSuggestions && (
-                      <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Sparkles className="h-5 w-5 text-primary" />
-                            <h3 className="font-semibold">AI Review Suggestions</h3>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setShowReviewResults(false);
-                              setAiReviewSuggestions(null);
-                            }}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                          {aiReviewSuggestions.suggestions?.map((suggestion: any, index: number) => (
-                            <div key={index} className="p-3 bg-background rounded border">
-                              <div className="flex items-start justify-between gap-2 mb-2">
-                                <span className="text-xs font-medium text-muted-foreground">
-                                  {suggestion.type || "Suggestion"}
-                                </span>
-                                <div className="flex gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                      // Apply suggestion
-                                      const updatedContent = editedSOPContent.replace(
-                                        suggestion.original,
-                                        suggestion.suggested
-                                      );
-                                      setEditedSOPContent(updatedContent);
-                                      // Remove this suggestion
-                                      const updatedSuggestions = {
-                                        ...aiReviewSuggestions,
-                                        suggestions: aiReviewSuggestions.suggestions.filter((_: any, i: number) => i !== index),
-                                      };
-                                      if (updatedSuggestions.suggestions.length === 0) {
-                                        setShowReviewResults(false);
-                                        setAiReviewSuggestions(null);
-                                      } else {
-                                        setAiReviewSuggestions(updatedSuggestions);
-                                      }
-                                      toast.success("Suggestion applied");
-                                    }}
-                                  >
-                                    Accept
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                      // Remove suggestion
-                                      const updatedSuggestions = {
-                                        ...aiReviewSuggestions,
-                                        suggestions: aiReviewSuggestions.suggestions.filter((_: any, i: number) => i !== index),
-                                      };
-                                      if (updatedSuggestions.suggestions.length === 0) {
-                                        setShowReviewResults(false);
-                                        setAiReviewSuggestions(null);
-                                      } else {
-                                        setAiReviewSuggestions(updatedSuggestions);
-                                      }
-                                    }}
-                                  >
-                                    Dismiss
-                                  </Button>
-                                </div>
-                              </div>
-                              <div className="space-y-2 text-sm">
-                                <div>
-                                  <span className="text-muted-foreground">Original: </span>
-                                  <span className="line-through text-muted-foreground">{suggestion.original}</span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Suggested: </span>
-                                  <span className="text-foreground">{suggestion.suggested}</span>
-                                </div>
-                                {suggestion.reason && (
-                                  <p className="text-xs text-muted-foreground mt-1">{suggestion.reason}</p>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex items-center justify-between pt-2 border-t">
-                          <p className="text-xs text-muted-foreground">
-                            {aiReviewSuggestions.suggestions?.length || 0} suggestion(s) remaining
-                          </p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              // Apply all suggestions
-                              let updatedContent = editedSOPContent;
-                              aiReviewSuggestions.suggestions.forEach((suggestion: any) => {
-                                updatedContent = updatedContent.replace(
-                                  suggestion.original,
-                                  suggestion.suggested
-                                );
-                              });
-                              setEditedSOPContent(updatedContent);
-                              setShowReviewResults(false);
-                              setAiReviewSuggestions(null);
-                              toast.success("All suggestions applied");
-                            }}
-                          >
-                            Accept All
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                    <Textarea
-                      value={editedSOPContent}
-                      onChange={(e) => setEditedSOPContent(e.target.value)}
-                      className="min-h-[600px] font-mono text-sm w-full max-w-full resize-y break-words whitespace-pre-wrap"
-                      placeholder="Edit your SOP content here..."
-                      style={{
-                        wordWrap: 'break-word',
-                        overflowWrap: 'break-word',
-                        overflowX: 'hidden',
-                        maxWidth: '100%'
-                      }}
-                    />
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="review-with-ai"
-                        checked={reviewWithAI}
-                        onChange={(e) => setReviewWithAI(e.target.checked)}
-                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                        disabled={isSubmitting || isReviewing}
-                      />
-                      <Label
-                        htmlFor="review-with-ai"
-                        className="text-sm font-normal cursor-pointer flex items-center gap-2"
-                      >
-                        <Sparkles className="h-4 w-4 text-primary" />
-                        Review with AI before submitting
-                      </Label>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      💡 Tip: You can edit the markdown content directly. {reviewWithAI ? "When enabled, AI will review your changes for grammar, clarity, and consistency before saving." : "Changes will be saved when you click 'Submit Modifications'."}
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <style dangerouslySetInnerHTML={{
-                      __html: `
-                      .sop-content-display h1 {
-                        font-size: 2rem;
-                        font-weight: 700;
-                        line-height: 1.2;
-                        margin-top: 2rem;
-                        margin-bottom: 1rem;
-                        color: hsl(var(--foreground));
-                      }
-                      .sop-content-display h2 {
-                        font-size: 1.5rem;
-                        font-weight: 600;
-                        line-height: 1.3;
-                        margin-top: 1.5rem;
-                        margin-bottom: 0.75rem;
-                        color: hsl(var(--foreground));
-                      }
-                      .sop-content-display h3 {
-                        font-size: 1.25rem;
-                        font-weight: 600;
-                        line-height: 1.4;
-                        margin-top: 1.25rem;
-                        margin-bottom: 0.5rem;
-                        color: hsl(var(--foreground));
-                      }
-                      .sop-content-display h4,
-                      .sop-content-display h5,
-                      .sop-content-display h6 {
-                        font-size: 1.125rem;
-                        font-weight: 600;
-                        line-height: 1.4;
-                        margin-top: 1rem;
-                        margin-bottom: 0.5rem;
-                        color: hsl(var(--foreground));
-                      }
-                      .sop-content-display p {
-                        margin-top: 1rem;
-                        margin-bottom: 1rem;
-                        line-height: 1.75;
-                        color: hsl(var(--foreground));
-                      }
-                      .sop-content-display p:first-child {
-                        margin-top: 0;
-                      }
-                      .sop-content-display p:last-child {
-                        margin-bottom: 0;
-                      }
-                      .sop-content-display ul,
-                      .sop-content-display ol {
-                        margin-top: 1rem;
-                        margin-bottom: 1rem;
-                        padding-left: 1.5rem;
-                        line-height: 1.75;
-                      }
-                      .sop-content-display li {
-                        margin-top: 0.5rem;
-                        margin-bottom: 0.5rem;
-                      }
-                      .sop-content-display strong {
-                        font-weight: 600;
-                        color: hsl(var(--foreground));
-                      }
-                      .sop-content-display em {
-                        font-style: italic;
-                      }
-                      .sop-content-display code {
-                        background-color: hsl(var(--muted));
-                        padding: 0.125rem 0.375rem;
-                        border-radius: 0.25rem;
-                        font-size: 0.875em;
-                        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-                      }
-                      .sop-content-display pre {
-                        background-color: hsl(var(--muted));
-                        padding: 1rem;
-                        border-radius: 0.5rem;
-                        overflow-x: auto;
-                        margin-top: 1rem;
-                        margin-bottom: 1rem;
-                      }
-                      .sop-content-display pre code {
-                        background-color: transparent;
-                        padding: 0;
-                      }
-                      .sop-content-display blockquote {
-                        border-left: 4px solid hsl(var(--border));
-                        padding-left: 1rem;
-                        margin-left: 0;
-                        margin-top: 1rem;
-                        margin-bottom: 1rem;
-                        font-style: italic;
-                        color: hsl(var(--muted-foreground));
-                      }
-                      .sop-content-display table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin-top: 1rem;
-                        margin-bottom: 1rem;
-                      }
-                      .sop-content-display th,
-                      .sop-content-display td {
-                        border: 1px solid hsl(var(--border));
-                        padding: 0.5rem;
-                        text-align: left;
-                      }
-                      .sop-content-display th {
-                        font-weight: 600;
-                        background-color: hsl(var(--muted));
-                      }
-                      .sop-content-display hr {
-                        border: none;
-                        border-top: 1px solid hsl(var(--border));
-                        margin-top: 2rem;
-                        margin-bottom: 2rem;
-                      }
-                      .sop-content-display a {
-                        color: hsl(var(--primary));
-                        text-decoration: underline;
-                      }
-                      .sop-content-display a:hover {
-                        text-decoration: none;
-                      }
-                    `}} />
-                    {generatedSOP.sopHtml && generatedSOP.sopHtml.trim().length > 0 ? (
-                      <div
-                        className="sop-content-display w-full max-w-full"
-                        style={{
-                          wordWrap: 'break-word',
-                          overflowWrap: 'break-word',
-                          overflowX: 'hidden',
-                          maxWidth: '100%'
-                        }}
-                        dangerouslySetInnerHTML={{ __html: generatedSOP.sopHtml }}
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center py-12">
-                        <div className="text-center space-y-2">
-                          <AlertCircle className="h-5 w-5 text-muted-foreground mx-auto" />
-                          <p className="text-sm text-muted-foreground">
-                            HTML content not available. Please regenerate the SOP.
-                          </p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="mt-4"
-                            onClick={() => setIsModalOpen(true)}
-                          >
-                            Regenerate SOP
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </CardContent>
             </Card>
-          )}
 
-          {!generatedSOP && !isProcessing && !error && !isLoadingLatest && hasNoSavedSOPs && (
-            <Card className="text-center">
-              <CardContent className="py-12 space-y-4">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                  <FileText className="h-6 w-6 text-primary" />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-lg font-semibold">No SOPs Generated Yet</h3>
-                  <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                    Create your first Standard Operating Procedure to get started
-                  </p>
-                </div>
-                <Button onClick={() => setIsModalOpen(true)} className="inline-flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  Generate Your First SOP
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+            {/* Loading Latest SOP */}
+            {isLoadingLatest && !generatedSOP && !isProcessing && (
+              <Card>
+                <CardContent className="py-6">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <div className="space-y-2 flex-1">
+                      <p className="text-sm font-medium text-foreground">
+                        Loading your latest SOP...
+                      </p>
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-3/4" />
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Processing State */}
+            {isProcessing && (
+              <Card>
+                <CardContent className="py-6">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <div className="space-y-1 flex-1">
+                      <p className="text-sm font-medium text-foreground">
+                        {statusMessage || "Processing your SOP..."}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        This may take a few moments
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Error State */}
+            {error && !isProcessing && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription className="space-y-3">
+                  <p>{error}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setError(null);
+                      setIsModalOpen(true);
+                    }}
+                    className="mt-2"
+                  >
+                    Try Again
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* SOP Display Card */}
+            {generatedSOP && !isProcessing && (
+              <Card className="overflow-hidden">
+                <CardHeader className="space-y-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-start gap-3">
+                        <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <CardTitle className="text-xl sm:text-2xl">
+                            {generatedSOP.metadata.title}
+                          </CardTitle>
+                          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                            <span>Generated on {new Date(generatedSOP.metadata.generatedAt).toLocaleString()}</span>
+                            {generatedSOP.metadata.organizationProfileUsed && (
+                              <>
+                                <Separator orientation="vertical" className="h-4" />
+                                <span className="flex items-center gap-1">
+                                  <Info className="h-3 w-3" />
+                                  Using organization profile
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <Separator />
+                      
+                      {/* Version Selector */}
+                      <div className="space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                          <Label htmlFor="version-select" className="text-sm font-medium shrink-0">
+                            Version:
+                          </Label>
+                          {isLoadingVersions ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span>Loading versions...</span>
+                            </div>
+                          ) : versions.length > 0 ? (
+                            <div className="flex items-center gap-2 flex-1">
+                              <Select
+                                value={selectedVersionId || generatedSOP.sopId || ""}
+                                onValueChange={(value) => {
+                                  setSelectedVersionId(value);
+                                  loadVersion(value);
+                                }}
+                                disabled={isLoadingVersions}
+                              >
+                                <SelectTrigger id="version-select" className="w-full sm:w-[280px]">
+                                  <SelectValue placeholder="Select version" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {versions.map((version) => (
+                                    <SelectItem key={version.id} value={version.id}>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium">Version {version.versionNumber}</span>
+                                        {version.isCurrentVersion && (
+                                          <Badge variant="secondary" className="text-xs">
+                                            Current
+                                          </Badge>
+                                        )}
+                                        <span className="text-muted-foreground text-xs">
+                                          • {new Date(version.versionCreatedAt).toLocaleDateString()}
+                                        </span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {generatedSOP.versionNumber && (
+                                <Badge variant={generatedSOP.isCurrentVersion ? "default" : "outline"}>
+                                  {generatedSOP.isCurrentVersion ? "Current" : `v${generatedSOP.versionNumber}`}
+                                </Badge>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-muted-foreground">
+                                Version {generatedSOP.versionNumber || 1}
+                              </span>
+                              {generatedSOP.isCurrentVersion && (
+                                <Badge variant="secondary">Current</Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {generatedSOP.sopId && !generatedSOP.isCurrentVersion && versions.length > 0 && (
+                          <div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => restoreVersion(generatedSOP.sopId!)}
+                              disabled={isRestoring}
+                            >
+                              {isRestoring ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Restoring...
+                                </>
+                              ) : (
+                                <>
+                                  <RotateCcw className="h-4 w-4 mr-2" />
+                                  Make this version current
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Action Buttons */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                      {!isEditing ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            onClick={() => setIsPreviewDialogOpen(true)}
+                            className="w-full sm:w-auto"
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            <span className="hidden sm:inline">Download PDF</span>
+                            <span className="sm:hidden">PDF</span>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              const markdown = htmlToMarkdown(generatedSOP.sopHtml);
+                              setIsEditing(true);
+                              setEditedSOPContent(markdown);
+                            }}
+                            className="w-full sm:w-auto"
+                          >
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit SOP
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setIsEditing(false);
+                              setEditedSOPContent("");
+                              setReviewWithAI(false);
+                              setAiReviewSuggestions(null);
+                              setShowReviewResults(false);
+                            }}
+                            disabled={isSubmitting || isReviewing}
+                            className="w-full sm:w-auto"
+                          >
+                            <X className="h-4 w-4 mr-2" />
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={async () => {
+                              if (reviewWithAI) {
+                                setIsReviewing(true);
+                                try {
+                                  const response = await fetch("/api/sop/review", {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                    },
+                                    credentials: "include",
+                                    body: JSON.stringify({
+                                      sopContent: editedSOPContent,
+                                    }),
+                                  });
+
+                                  if (response.ok) {
+                                    const result = await response.json();
+                                    if (result.suggestions && result.suggestions.length > 0) {
+                                      setAiReviewSuggestions(result);
+                                      setShowReviewResults(true);
+                                      toast.info("AI review complete", {
+                                        description: `Found ${result.suggestions.length} suggestion(s). Review them below.`,
+                                      });
+                                    } else {
+                                      await saveSOPModifications(editedSOPContent);
+                                    }
+                                  } else {
+                                    throw new Error("AI review failed");
+                                  }
+                                } catch (error: any) {
+                                  console.error("Error during AI review:", error);
+                                  toast.warning("AI review unavailable", {
+                                    description: "Proceeding with save. You can still submit your changes.",
+                                  });
+                                  await saveSOPModifications(editedSOPContent);
+                                } finally {
+                                  setIsReviewing(false);
+                                }
+                              } else {
+                                await saveSOPModifications(editedSOPContent);
+                              }
+                            }}
+                            disabled={isSubmitting || isReviewing || !editedSOPContent.trim()}
+                            className="w-full sm:w-auto"
+                          >
+                            {isReviewing ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Reviewing...
+                              </>
+                            ) : (
+                              <>
+                                <Save className="h-4 w-4 mr-2" />
+                                {isSubmitting ? "Saving..." : "Submit Modifications"}
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="w-full max-w-full overflow-x-hidden">
+                  {isEditing ? (
+                    <div className="space-y-6 w-full max-w-full">
+                      {/* AI Review Suggestions */}
+                      {showReviewResults && aiReviewSuggestions && (
+                        <Card className="border-primary/20 bg-muted/30">
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Sparkles className="h-5 w-5 text-primary" />
+                                <CardTitle className="text-lg">AI Review Suggestions</CardTitle>
+                                <Badge variant="secondary">
+                                  {aiReviewSuggestions.suggestions?.length || 0}
+                                </Badge>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setShowReviewResults(false);
+                                  setAiReviewSuggestions(null);
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <ScrollArea className="h-[400px] pr-4">
+                              <div className="space-y-3">
+                                {aiReviewSuggestions.suggestions?.map((suggestion: any, index: number) => (
+                                  <Card key={index} className="bg-background">
+                                    <CardContent className="p-4 space-y-3">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                          <Badge variant="outline" className="text-xs">
+                                            {suggestion.type || "Suggestion"}
+                                          </Badge>
+                                        </div>
+                                        <div className="flex gap-2">
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                              const updatedContent = editedSOPContent.replace(
+                                                suggestion.original,
+                                                suggestion.suggested
+                                              );
+                                              setEditedSOPContent(updatedContent);
+                                              const updatedSuggestions = {
+                                                ...aiReviewSuggestions,
+                                                suggestions: aiReviewSuggestions.suggestions.filter((_: any, i: number) => i !== index),
+                                              };
+                                              if (updatedSuggestions.suggestions.length === 0) {
+                                                setShowReviewResults(false);
+                                                setAiReviewSuggestions(null);
+                                              } else {
+                                                setAiReviewSuggestions(updatedSuggestions);
+                                              }
+                                              toast.success("Suggestion applied");
+                                            }}
+                                          >
+                                            Accept
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                              const updatedSuggestions = {
+                                                ...aiReviewSuggestions,
+                                                suggestions: aiReviewSuggestions.suggestions.filter((_: any, i: number) => i !== index),
+                                              };
+                                              if (updatedSuggestions.suggestions.length === 0) {
+                                                setShowReviewResults(false);
+                                                setAiReviewSuggestions(null);
+                                              } else {
+                                                setAiReviewSuggestions(updatedSuggestions);
+                                              }
+                                            }}
+                                          >
+                                            Dismiss
+                                          </Button>
+                                        </div>
+                                      </div>
+                                      <div className="space-y-2 text-sm">
+                                        <div>
+                                          <span className="text-muted-foreground font-medium">Original: </span>
+                                          <span className="line-through text-muted-foreground">{suggestion.original}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-muted-foreground font-medium">Suggested: </span>
+                                          <span className="text-foreground">{suggestion.suggested}</span>
+                                        </div>
+                                        {suggestion.reason && (
+                                          <p className="text-xs text-muted-foreground mt-2 italic">{suggestion.reason}</p>
+                                        )}
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                            <Separator />
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm text-muted-foreground">
+                                {aiReviewSuggestions.suggestions?.length || 0} suggestion(s) remaining
+                              </p>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  let updatedContent = editedSOPContent;
+                                  aiReviewSuggestions.suggestions.forEach((suggestion: any) => {
+                                    updatedContent = updatedContent.replace(
+                                      suggestion.original,
+                                      suggestion.suggested
+                                    );
+                                  });
+                                  setEditedSOPContent(updatedContent);
+                                  setShowReviewResults(false);
+                                  setAiReviewSuggestions(null);
+                                  toast.success("All suggestions applied");
+                                }}
+                              >
+                                Accept All
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+                      
+                      {/* Edit Textarea */}
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="sop-edit" className="text-sm font-medium">
+                            Edit SOP Content
+                          </Label>
+                          <Textarea
+                            id="sop-edit"
+                            value={editedSOPContent}
+                            onChange={(e) => setEditedSOPContent(e.target.value)}
+                            className="min-h-[600px] font-mono text-sm w-full max-w-full resize-y break-words whitespace-pre-wrap"
+                            placeholder="Edit your SOP content here..."
+                            style={{
+                              wordWrap: 'break-word',
+                              overflowWrap: 'break-word',
+                              overflowX: 'hidden',
+                              maxWidth: '100%'
+                            }}
+                          />
+                        </div>
+                        
+                        {/* AI Review Checkbox */}
+                        <div className="flex items-start space-x-3 p-4 border rounded-lg bg-muted/30">
+                          <input
+                            type="checkbox"
+                            id="review-with-ai"
+                            checked={reviewWithAI}
+                            onChange={(e) => setReviewWithAI(e.target.checked)}
+                            className="h-4 w-4 mt-0.5 rounded border-input text-primary focus:ring-primary focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={isSubmitting || isReviewing}
+                          />
+                          <div className="flex-1 space-y-1">
+                            <Label
+                              htmlFor="review-with-ai"
+                              className="text-sm font-medium cursor-pointer flex items-center gap-2"
+                            >
+                              <Sparkles className="h-4 w-4 text-primary" />
+                              Review with AI before submitting
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                              AI will review your changes for grammar, clarity, and consistency before saving.
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* Helpful Tip */}
+                        <Alert>
+                          <Info className="h-4 w-4" />
+                          <AlertDescription>
+                            <strong>Tip:</strong> You can edit the markdown content directly. {reviewWithAI ? "AI review is enabled and will check your changes before saving." : "Changes will be saved when you click 'Submit Modifications'."}
+                          </AlertDescription>
+                        </Alert>
+                      </div>
+                    </div>
+                    ) : (
+                    <>
+                      <style dangerouslySetInnerHTML={{
+                        __html: `
+                        .sop-content-display h1 {
+                          font-size: 2rem;
+                          font-weight: 700;
+                          line-height: 1.2;
+                          margin-top: 2rem;
+                          margin-bottom: 1rem;
+                          color: hsl(var(--foreground));
+                        }
+                        .sop-content-display h2 {
+                          font-size: 1.5rem;
+                          font-weight: 600;
+                          line-height: 1.3;
+                          margin-top: 1.5rem;
+                          margin-bottom: 0.75rem;
+                          color: hsl(var(--foreground));
+                        }
+                        .sop-content-display h3 {
+                          font-size: 1.25rem;
+                          font-weight: 600;
+                          line-height: 1.4;
+                          margin-top: 1.25rem;
+                          margin-bottom: 0.5rem;
+                          color: hsl(var(--foreground));
+                        }
+                        .sop-content-display h4,
+                        .sop-content-display h5,
+                        .sop-content-display h6 {
+                          font-size: 1.125rem;
+                          font-weight: 600;
+                          line-height: 1.4;
+                          margin-top: 1rem;
+                          margin-bottom: 0.5rem;
+                          color: hsl(var(--foreground));
+                        }
+                        .sop-content-display p {
+                          margin-top: 1rem;
+                          margin-bottom: 1rem;
+                          line-height: 1.75;
+                          color: hsl(var(--foreground));
+                        }
+                        .sop-content-display p:first-child {
+                          margin-top: 0;
+                        }
+                        .sop-content-display p:last-child {
+                          margin-bottom: 0;
+                        }
+                        .sop-content-display ul,
+                        .sop-content-display ol {
+                          margin-top: 1rem;
+                          margin-bottom: 1rem;
+                          padding-left: 1.5rem;
+                          line-height: 1.75;
+                        }
+                        .sop-content-display li {
+                          margin-top: 0.5rem;
+                          margin-bottom: 0.5rem;
+                        }
+                        .sop-content-display strong {
+                          font-weight: 600;
+                          color: hsl(var(--foreground));
+                        }
+                        .sop-content-display em {
+                          font-style: italic;
+                        }
+                        .sop-content-display code {
+                          background-color: hsl(var(--muted));
+                          padding: 0.125rem 0.375rem;
+                          border-radius: 0.25rem;
+                          font-size: 0.875em;
+                          font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+                        }
+                        .sop-content-display pre {
+                          background-color: hsl(var(--muted));
+                          padding: 1rem;
+                          border-radius: 0.5rem;
+                          overflow-x: auto;
+                          margin-top: 1rem;
+                          margin-bottom: 1rem;
+                        }
+                        .sop-content-display pre code {
+                          background-color: transparent;
+                          padding: 0;
+                        }
+                        .sop-content-display blockquote {
+                          border-left: 4px solid hsl(var(--border));
+                          padding-left: 1rem;
+                          margin-left: 0;
+                          margin-top: 1rem;
+                          margin-bottom: 1rem;
+                          font-style: italic;
+                          color: hsl(var(--muted-foreground));
+                        }
+                        .sop-content-display table {
+                          width: 100%;
+                          border-collapse: collapse;
+                          margin-top: 1rem;
+                          margin-bottom: 1rem;
+                        }
+                        .sop-content-display th,
+                        .sop-content-display td {
+                          border: 1px solid hsl(var(--border));
+                          padding: 0.5rem;
+                          text-align: left;
+                        }
+                        .sop-content-display th {
+                          font-weight: 600;
+                          background-color: hsl(var(--muted));
+                        }
+                        .sop-content-display hr {
+                          border: none;
+                          border-top: 1px solid hsl(var(--border));
+                          margin-top: 2rem;
+                          margin-bottom: 2rem;
+                        }
+                        .sop-content-display a {
+                          color: hsl(var(--primary));
+                          text-decoration: underline;
+                        }
+                        .sop-content-display a:hover {
+                          text-decoration: none;
+                        }
+                      `}} />
+                      {generatedSOP.sopHtml && generatedSOP.sopHtml.trim().length > 0 ? (
+                        <ScrollArea className="h-[calc(100vh-400px)] w-full">
+                          <div
+                            className="sop-content-display w-full max-w-full pr-4"
+                            style={{
+                              wordWrap: 'break-word',
+                              overflowWrap: 'break-word',
+                              overflowX: 'hidden',
+                              maxWidth: '100%'
+                            }}
+                            dangerouslySetInnerHTML={{ __html: generatedSOP.sopHtml }}
+                          />
+                        </ScrollArea>
+                      ) : (
+                        <Alert variant="destructive">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertTitle>Content Unavailable</AlertTitle>
+                          <AlertDescription className="space-y-3">
+                            <p>HTML content not available. Please regenerate the SOP.</p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setIsModalOpen(true)}
+                            >
+                              Regenerate SOP
+                            </Button>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Empty State */}
+            {!generatedSOP && !isProcessing && !error && !isLoadingLatest && hasNoSavedSOPs && (
+              <Card>
+                <CardContent className="py-16 sm:py-20">
+                  <div className="flex flex-col items-center justify-center space-y-6 text-center max-w-md mx-auto">
+                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                      <FileText className="h-8 w-8 text-primary" />
+                    </div>
+                    <div className="space-y-2">
+                      <CardTitle className="text-xl sm:text-2xl">No SOPs Generated Yet</CardTitle>
+                      <CardDescription className="text-sm sm:text-base">
+                        Create your first Standard Operating Procedure to get started with automated documentation for your business processes.
+                      </CardDescription>
+                    </div>
+                    <Button 
+                      onClick={() => setIsModalOpen(true)} 
+                      size="lg"
+                      className="inline-flex items-center gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Generate Your First SOP
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
       </div>
 
@@ -879,8 +1289,16 @@ export default function SopPage() {
                     setGeneratedSOP({
                       sopHtml: result.sopHtml, // HTML only (primary format)
                       sopId: result.sopId || null,
+                      versionNumber: result.metadata?.versionNumber || 1,
+                      isCurrentVersion: true,
                       metadata: result.metadata,
                     });
+                    setSelectedVersionId(result.sopId);
+                    
+                    // Load versions for the new SOP
+                    if (result.sopId) {
+                      loadVersions(result.sopId);
+                    }
 
                     setIsModalOpen(false);
                     setIsProcessing(false);
@@ -936,16 +1354,16 @@ export default function SopPage() {
       {generatedSOP && (
         <Dialog open={isPreviewDialogOpen} onOpenChange={setIsPreviewDialogOpen}>
           <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
-            <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
-              <DialogTitle>Preview SOP Document</DialogTitle>
+            <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
+              <DialogTitle className="text-xl">Preview SOP Document</DialogTitle>
               <DialogDescription>
                 Review your Standard Operating Procedure before downloading as PDF
               </DialogDescription>
             </DialogHeader>
-            <div className="flex-1 overflow-y-auto px-6 pb-4">
+            <ScrollArea className="flex-1 px-6 py-4">
               {generatedSOP.sopHtml && generatedSOP.sopHtml.trim().length > 0 ? (
                 <div
-                  className="sop-content-display w-full max-w-full"
+                  className="sop-content-display w-full max-w-full pr-4"
                   style={{
                     wordWrap: 'break-word',
                     overflowWrap: 'break-word',
@@ -955,16 +1373,15 @@ export default function SopPage() {
                   dangerouslySetInnerHTML={{ __html: generatedSOP.sopHtml }}
                 />
               ) : (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center space-y-2">
-                    <AlertCircle className="h-5 w-5 text-muted-foreground mx-auto" />
-                    <p className="text-sm text-muted-foreground">
-                      HTML content not available. Cannot preview.
-                    </p>
-                  </div>
-                </div>
+                <Alert variant="destructive" className="my-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Preview Unavailable</AlertTitle>
+                  <AlertDescription>
+                    HTML content not available. Cannot preview.
+                  </AlertDescription>
+                </Alert>
               )}
-            </div>
+            </ScrollArea>
             <DialogFooter className="px-6 py-4 flex-shrink-0 border-t">
               <Button
                 variant="outline"

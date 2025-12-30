@@ -77,56 +77,142 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get("limit") || "50", 10);
     const skip = (page - 1) * limit;
 
+    // Get query parameter to include all versions (for version selector)
+    const includeAllVersions = searchParams.get("includeAllVersions") === "true";
+    
     // Build where clause
     const where: any = {
       userOrganizationId: {
         in: userOrganizationIds,
       },
     };
+    
+    // Check if versioning fields exist in the database
+    // This allows backward compatibility if migration hasn't been run
+    let hasVersionFields = false;
+    try {
+      // Check if the column exists using information_schema
+      const result = await prisma.$queryRaw<Array<{ column_name: string }>>`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'SOP' AND column_name = 'versionNumber'
+        LIMIT 1
+      `;
+      hasVersionFields = result.length > 0;
+    } catch (e: any) {
+      // If query fails, assume fields don't exist
+      hasVersionFields = false;
+      console.warn("[SOP Saved] Could not check for version fields - assuming migration not applied");
+    }
 
-    // Fetch saved SOPs
-    const [sops, total] = await Promise.all([
-      prisma.sOP.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: {
-          createdAt: "desc",
-        },
+    // Build where clause - only filter by isCurrentVersion if field exists
+    const whereClause: any = {
+      userOrganizationId: {
+        in: userOrganizationIds,
+      },
+    };
+    
+    if (hasVersionFields && !includeAllVersions) {
+      whereClause.isCurrentVersion = true; // Only show latest versions by default
+    }
+
+    // Build select fields - conditionally include version fields
+    const baseSelect: any = {
+      id: true,
+      title: true,
+      content: true,
+      intakeData: true,
+      usedKnowledgeBaseVersion: true,
+      knowledgeBaseSnapshot: true,
+      contributedInsights: true,
+      organizationId: true,
+      metadata: true,
+      createdAt: true,
+      updatedAt: true,
+      userOrganization: {
         select: {
-          id: true,
-          title: true,
-          content: true,
-          intakeData: true,
-          usedKnowledgeBaseVersion: true,
-          knowledgeBaseSnapshot: true,
-          contributedInsights: true,
-          organizationId: true,
-          metadata: true,
-          createdAt: true,
-          updatedAt: true,
-          userOrganization: {
+          userId: true,
+          user: {
             select: {
-              userId: true,
-              user: {
-                select: {
-                  id: true,
-                  firstname: true,
-                  lastname: true,
-                  email: true,
-                },
-              },
+              id: true,
+              firstname: true,
+              lastname: true,
+              email: true,
             },
           },
         },
-      }),
-      prisma.sOP.count({ where }),
-    ]);
+      },
+    };
+
+    // Add version fields only if they exist in the database
+    if (hasVersionFields) {
+      baseSelect.versionNumber = true;
+      baseSelect.rootSOPId = true;
+      baseSelect.isCurrentVersion = true;
+    }
+
+    // Fetch saved SOPs - wrap in try-catch as fallback
+    let sops: any[];
+    let total: number;
+    
+    try {
+      [sops, total] = await Promise.all([
+        prisma.sOP.findMany({
+          where: whereClause,
+          skip,
+          take: limit,
+          orderBy: {
+            createdAt: "desc",
+          },
+          select: baseSelect,
+        }),
+        prisma.sOP.count({ where: whereClause }),
+      ]);
+    } catch (error: any) {
+      // If query fails (e.g., field doesn't exist despite check), retry without version fields
+      if (error.message?.includes("Unknown column") || 
+          error.message?.includes("does not exist") || 
+          error.code === "P2021" ||
+          error.code === "P2001") {
+        console.warn("[SOP Saved] Query failed with version fields, retrying without them");
+        
+        // Remove version fields from select and where
+        delete baseSelect.versionNumber;
+        delete baseSelect.rootSOPId;
+        delete baseSelect.isCurrentVersion;
+        delete whereClause.isCurrentVersion;
+        
+        [sops, total] = await Promise.all([
+          prisma.sOP.findMany({
+            where: whereClause,
+            skip,
+            take: limit,
+            orderBy: {
+              createdAt: "desc",
+            },
+            select: baseSelect,
+          }),
+          prisma.sOP.count({ where: whereClause }),
+        ]);
+      } else {
+        throw error;
+      }
+    }
+
+    // Add default version values if fields don't exist (for backward compatibility)
+    const sopsWithVersions = hasVersionFields && sops[0]?.versionNumber !== undefined
+      ? sops 
+      : sops.map((sop: any) => ({
+          ...sop,
+          versionNumber: sop.versionNumber ?? 1,
+          rootSOPId: sop.rootSOPId ?? sop.id,
+          isCurrentVersion: sop.isCurrentVersion ?? true,
+        }));
 
     return NextResponse.json({
       success: true,
       data: {
-        sops,
+        sops: sopsWithVersions,
         total,
         page,
         limit,

@@ -77,6 +77,27 @@ export async function createKBStateSnapshot(
 
     if (!kb) return null;
 
+    // Get extractedKnowledge and create a copy without circular references
+    const extractedKnowledge = (kb.extractedKnowledge as Record<string, any>) || {};
+    
+    // Create a deep copy of extractedKnowledge for the snapshot, excluding snapshots and auditLog
+    // to prevent circular references
+    const extractedKnowledgeForSnapshot = { ...extractedKnowledge };
+    delete extractedKnowledgeForSnapshot.snapshots;
+    delete extractedKnowledgeForSnapshot.auditLog;
+    
+    // Deep clone the remaining extractedKnowledge to ensure no shared references
+    // This prevents circular references when storing the snapshot
+    let clonedExtractedKnowledge: any;
+    try {
+      clonedExtractedKnowledge = JSON.parse(JSON.stringify(extractedKnowledgeForSnapshot));
+    } catch (cloneError) {
+      // If deep clone fails (e.g., due to non-serializable values), use shallow copy
+      // This is a fallback to prevent the entire snapshot from failing
+      console.warn('[KB Snapshot] Deep clone failed, using shallow copy:', cloneError);
+      clonedExtractedKnowledge = { ...extractedKnowledgeForSnapshot };
+    }
+
     const snapshot: KBStateSnapshot = {
       knowledgeBaseId,
       version: kb.version || 1,
@@ -89,8 +110,8 @@ export async function createKBStateSnapshot(
         topObjection: kb.topObjection,
         coreOffer: kb.coreOffer,
         toolStack: kb.toolStack,
-        // Extracted knowledge
-        extractedKnowledge: kb.extractedKnowledge,
+        // Extracted knowledge (without snapshots and auditLog to prevent circular references)
+        extractedKnowledge: clonedExtractedKnowledge,
         // Other relevant fields
         idealCustomer: kb.idealCustomer,
         primaryGoal: kb.primaryGoal,
@@ -100,7 +121,6 @@ export async function createKBStateSnapshot(
     };
 
     // Store snapshot in extractedKnowledge
-    const extractedKnowledge = (kb.extractedKnowledge as Record<string, any>) || {};
     if (!extractedKnowledge.snapshots) {
       extractedKnowledge.snapshots = [];
     }

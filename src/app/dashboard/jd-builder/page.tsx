@@ -2676,7 +2676,7 @@ export default function JdBuilderPage() {
                                             <AlertCircle className="h-4 w-4" />
                                             <AlertTitle>Organization Knowledge Base Not Set Up</AlertTitle>
                                             <AlertDescription>
-                                                Set up your Organization Knowledge Base to use defaults across roles. 
+                                                Set up your Organization Knowledge Base to use defaults across roles.
                                                 <Button
                                                     variant="link"
                                                     className="p-0 h-auto ml-1 text-primary"

@@ -225,6 +225,11 @@ CREATE TABLE "SOP" (
     "knowledgeBaseSnapshot" JSONB,
     "contributedInsights" JSONB,
     "metadata" JSONB,
+    "versionNumber" INTEGER NOT NULL DEFAULT 1,
+    "rootSOPId" TEXT,
+    "isCurrentVersion" BOOLEAN NOT NULL DEFAULT true,
+    "versionCreatedBy" TEXT,
+    "versionCreatedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -386,6 +391,18 @@ CREATE INDEX "SOP_organizationId_idx" ON "SOP"("organizationId");
 CREATE INDEX "SOP_createdAt_idx" ON "SOP"("createdAt");
 
 -- CreateIndex
+CREATE INDEX "SOP_rootSOPId_idx" ON "SOP"("rootSOPId");
+
+-- CreateIndex
+CREATE INDEX "SOP_isCurrentVersion_idx" ON "SOP"("isCurrentVersion");
+
+-- CreateIndex
+CREATE INDEX "SOP_rootSOPId_versionNumber_idx" ON "SOP"("rootSOPId", "versionNumber");
+
+-- CreateIndex
+CREATE INDEX "SOP_rootSOPId_isCurrentVersion_idx" ON "SOP"("rootSOPId", "isCurrentVersion");
+
+-- CreateIndex
 CREATE INDEX "EnhancementAnalysis_organizationId_idx" ON "EnhancementAnalysis"("organizationId");
 
 -- CreateIndex
@@ -465,6 +482,9 @@ ALTER TABLE "SOP" ADD CONSTRAINT "SOP_userOrganizationId_fkey" FOREIGN KEY ("use
 
 -- AddForeignKey
 ALTER TABLE "SOP" ADD CONSTRAINT "SOP_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SOP" ADD CONSTRAINT "SOP_rootSOPId_fkey" FOREIGN KEY ("rootSOPId") REFERENCES "SOP"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "EnhancementAnalysis" ADD CONSTRAINT "EnhancementAnalysis_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
