@@ -5,7 +5,6 @@ import { generateAccessToken, generateRefreshToken } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-// GET endpoint: Validate token and return invite details
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -18,7 +17,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const invitation = await prisma.invitationToken.findUnique({
+    const invitation = (await prisma.invitationToken.findUnique({
       where: { token },
       include: {
         organization: {
@@ -30,7 +29,7 @@ export async function GET(request: NextRequest) {
           } as any,
         },
       },
-    }) as any;
+    })) as any;
 
     if (!invitation) {
       return NextResponse.json(
@@ -39,7 +38,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check if cancelled
     if ((invitation as any).cancelledAt) {
       return NextResponse.json(
         { success: false, message: "Your invite has been cancelled." },
@@ -47,15 +45,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check if already accepted
     if (invitation.acceptedAt || invitation.acceptedBy) {
       return NextResponse.json(
-        { success: false, message: "This invitation has already been accepted." },
+        {
+          success: false,
+          message: "This invitation has already been accepted.",
+        },
         { status: 400 }
       );
     }
 
-    // Check if expired
     if (invitation.expiresAt < new Date()) {
       return NextResponse.json(
         { success: false, message: "This invitation has expired." },
@@ -63,11 +62,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check if organization is deactivated
     if (invitation.organization.deactivatedAt) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           message: `The organization "${invitation.organization.name}" has been deactivated. Please contact your administrator.`,
           organizationDeactivated: true,
         },
@@ -75,7 +73,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email: invitation.email.toLowerCase() },
     });
@@ -101,7 +98,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST endpoint: Accept invite and create user account
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -116,7 +112,10 @@ export async function POST(request: Request) {
 
     if (password.length < 8) {
       return NextResponse.json(
-        { success: false, message: "Password must be at least 8 characters long." },
+        {
+          success: false,
+          message: "Password must be at least 8 characters long.",
+        },
         { status: 400 }
       );
     }
@@ -128,8 +127,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate invitation token
-    const invitation = await prisma.invitationToken.findUnique({
+    const invitation = (await prisma.invitationToken.findUnique({
       where: { token },
       include: {
         organization: {
@@ -140,7 +138,7 @@ export async function POST(request: Request) {
           } as any,
         },
       },
-    }) as any;
+    })) as any;
 
     if (!invitation) {
       return NextResponse.json(
@@ -149,7 +147,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if cancelled
     if ((invitation as any).cancelledAt) {
       return NextResponse.json(
         { success: false, message: "Your invite has been cancelled." },
@@ -157,15 +154,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if already accepted
     if (invitation.acceptedAt || invitation.acceptedBy) {
       return NextResponse.json(
-        { success: false, message: "This invitation has already been accepted." },
+        {
+          success: false,
+          message: "This invitation has already been accepted.",
+        },
         { status: 400 }
       );
     }
 
-    // Check if expired
     if (invitation.expiresAt < new Date()) {
       return NextResponse.json(
         { success: false, message: "This invitation has expired." },
@@ -173,11 +171,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if organization is deactivated
     if ((invitation.organization as any).deactivatedAt) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           message: `The organization "${invitation.organization.name}" has been deactivated. Please contact your administrator.`,
           organizationDeactivated: true,
         },
@@ -185,7 +182,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email: invitation.email.toLowerCase() },
     });
@@ -197,15 +193,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Map invitation role to globalRole
-    // Set globalRole to match the invitation role (ADMIN -> ADMIN, MEMBER -> MEMBER)
-    // Note: Prisma client types may need regeneration if this fails
     const globalRole = invitation.role === "ADMIN" ? "ADMIN" : "MEMBER";
 
-    // Create user account
     const userData: any = {
       firstname,
       lastname,
@@ -213,7 +204,6 @@ export async function POST(request: Request) {
       password: hashedPassword,
     };
 
-    // Only set globalRole if it has a value
     if (globalRole) {
       userData.globalRole = globalRole;
     }
@@ -229,7 +219,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // Create UserOrganization relationship
     await prisma.userOrganization.create({
       data: {
         userId: user.id,
@@ -238,7 +227,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // Mark invitation as accepted
     await prisma.invitationToken.update({
       where: { id: invitation.id },
       data: {
@@ -247,7 +235,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // Generate tokens for automatic sign-in
     const accessToken = await generateAccessToken({
       userId: user.id,
       email: user.email,
@@ -258,7 +245,6 @@ export async function POST(request: Request) {
       email: user.email,
     });
 
-    // Save refresh token to DB
     await prisma.refreshToken.create({
       data: {
         token: refreshToken,
@@ -267,7 +253,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // Update lastLoginAt
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -287,7 +272,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // Set cookies for automatic sign-in
     response.cookies.set("accessToken", accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -313,4 +297,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

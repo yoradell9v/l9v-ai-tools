@@ -1,21 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import OpenAI from "openai";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import { extractInsights } from "@/lib/analysis/extractInsights";
 import { extractFromFile, extractFromUrl } from "@/lib/extract-content";
+import { withRateLimit } from "@/lib/rate-limit-utils";
+import { getRateLimitHeaders } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
-
-
-
-
-/**
- * Transforms the output from extractFromUrl to match the expected format
- * for the analysis prompts
- */
 function transformWebsiteContent(extracted: any): any {
   if (!extracted || extracted.error) {
     return {
@@ -32,7 +26,6 @@ function transformWebsiteContent(extracted: any): any {
     };
   }
 
-  // Combine section summaries and key points for full text
   const sectionTexts: string[] = [];
   if (extracted.sections?.hero?.summary) sectionTexts.push(`Hero: ${extracted.sections.hero.summary}`);
   if (extracted.sections?.about?.summary) sectionTexts.push(`About: ${extracted.sections.about.summary}`);
@@ -1523,8 +1516,18 @@ function generateMonitoringPlan(validation: any) {
 //Main Function
 
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // Check rate limit (before expensive operations)
+    // Note: Auth is optional for this endpoint, so requireAuth is false
+    const rateLimit = await withRateLimit(request, "/api/jd/analyze", {
+      requireAuth: false,
+    });
+
+    if (!rateLimit.allowed) {
+      return rateLimit.response!;
+    }
+
     // Parse request - frontend sends JSON with file URLs from S3
     const body = await request.json();
     const intake_json = body?.intake_json;
@@ -2011,13 +2014,24 @@ export async function POST(request: Request) {
       },
     });
 
-    return new Response(stream, {
+    // Create streaming response with rate limit headers
+    const response = new Response(stream, {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
       },
     });
+
+    // Add rate limit headers to streaming response
+    if (rateLimit.rateLimitResult) {
+      const rateLimitHeaders = require("@/lib/rate-limit").getRateLimitHeaders(rateLimit.rateLimitResult);
+      Object.entries(rateLimitHeaders).forEach(([key, value]) => {
+        response.headers.set(key, String(value));
+      });
+    }
+
+    return response;
   } catch (error) {
     console.error("JD Analysis error:", error);
     const formattedError = formatErrorMessage(error);

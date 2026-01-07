@@ -40,7 +40,7 @@ function AcceptInviteContent() {
             }
 
             try {
-                const response = await fetch(`/api/accept-invite?token=${encodeURIComponent(token)}`, {
+                const response = await fetch(`/api/auth/accept-invite?token=${encodeURIComponent(token)}`, {
                     method: "GET",
                     credentials: "include",
                 });
@@ -80,7 +80,7 @@ function AcceptInviteContent() {
             setLoading(true);
             setError(undefined);
 
-            const response = await fetch("/api/accept-invite", {
+            const response = await fetch("/api/auth/accept-invite", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

@@ -18,6 +18,8 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from "@/lib/rate-limit-client";
+import { toast } from "sonner";
 
 interface RefinementFormProps {
   analysisId: string;
@@ -136,6 +138,20 @@ const RefinementForm: React.FC<RefinementFormProps> = ({
           refinement_areas: refinementAreas,
         }),
       });
+
+      // Check for rate limit error
+      if (isRateLimitError(response)) {
+        const rateLimitError = await parseRateLimitError(response);
+        const errorMessage = getRateLimitErrorMessage(rateLimitError);
+        toast.error("Rate limit exceeded", {
+          description: errorMessage,
+          duration: 10000,
+        });
+        setStatus("error");
+        setMessage(errorMessage);
+        setIsSubmitting(false);
+        return;
+      }
 
       const data = await response.json();
 

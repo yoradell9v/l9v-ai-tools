@@ -70,7 +70,6 @@ export async function GET(request: Request) {
     const organizationIds = userOrganizations.map((uo) => uo.organizationId);
     const isSuperadmin = user.globalRole === "SUPERADMIN";
 
-    // Get the user's organization knowledge base
     const knowledgeBase = await prisma.organizationKnowledgeBase.findFirst({
       where: {
         organizationId: { in: organizationIds },

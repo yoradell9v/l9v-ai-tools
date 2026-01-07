@@ -37,7 +37,7 @@ function ResetPasswordForm() {
 
     useEffect(() => {
         if (!token) {
-            setErrorMessage('Invalid or missing reset token')
+            setErrorMessage('Missing reset token')
         }
     }, [token])
 

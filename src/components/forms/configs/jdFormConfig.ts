@@ -159,14 +159,14 @@ export const jdFormConfig: FormConfig = {
         {
             id: 'tools-skills',
             title: 'Tools & Skills',
-            description: 'Tool stack will be pulled from your Organization Knowledge Base. Specify role-specific tools or English level requirements if different.',
+            description: 'All tools from your Organization Knowledge Base will be automatically included in the analysis. Use the field below to add any role-specific tools that are not already in your organization stack.',
             fields: [
                 {
                     id: 'tools',
                     label: 'Additional Tools (Role-Specific)',
                     type: 'textarea',
                     placeholder: 'e.g., Role-specific tools not in organization stack',
-                    helpText: 'Optional: Add tools specific to this role. Organization tool stack will be included automatically.',
+                    helpText: 'Optional: Add tools specific to this role only. Your organization\'s complete tool stack will be automatically included in the analysis.',
                 },
                 {
                     id: 'englishLevel',
@@ -333,6 +333,9 @@ export function getJDFormConfigWithKB(hasOrgKB: boolean): FormConfig {
                 } else if (field.id === 'businessName') {
                     field.label = 'Company Name'; // Remove "(Override)"
                     field.helpText = 'Enter the company name for this role';
+                } else if (field.id === 'tools') {
+                    field.label = 'Tools'; // Remove "(Role-Specific)" since there's no org KB
+                    field.helpText = 'List the tools and software this role will use';
                 }
             });
         });

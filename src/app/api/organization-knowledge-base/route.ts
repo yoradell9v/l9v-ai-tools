@@ -123,9 +123,8 @@ export async function GET() {
         },
       });
 
-    // Calculate computed fields for backward compatibility
     const contributorsCount = organizationKnowledgeBase?.contributors?.length ?? 0;
-        const requiredFieldsComplete = organizationKnowledgeBase
+    const requiredFieldsComplete = organizationKnowledgeBase
       ? checkRequiredFieldsComplete({
           businessName: organizationKnowledgeBase.businessName,
           website: organizationKnowledgeBase.website,

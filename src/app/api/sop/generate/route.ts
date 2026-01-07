@@ -7,6 +7,7 @@ import { extractInsights } from "@/lib/analysis/extractInsights";
 import { createLearningEvents } from "@/lib/learning-events";
 import { applyLearningEventsToKB } from "@/lib/apply-learning-events";
 import { markdownToHtml } from "@/lib/markdown-to-html";
+import { withRateLimit, addRateLimitHeaders } from "@/lib/rate-limit-utils";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -592,6 +593,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 1.5. Check rate limit (before expensive operations)
+    const rateLimit = await withRateLimit(request, "/api/sop/generate", {
+      requireAuth: true,
+    });
+
+    if (!rateLimit.allowed) {
+      return rateLimit.response!;
+    }
+
     // 2. Get user's organization
     const userOrg = await prisma.userOrganization.findFirst({
       where: {
@@ -1115,7 +1125,7 @@ export async function POST(request: NextRequest) {
 
     // 10. Return success response with HTML only
     console.log("[SOP Generate] Returning response, sopHtml length:", generatedSOPHtml?.length || 0);
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       sopHtml: generatedSOPHtml, // Return only HTML (primary format)
       sopId: savedSOP?.id || null,
@@ -1130,6 +1140,9 @@ export async function POST(request: NextRequest) {
         organizationProfileUsed: organizationProfile !== null,
       },
     });
+
+    // Add rate limit headers to response
+    return addRateLimitHeaders(response, rateLimit.rateLimitResult);
   } catch (error: any) {
     console.error("[SOP Generate] Error:", error);
     return NextResponse.json(

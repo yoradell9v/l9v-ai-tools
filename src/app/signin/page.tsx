@@ -24,14 +24,11 @@ export default function SignInPage() {
 
             const data = await response.json();
 
-            // Check if password reset is required (for SUPERADMIN first login)
-            // This can come with a 403 status, so check before the !response.ok check
             if (data.requiresPasswordReset && data.resetToken) {
                 router.push(`/reset-password?token=${encodeURIComponent(data.resetToken)}`);
                 return;
             }
 
-            // Check if organization is deactivated
             if (data.organizationDeactivated) {
                 setError(data.message || "Your organization has been deactivated. Please contact your administrator.");
                 return;

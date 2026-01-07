@@ -7,6 +7,7 @@ import { extractInsights } from "@/lib/analysis/extractInsights";
 import { createLearningEvents } from "@/lib/learning-events";
 import { applyLearningEventsToKB } from "@/lib/apply-learning-events";
 import { markdownToHtml } from "@/lib/markdown-to-html";
+import { withRateLimit, addRateLimitHeaders } from "@/lib/rate-limit-utils";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -102,6 +103,15 @@ export async function POST(request: NextRequest) {
         { success: false, message: "Invalid token." },
         { status: 401 }
       );
+    }
+
+    // 1.5. Check rate limit (before expensive operations)
+    const rateLimit = await withRateLimit(request, "/api/sop/update", {
+      requireAuth: true,
+    });
+
+    if (!rateLimit.allowed) {
+      return rateLimit.response!;
     }
 
     // 2. Parse request body
@@ -390,7 +400,7 @@ export async function POST(request: NextRequest) {
 
     // 9. Return success response with HTML only
     const responseContent = updatedSOP.content as any;
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       sop: {
         id: updatedSOP.id,
@@ -408,6 +418,9 @@ export async function POST(request: NextRequest) {
           }
         : null,
     });
+
+    // Add rate limit headers to response
+    return addRateLimitHeaders(response, rateLimit.rateLimitResult);
   } catch (error: any) {
     console.error("[SOP Update] Error:", error);
     return NextResponse.json(

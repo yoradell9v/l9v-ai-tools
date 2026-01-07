@@ -3,7 +3,10 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import OpenAI from "openai";
-import { analyzeKnowledgeBaseQuality, getQualityDataForStorage } from "@/lib/ai-quality-analysis";
+import {
+  analyzeKnowledgeBaseQuality,
+  getQualityDataForStorage,
+} from "@/lib/ai-quality-analysis";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -29,7 +32,6 @@ export async function POST() {
       );
     }
 
-    // Get user's organization
     const userOrg = await prisma.userOrganization.findFirst({
       where: {
         userId: decoded.userId,
@@ -56,7 +58,6 @@ export async function POST() {
       );
     }
 
-    // Fetch knowledge base
     const knowledgeBase = await prisma.organizationKnowledgeBase.findUnique({
       where: { organizationId: userOrg.organizationId },
       select: {
@@ -116,54 +117,58 @@ export async function POST() {
       return NextResponse.json(
         {
           success: false,
-          message: "Knowledge base not found. Please complete your profile first.",
+          message:
+            "Knowledge base not found. Please complete your profile first.",
         },
         { status: 404 }
       );
     }
 
-    // Check if analysis is recent (within 24 hours) - return cached if so
     const now = new Date();
     const lastAnalyzed = knowledgeBase.aiQualityAnalyzedAt
       ? new Date(knowledgeBase.aiQualityAnalyzedAt)
       : null;
-    
+
     const hoursSinceAnalysis = lastAnalyzed
       ? (now.getTime() - lastAnalyzed.getTime()) / (1000 * 60 * 60)
       : Infinity;
 
-    // If analysis is less than 24 hours old, return cached
     if (hoursSinceAnalysis < 24 && knowledgeBase.aiQualityAnalysis) {
       return NextResponse.json({
         success: true,
         qualityAnalysis: knowledgeBase.aiQualityAnalysis,
         cached: true,
-        message: "Returning cached analysis. Last analyzed less than 24 hours ago.",
+        message:
+          "Returning cached analysis. Last analyzed less than 24 hours ago.",
       });
     }
 
-    // Run AI quality analysis
     let qualityAnalysis;
     try {
-      qualityAnalysis = await analyzeKnowledgeBaseQuality(openai, knowledgeBase);
+      qualityAnalysis = await analyzeKnowledgeBaseQuality(
+        openai,
+        knowledgeBase
+      );
     } catch (error) {
       console.error("Error running AI quality analysis:", error);
       return NextResponse.json(
         {
           success: false,
-          message: "Failed to analyze knowledge base quality. Please try again later.",
-          error: process.env.NODE_ENV === 'development' 
-            ? (error instanceof Error ? error.message : 'Unknown error')
-            : undefined,
+          message:
+            "Failed to analyze knowledge base quality. Please try again later.",
+          error:
+            process.env.NODE_ENV === "development"
+              ? error instanceof Error
+                ? error.message
+                : "Unknown error"
+              : undefined,
         },
         { status: 500 }
       );
     }
 
-    // Prepare data for storage
     const qualityData = getQualityDataForStorage(qualityAnalysis);
 
-    // Update knowledge base with quality analysis
     await prisma.organizationKnowledgeBase.update({
       where: { id: knowledgeBase.id },
       data: {
@@ -181,21 +186,22 @@ export async function POST() {
     });
   } catch (error) {
     console.error("Error in analyze-quality endpoint:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     const errorStack = error instanceof Error ? error.stack : undefined;
     console.error("Error details:", { errorMessage, errorStack });
     return NextResponse.json(
       {
         success: false,
         message: "Internal server error.",
-        error: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? errorMessage : undefined,
       },
       { status: 500 }
     );
   }
 }
 
-// GET endpoint to retrieve existing quality analysis
 export async function GET() {
   try {
     const cookieStore = await cookies();
@@ -276,4 +282,3 @@ export async function GET() {
     );
   }
 }
-

@@ -64,9 +64,7 @@ export function mapOrgKBToJDForm(
   return {
     businessName: orgKB.businessName || "",
     businessGoal: orgKB.primaryGoal || "__ORG_DEFAULT__",
-    tools: Array.isArray(orgKB.toolStack)
-      ? orgKB.toolStack.join(", ")
-      : "",
+    tools: "",
     timezone: orgKB.defaultTimeZone || "",
     weeklyHours: orgKB.defaultWeeklyHours || "40",
     englishLevel: orgKB.defaultEnglishLevel || "__ORG_DEFAULT__",

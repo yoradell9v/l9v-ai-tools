@@ -8,7 +8,6 @@ import { sendInviteEmail } from "@/lib/email";
 
 export async function POST(request: Request) {
   try {
-    // Get user from session
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("accessToken")?.value;
 
@@ -38,7 +37,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate role value
     if (role !== "ADMIN" && role !== "MEMBER") {
       return NextResponse.json(
         {
@@ -49,10 +47,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Normalize email
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Validation: Check if user with this email exists and belongs to another organization
     const existingUser = await prisma.user.findUnique({
       where: { email: normalizedEmail },
       include: {
@@ -65,7 +61,6 @@ export async function POST(request: Request) {
     });
 
     if (existingUser) {
-      // Check if user belongs to a different organization
       const belongsToOtherOrg = existingUser.organizations.some(
         (uo) => uo.organizationId !== organizationId
       );
@@ -74,13 +69,13 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             success: false,
-            message: "This email already belongs to another organization. Users cannot be invited to multiple organizations.",
+            message:
+              "This email already belongs to another organization. Users cannot be invited to multiple organizations.",
           },
           { status: 400 }
         );
       }
 
-      // Check if user already belongs to this organization
       const belongsToCurrentOrg = existingUser.organizations.some(
         (uo) => uo.organizationId === organizationId
       );
@@ -96,7 +91,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Validation: Check if there's a pending invite for this email in the current organization
     const existingPendingInvite = await prisma.invitationToken.findFirst({
       where: {
         organizationId: organizationId,
@@ -104,7 +98,7 @@ export async function POST(request: Request) {
         acceptedAt: null,
         cancelledAt: null,
         expiresAt: {
-          gt: new Date(), // Not expired
+          gt: new Date(),
         },
       },
     });
@@ -113,7 +107,8 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          message: "This user has a pending invitation. Please remove the existing invitation to add another.",
+          message:
+            "This user has a pending invitation. Please remove the existing invitation to add another.",
         },
         { status: 400 }
       );
@@ -142,35 +137,32 @@ export async function POST(request: Request) {
       });
     } catch (prismaError: any) {
       console.error("Prisma error creating invite:", prismaError);
-      // Handle unique constraint violation (duplicate email for organization)
       if (prismaError.code === "P2002") {
         return NextResponse.json(
           {
             success: false,
-            message: "An invitation has already been sent to this email for this organization.",
+            message:
+              "An invitation has already been sent to this email for this organization.",
           },
           { status: 409 }
         );
       }
-      throw prismaError; // Re-throw to be caught by outer catch
+      throw prismaError;
     }
-
   } catch (error: any) {
     console.error("Error creating invite:", error);
     return NextResponse.json(
-      { 
-        success: false, 
-        message: error.message || "Failed sending an invite. Please try again." 
+      {
+        success: false,
+        message: error.message || "Failed sending an invite. Please try again.",
       },
       { status: 500 }
     );
   }
 }
 
-// DELETE endpoint: Cancel an invitation
 export async function DELETE(request: Request) {
   try {
-    // Get user from session
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("accessToken")?.value;
 
@@ -199,7 +191,6 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Find the invitation
     const invitation = await prisma.invitationToken.findUnique({
       where: { id: inviteId },
       include: {
@@ -218,23 +209,27 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Check if already accepted
     if (invitation.acceptedAt || invitation.acceptedBy) {
       return NextResponse.json(
-        { success: false, message: "Cannot cancel an invitation that has already been accepted." },
+        {
+          success: false,
+          message:
+            "Cannot cancel an invitation that has already been accepted.",
+        },
         { status: 400 }
       );
     }
 
-    // Check if already cancelled
     if (invitation.cancelledAt) {
       return NextResponse.json(
-        { success: false, message: "This invitation has already been cancelled." },
+        {
+          success: false,
+          message: "This invitation has already been cancelled.",
+        },
         { status: 400 }
       );
     }
 
-    // Cancel the invitation
     await prisma.invitationToken.update({
       where: { id: inviteId },
       data: {
@@ -249,9 +244,10 @@ export async function DELETE(request: Request) {
   } catch (error: any) {
     console.error("Error cancelling invite:", error);
     return NextResponse.json(
-      { 
-        success: false, 
-        message: error.message || "Failed to cancel invitation. Please try again." 
+      {
+        success: false,
+        message:
+          error.message || "Failed to cancel invitation. Please try again.",
       },
       { status: 500 }
     );

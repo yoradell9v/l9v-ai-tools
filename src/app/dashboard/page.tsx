@@ -173,7 +173,6 @@ export default function DashboardPage() {
     const renderStatsCards = () => {
         if (!stats) return null;
 
-        // SUPERADMIN cards
         if (user?.globalRole === "SUPERADMIN") {
             return (
                 <>
@@ -211,8 +210,6 @@ export default function DashboardPage() {
             );
         }
 
-        // Check if user is an ADMIN in any organization
-        // For now, we'll show ADMIN stats if they have organizations
         if (stats.organizationMembers !== undefined) {
             return (
                 <>
@@ -245,7 +242,6 @@ export default function DashboardPage() {
             );
         }
 
-        // MEMBER cards
         return (
             <>
                 <StatCard

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
@@ -6,6 +6,8 @@ import { verifyAccessToken } from "@/lib/auth";
 import { extractInsights } from "@/lib/analysis/extractInsights";
 import { createLearningEvents } from "@/lib/learning-events";
 import { applyLearningEventsToKB } from "@/lib/apply-learning-events";
+import { addRateLimitHeaders } from "@/lib/rate-limit-middleware";
+import { withRateLimit } from "@/lib/rate-limit-utils";
 
 export const runtime = "nodejs";
 
@@ -44,12 +46,10 @@ async function handleSlashCommand(
     throw new Error(`Unknown command: /${command}`);
   }
 
-  // Prepare context for command handlers
   const context = {
     knowledgeBase: knowledgeBase,
   };
 
-  // Execute command handler
   const content = await handler(openai, context);
 
   return {
@@ -423,7 +423,7 @@ Extract structured insights that would enrich the knowledge base. Focus on NEW i
         { role: "user", content: userPrompt },
       ],
       response_format: { type: "json_object" },
-      temperature: 0.2, // Low temperature for consistent extraction
+      temperature: 0.2,
       max_tokens: 1000,
     });
 
@@ -438,7 +438,7 @@ Extract structured insights that would enrich the knowledge base. Focus on NEW i
     return extracted;
   } catch (error: any) {
     console.error("[Insight Extraction] AI extraction failed:", error);
-    return null; // Fail gracefully - don't block message flow
+    return null; 
   }
 }
 
@@ -447,11 +447,10 @@ function buildSystemPrompt(knowledgeBase: any, contextSummary: string | null): s
 
   let prompt = `You are an AI assistant with deep knowledge of ${businessName}.\n\n`;
 
-  // KNOWLEDGE BASE
+
   prompt += `=== KNOWLEDGE BASE ===\n`;
   prompt += `\nThe following is the complete knowledge base for ${businessName}:\n\n`;
   
-  // Core Identity
   if (knowledgeBase.businessName) prompt += `Business Name: ${knowledgeBase.businessName}\n`;
   if (knowledgeBase.website) prompt += `Website: ${knowledgeBase.website}\n`;
   if (knowledgeBase.industry) prompt += `Industry: ${knowledgeBase.industry}\n`;
@@ -536,7 +535,7 @@ function buildSystemPrompt(knowledgeBase: any, contextSummary: string | null): s
 }
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ conversationId: string }> }
 ) {
   try {
@@ -556,6 +555,15 @@ export async function POST(
         { success: false, error: "Invalid token." },
         { status: 401 }
       );
+    }
+
+    // Check rate limit (before expensive operations)
+    const rateLimit = await withRateLimit(request, "/api/organization-knowledge-base/conversation", {
+      requireAuth: true,
+    });
+
+    if (!rateLimit.allowed) {
+      return rateLimit.response!;
     }
 
     if (!process.env.OPENAI_API_KEY) {
@@ -900,7 +908,7 @@ export async function POST(
       // Don't fail the request if insight extraction fails
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: userMessage,
       assistantMessage: {
@@ -915,6 +923,9 @@ export async function POST(
         contextSummary: result.updatedConversation.contextSummary,
       },
     });
+
+    // Add rate limit headers to response
+    return addRateLimitHeaders(response, rateLimit.rateLimitResult);
   } catch (err: any) {
     console.error("[Message POST] Error:", err);
     return NextResponse.json(

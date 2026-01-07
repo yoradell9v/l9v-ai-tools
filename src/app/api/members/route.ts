@@ -191,8 +191,7 @@ export async function PATCH(request: Request) {
         { status: 400 }
       );
     }
-
-    // Verify the requester is an ADMIN of the organization
+   
     const memberToUpdate = await prisma.userOrganization.findUnique({
       where: { id: memberId },
       include: {
@@ -207,7 +206,6 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // Check if requester is SUPERADMIN or ADMIN of the same organization
     const requester = await prisma.user.findUnique({
       where: { id: decoded.userId },
       select: { globalRole: true },
@@ -236,7 +234,6 @@ export async function PATCH(request: Request) {
 
     const isSelfAction = memberToUpdate.userId === decoded.userId;
 
-    // Update member
     const updatedMember = await prisma.userOrganization.update({
       where: { id: memberId },
       data: {

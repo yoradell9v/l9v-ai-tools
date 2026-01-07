@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { verifyAccessToken } from "@/lib/auth";
+import { withRateLimit, addRateLimitHeaders } from "@/lib/rate-limit-utils";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -33,6 +34,15 @@ export async function POST(req: NextRequest) {
         { success: false, error: "Invalid token." },
         { status: 401 }
       );
+    }
+
+    // Check rate limit (before expensive operations)
+    const rateLimit = await withRateLimit(req, "/api/jd/refine", {
+      requireAuth: true,
+    });
+
+    if (!rateLimit.allowed) {
+      return rateLimit.response!;
     }
 
     const { userId, message, analysisId }: RefineRequestBody = await req.json();
@@ -248,7 +258,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         messages: result.refinements,
@@ -260,6 +270,9 @@ export async function POST(req: NextRequest) {
         tokensUsed: completion.usage?.total_tokens || 0,
       },
     });
+
+    // Add rate limit headers to response
+    return addRateLimitHeaders(response, rateLimit.rateLimitResult);
   } catch (error) {
     console.error("Refinement error:", error);
     const errorMessage =
@@ -367,6 +380,15 @@ export async function PATCH(req: NextRequest) {
         { success: false, error: "Invalid token." },
         { status: 401 }
       );
+    }
+
+    // Check rate limit (before expensive operations)
+    const rateLimit = await withRateLimit(req, "/api/jd/refine", {
+      requireAuth: true,
+    });
+
+    if (!rateLimit.allowed) {
+      return rateLimit.response!;
     }
 
     const {
@@ -741,7 +763,7 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       status: "success",
       refined_package: finalResponse,
       iteration: nextVersion,
@@ -749,6 +771,9 @@ export async function PATCH(req: NextRequest) {
       message: `Analysis refined successfully! (Version ${nextVersion})`,
       newAnalysisId: result.id,
     });
+
+    // Add rate limit headers to response
+    return addRateLimitHeaders(response, rateLimit.rateLimitResult);
   } catch (error) {
     console.error("Refinement PATCH error:", error);
     const errorMessage =

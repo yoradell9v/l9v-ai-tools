@@ -8,7 +8,7 @@ import RefinementForm from "@/components/forms/RefinementForm";
 import { useUser } from "@/context/UserContext";
 import { OrganizationKnowledgeBase } from "@/lib/organizationKnowledgeBase";
 import { mapOrgKBToJDForm, resolveJDFormWithOrgKB, resolvedJDFormToIntakePayload } from "@/lib/field-mapping";
-import { Briefcase, Sparkles, CheckCircle2, ShieldAlert, AlertTriangle, TrendingUp, Target, AlertCircle, Network, FileText, Plus, MoreVertical, Edit, Download, Save, History, Loader2 } from "lucide-react";
+import { Briefcase, Sparkles, CheckCircle2, ShieldAlert, AlertTriangle, TrendingUp, Target, AlertCircle, Network, FileText, Plus, MoreVertical, Edit, Download, Save, History, Loader2, Clock, Calendar, Zap, ArrowRight, X, Check, AlertCircle as AlertCircleIcon } from "lucide-react";
 import { getConfidenceValue, getConfidenceColor } from '@/utils/confidence';
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import {
     Dialog,
     DialogContent,
@@ -30,6 +31,8 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from "@/lib/rate-limit-client";
+import { toast } from "sonner";
 
 interface AnalysisResult {
     preview: {
@@ -486,7 +489,7 @@ export default function JdBuilderPage() {
     const [isDownloading, setIsDownloading] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [intakeData, setIntakeData] = useState<IntakeFormData | null>(null);
-    const [activeTab, setActiveTab] = useState<'summary' | 'overview' | 'roles' | 'implementation' | 'risks'>('summary');
+    const [activeTab, setActiveTab] = useState<'overview' | 'roles' | 'getting-started' | 'risks-monitoring'>('overview');
     const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
     const [isRefinementModalOpen, setIsRefinementModalOpen] = useState(false);
     const [savedAnalysisId, setSavedAnalysisId] = useState<string | null>(null);
@@ -633,6 +636,73 @@ export default function JdBuilderPage() {
     const implementationPlan = analysisResult?.full_package?.implementation_plan;
     const riskManagement = analysisResult?.full_package?.risk_management;
     const monitoringPlan = riskManagement?.monitoring_plan;
+    const serviceStructure = analysisResult?.full_package?.service_structure;
+    const executiveSummary = analysisResult?.full_package?.executive_summary;
+
+    // Helper functions for extracting key data
+    const getPrimaryRoleTitle = () => {
+        if (analysisResult?.preview?.service_type === "Dedicated VA") {
+            return analysisResult?.preview?.role_title || serviceStructure?.dedicated_va_role?.title || "Dedicated VA";
+        } else if (analysisResult?.preview?.service_type === "Unicorn VA Service") {
+            return serviceStructure?.core_va_role?.title || analysisResult?.preview?.core_va_title || "Core VA";
+        } else if (analysisResult?.preview?.service_type === "Projects on Demand") {
+            return `${analysisResult?.preview?.project_count || 0} Projects`;
+        }
+        return "Virtual Assistant";
+    };
+
+    const getTotalHours = () => {
+        if (analysisResult?.preview?.service_type === "Dedicated VA") {
+            return analysisResult?.preview?.hours_per_week || serviceStructure?.dedicated_va_role?.hours_per_week || "40";
+        } else if (analysisResult?.preview?.service_type === "Unicorn VA Service") {
+            return serviceStructure?.core_va_role?.hours_per_week || analysisResult?.preview?.core_va_hours || "40";
+        } else if (analysisResult?.preview?.service_type === "Projects on Demand") {
+            return analysisResult?.preview?.total_hours || "N/A";
+        }
+        return "40";
+    };
+
+    const handleRefineClick = async () => {
+        setActionsMenuOpen(false);
+        if (!savedAnalysisId && analysisResult && intakeData && user) {
+            try {
+                const title = `${intakeData.businessName} - ${analysisResult.preview?.service_type || analysisResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
+
+                const saveResponse = await fetch("/api/jd/save", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    credentials: "include",
+                    body: JSON.stringify({
+                        title,
+                        intakeData,
+                        analysis: analysisResult,
+                        isFinalized: false,
+                        organizationId: kbMetadata?.organizationId ?? null,
+                        usedKnowledgeBaseVersion: kbMetadata?.usedKnowledgeBaseVersion ?? null,
+                        knowledgeBaseSnapshot: kbMetadata?.knowledgeBaseSnapshot ?? null,
+                        contributedInsights: kbMetadata?.contributedInsights ?? null,
+                    }),
+                });
+
+                const saveData = await saveResponse.json();
+                if (saveResponse.ok && saveData.savedAnalysis?.id) {
+                    setSavedAnalysisId(saveData.savedAnalysis.id);
+                    setIsRefinementModalOpen(true);
+                } else {
+                    alert("Please save your analysis first before refining.");
+                }
+            } catch (error) {
+                console.error("Error saving analysis:", error);
+                alert("Failed to save analysis. Please try again.");
+            }
+        } else if (savedAnalysisId) {
+            setIsRefinementModalOpen(true);
+        } else {
+            alert("Please save your analysis first before refining.");
+        }
+    };
 
     const getCurrentGreeting = () => {
         if (!user) return "Welcome";
@@ -954,10 +1024,10 @@ export default function JdBuilderPage() {
                                         <div className="flex items-start justify-between">
                                             <div>
                                                 <CardTitle className="text-xl mb-1">
-                                                    Analysis Results
+                                                    {analysisResult.preview.service_type || 'Your recommendations'}
                                                 </CardTitle>
                                                 <CardDescription className="pb-0">
-                                                    {analysisResult.preview.service_type || 'Your recommendations'}
+                                                    {analysisResult.preview.service_reasoning}
                                                 </CardDescription>
                                             </div>
                                             <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
@@ -2789,6 +2859,17 @@ export default function JdBuilderPage() {
                                                     },
                                                     body: JSON.stringify(requestBody),
                                                 });
+                                                if (isRateLimitError(response)) {
+                                                    const rateLimitError = await parseRateLimitError(response);
+                                                    const errorMessage = getRateLimitErrorMessage(rateLimitError);
+                                                    toast.error("Rate limit exceeded", {
+                                                        description: errorMessage,
+                                                        duration: 10000,
+                                                    });
+                                                    const error = new Error(errorMessage);
+                                                    (error as any).userMessage = errorMessage;
+                                                    throw error;
+                                                }
 
                                                 if (!response.ok) {
                                                     let message = 'Analysis failed';

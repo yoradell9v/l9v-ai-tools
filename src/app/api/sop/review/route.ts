@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { cookies } from "next/headers";
 import { verifyAccessToken } from "@/lib/auth";
+import { withRateLimit, addRateLimitHeaders } from "@/lib/rate-limit-utils";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -58,6 +59,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 1.5. Check rate limit (before expensive operations)
+    const rateLimit = await withRateLimit(request, "/api/sop/review", {
+      requireAuth: true,
+    });
+
+    if (!rateLimit.allowed) {
+      return rateLimit.response!;
+    }
+
     // 2. Parse request body
     const body = await request.json();
     const { sopContent } = body;
@@ -105,11 +115,14 @@ export async function POST(request: NextRequest) {
           })
         : [];
 
-      return NextResponse.json({
+      const response = NextResponse.json({
         success: true,
         suggestions: suggestions,
         reviewed: true,
       });
+
+      // Add rate limit headers to response
+      return addRateLimitHeaders(response, rateLimit.rateLimitResult);
     } catch (openaiError: any) {
       console.error("[SOP Review] OpenAI API error:", openaiError);
       return NextResponse.json(

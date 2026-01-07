@@ -21,7 +21,6 @@ export async function POST(request: Request) {
       });
     } catch (dbError: any) {
       console.error("Database error:", dbError);
-      // Check if it's a connection error
       if (dbError.code === "P1017" || dbError.message?.includes("connection")) {
         return NextResponse.json(
           {
@@ -31,7 +30,7 @@ export async function POST(request: Request) {
           { status: 503 }
         );
       }
-      throw dbError; // Re-throw if it's not a connection error
+      throw dbError;
     }
 
     if (!user) {
@@ -71,28 +70,28 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if user has at least one active organization
-    // User is active if: deactivatedAt is null/undefined AND organization is not deactivated
-    const hasActiveOrganization = userOrganizations.some(
-      (uo: any) => {
-        const isMemberActive = uo.deactivatedAt === null || uo.deactivatedAt === undefined;
-        const isOrgActive = uo.organization && (uo.organization.deactivatedAt === null || uo.organization.deactivatedAt === undefined);
-        return isMemberActive && isOrgActive;
-      }
-    );
+    const hasActiveOrganization = userOrganizations.some((uo: any) => {
+      const isMemberActive =
+        uo.deactivatedAt === null || uo.deactivatedAt === undefined;
+      const isOrgActive =
+        uo.organization &&
+        (uo.organization.deactivatedAt === null ||
+          uo.organization.deactivatedAt === undefined);
+      return isMemberActive && isOrgActive;
+    });
 
-    // Only block signin if user has organizations but none are active
     if (userOrganizations.length > 0 && !hasActiveOrganization) {
-      // User is deactivated in all organizations or all organizations are deactivated
-      const deactivatedMember: any = userOrganizations.find(
-        (uo: any) => {
-          const isDeactivated = uo.deactivatedAt !== null && uo.deactivatedAt !== undefined;
-          return isDeactivated;
-        }
-      );
-      
-      const orgName = deactivatedMember?.organization?.name || userOrganizations[0]?.organization?.name || "your organization";
-      
+      const deactivatedMember: any = userOrganizations.find((uo: any) => {
+        const isDeactivated =
+          uo.deactivatedAt !== null && uo.deactivatedAt !== undefined;
+        return isDeactivated;
+      });
+
+      const orgName =
+        deactivatedMember?.organization?.name ||
+        userOrganizations[0]?.organization?.name ||
+        "your organization";
+
       return NextResponse.json(
         {
           error: "Account deactivated",
@@ -170,7 +169,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Save refresh token to DB
     await prisma.refreshToken.create({
       data: {
         token: refreshToken,
@@ -179,7 +177,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // Update lastLoginAt
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -187,7 +184,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // Safety check - ensure user is still defined
     if (!user || !user.id || !user.email) {
       console.error("User object is invalid:", user);
       return NextResponse.json(

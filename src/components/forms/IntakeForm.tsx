@@ -4,6 +4,7 @@ import { Fragment, useState, useEffect, useRef } from "react";
 import { Listbox, Transition } from "@headlessui/react";
 import { CheckIcon, ChevronUpDownIcon } from "@heroicons/react/20/solid";
 import Modal from "@/components/ui/Modal";
+import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from "@/lib/rate-limit-client";
 
 interface IntakeFormData {
     companyName: string;
@@ -314,6 +315,14 @@ export default function IntakeForm({ userId, onFormChange, onClose, onSuccess, o
                 method: 'POST',
                 body: payload,
             });
+
+            // Check for rate limit error
+            if (isRateLimitError(response)) {
+                const rateLimitError = await parseRateLimitError(response);
+                const errorMessage = getRateLimitErrorMessage(rateLimitError);
+                setAnalysisError(errorMessage);
+                throw new Error(errorMessage);
+            }
 
             if (!response.ok) {
                 let message = 'Analysis failed';

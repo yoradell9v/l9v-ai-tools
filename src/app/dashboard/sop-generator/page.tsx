@@ -33,6 +33,7 @@ import BaseIntakeForm from "@/components/forms/BaseIntakeForm";
 import { sopGeneratorConfig } from "@/components/forms/configs/sopGeneratorConfig";
 import { useUser } from "@/context/UserContext";
 import { htmlToMarkdown } from "@/lib/html-to-markdown";
+import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from "@/lib/rate-limit-client";
 
 interface GeneratedSOP {
   sopHtml: string; // HTML content (primary format)
@@ -111,6 +112,17 @@ export default function SopPage() {
         }),
       });
 
+      // Check for rate limit error
+      if (isRateLimitError(response)) {
+        const rateLimitError = await parseRateLimitError(response);
+        const errorMessage = getRateLimitErrorMessage(rateLimitError);
+        toast.error("Rate limit exceeded", {
+          description: errorMessage,
+          duration: 10000,
+        });
+        throw new Error(errorMessage);
+      }
+
       const result = await response.json();
 
       if (!response.ok || !result.success) {
@@ -119,8 +131,8 @@ export default function SopPage() {
 
       // Update local state with the updated SOP (HTML only)
       const responseContent = result.sop.content;
-      const htmlContent = typeof responseContent === "object" 
-        ? (responseContent.html || result.sopHtml) 
+      const htmlContent = typeof responseContent === "object"
+        ? (responseContent.html || result.sopHtml)
         : result.sopHtml || "";
 
       if (!htmlContent) {
@@ -135,7 +147,7 @@ export default function SopPage() {
         isCurrentVersion: true,
       });
       setSelectedVersionId(result.sop.id);
-      
+
       // Reload versions after update
       if (result.sop.id) {
         loadVersions(result.sop.id);
@@ -203,7 +215,7 @@ export default function SopPage() {
 
           // Extract HTML from content (primary format)
           let htmlContent = "";
-          
+
           if (typeof content === "string") {
             // Legacy: content is a string (treat as HTML if it has tags, otherwise it's markdown - should be rare)
             if (content.includes("<") && content.includes(">")) {
@@ -242,7 +254,7 @@ export default function SopPage() {
           });
           setSelectedVersionId(latestSOP.id);
           setHasNoSavedSOPs(false);
-          
+
           // Load versions for this SOP
           if (latestSOP.id) {
             loadVersions(latestSOP.id);
@@ -375,7 +387,7 @@ export default function SopPage() {
       if (versionSOP) {
         const content = versionSOP.content as any;
         const htmlContent = typeof content === "object" ? content.html || "" : "";
-        
+
         if (htmlContent) {
           setGeneratedSOP({
             sopHtml: htmlContent,
@@ -426,12 +438,12 @@ export default function SopPage() {
         toast.success("Version restored successfully!", {
           description: data.message || "The version has been restored as the current version.",
         });
-        
+
         // Reload the current SOP and versions
         if (data.sop?.id) {
           // Load the newly restored version (which is now current)
           await loadVersion(data.sop.id);
-          
+
           // Reload versions list
           const rootSOPId = (generatedSOP as any)?.rootSOPId || generatedSOP?.sopId || data.sop.id;
           await loadVersions(rootSOPId);
@@ -439,7 +451,7 @@ export default function SopPage() {
           // Fallback: reload versions and find current
           const rootSOPId = (generatedSOP as any)?.rootSOPId || generatedSOP.sopId;
           await loadVersions(rootSOPId);
-          
+
           // Find the new current version and load it
           try {
             const versionsResponse = await fetch(`/api/sop/${rootSOPId}/versions`, {
@@ -557,8 +569,8 @@ export default function SopPage() {
                     </CardDescription>
                   </div>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                    <Button 
-                      onClick={() => setIsModalOpen(true)} 
+                    <Button
+                      onClick={() => setIsModalOpen(true)}
                       size="default"
                       className="w-full sm:w-auto"
                     >
@@ -625,17 +637,28 @@ export default function SopPage() {
                 <AlertTitle>Error</AlertTitle>
                 <AlertDescription className="space-y-3">
                   <p>{error}</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setError(null);
-                      setIsModalOpen(true);
-                    }}
-                    className="mt-2"
-                  >
-                    Try Again
-                  </Button>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setError(null);
+                        setIsModalOpen(true);
+                      }}
+                    >
+                      Try Again
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setError(null);
+                      }}
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Close
+                    </Button>
+                  </div>
                 </AlertDescription>
               </Alert>
             )}
@@ -666,9 +689,9 @@ export default function SopPage() {
                           </div>
                         </div>
                       </div>
-                      
+
                       <Separator />
-                      
+
                       {/* Version Selector */}
                       <div className="space-y-3">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -728,7 +751,7 @@ export default function SopPage() {
                             </div>
                           )}
                         </div>
-                        
+
                         {generatedSOP.sopId && !generatedSOP.isCurrentVersion && versions.length > 0 && (
                           <div>
                             <Button
@@ -753,7 +776,7 @@ export default function SopPage() {
                         )}
                       </div>
                     </div>
-                    
+
                     {/* Action Buttons */}
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
                       {!isEditing ? (
@@ -812,6 +835,18 @@ export default function SopPage() {
                                       sopContent: editedSOPContent,
                                     }),
                                   });
+
+                                  // Check for rate limit error
+                                  if (isRateLimitError(response)) {
+                                    const rateLimitError = await parseRateLimitError(response);
+                                    const errorMessage = getRateLimitErrorMessage(rateLimitError);
+                                    toast.error("Rate limit exceeded", {
+                                      description: errorMessage,
+                                      duration: 10000,
+                                    });
+                                    setIsReviewing(false);
+                                    return;
+                                  }
 
                                   if (response.ok) {
                                     const result = await response.json();
@@ -990,7 +1025,7 @@ export default function SopPage() {
                           </CardContent>
                         </Card>
                       )}
-                      
+
                       {/* Edit Textarea */}
                       <div className="space-y-4">
                         <div className="space-y-2">
@@ -1011,7 +1046,7 @@ export default function SopPage() {
                             }}
                           />
                         </div>
-                        
+
                         {/* AI Review Checkbox */}
                         <div className="flex items-start space-x-3 p-4 border rounded-lg bg-muted/30">
                           <input
@@ -1035,7 +1070,7 @@ export default function SopPage() {
                             </p>
                           </div>
                         </div>
-                        
+
                         {/* Helpful Tip */}
                         <Alert>
                           <Info className="h-4 w-4" />
@@ -1045,7 +1080,7 @@ export default function SopPage() {
                         </Alert>
                       </div>
                     </div>
-                    ) : (
+                  ) : (
                     <>
                       <style dangerouslySetInnerHTML={{
                         __html: `
@@ -1220,8 +1255,8 @@ export default function SopPage() {
                         Create your first Standard Operating Procedure to get started with automated documentation for your business processes.
                       </CardDescription>
                     </div>
-                    <Button 
-                      onClick={() => setIsModalOpen(true)} 
+                    <Button
+                      onClick={() => setIsModalOpen(true)}
                       size="lg"
                       className="inline-flex items-center gap-2"
                     >
@@ -1265,6 +1300,7 @@ export default function SopPage() {
                   setIsProcessing(true);
                   setStatusMessage("Generating your SOP...");
                   setError(null);
+                  setIsModalOpen(false); // Close modal immediately since loading state is shown on page
 
                   try {
                     const response = await fetch("/api/sop/generate", {
@@ -1275,6 +1311,16 @@ export default function SopPage() {
                       credentials: "include",
                       body: JSON.stringify(formData),
                     });
+
+                    if (isRateLimitError(response)) {
+                      const rateLimitError = await parseRateLimitError(response);
+                      const errorMessage = getRateLimitErrorMessage(rateLimitError);
+                      toast.error("Rate limit exceeded", {
+                        description: errorMessage,
+                        duration: 10000,
+                      });
+                      throw new Error(errorMessage);
+                    }
 
                     const result = await response.json();
 
@@ -1294,13 +1340,12 @@ export default function SopPage() {
                       metadata: result.metadata,
                     });
                     setSelectedVersionId(result.sopId);
-                    
+
                     // Load versions for the new SOP
                     if (result.sopId) {
                       loadVersions(result.sopId);
                     }
 
-                    setIsModalOpen(false);
                     setIsProcessing(false);
                     toast.success("SOP generated successfully!", {
                       description: `Your Standard Operating Procedure "${result.metadata.title}" is ready to review and use.`,
