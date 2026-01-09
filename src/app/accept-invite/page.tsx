@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import Image from "next/image";
 
 interface InviteDetails {
     email: string;
@@ -117,68 +118,112 @@ function AcceptInviteContent() {
 
     if (isValidating) {
         return (
-            <div className="min-h-screen flex items-center justify-center px-4 bg-[var(--background)] text-[var(--text-primary)]">
-                <Card className="w-full max-w-md">
-                    <CardContent className="pt-6">
-                        <div className="text-center">
-                            <svg className="animate-spin h-8 w-8 mx-auto mb-4 text-[var(--primary)]" viewBox="0 0 24 24">
-                                <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                    fill="none"
-                                />
-                                <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                />
-                            </svg>
-                            <p className="text-[var(--text-primary)]">Validating invitation...</p>
-                        </div>
-                    </CardContent>
-                </Card>
+            <div className="relative min-h-screen" style={{ backgroundColor: 'var(--primary-dark)' }}>
+                <div 
+                    className="absolute inset-0"
+                    style={{
+                        background: 'radial-gradient(ellipse at bottom left, hsl(var(--primary) / 0.2) 0%, transparent 50%)'
+                    }}
+                />
+                <div className="relative min-h-screen flex flex-col items-center justify-center px-4">
+                    <div className="flex justify-center mb-8">
+                        <Image
+                            src="/logo-light.png"
+                            alt="Level 9 Virtual"
+                            width={200}
+                            height={200}
+                            className="object-contain"
+                            priority
+                        />
+                    </div>
+                    <Card className="w-full max-w-md">
+                        <CardContent className="pt-6">
+                            <div className="text-center">
+                                <svg className="animate-spin h-8 w-8 mx-auto mb-4 text-[var(--primary)]" viewBox="0 0 24 24">
+                                    <circle
+                                        className="opacity-25"
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                        fill="none"
+                                    />
+                                    <path
+                                        className="opacity-75"
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    />
+                                </svg>
+                                <p className="text-[var(--text-primary)]">Validating invitation...</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
         );
     }
 
     if (validationError || !inviteDetails) {
         return (
-            <div className="min-h-screen flex items-center justify-center px-4 bg-[var(--background)] text-[var(--text-primary)]">
-                <Card className="w-full max-w-md">
-                    <CardHeader>
-                        <CardTitle className="text-2xl font-semibold">Invalid Invitation</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <Alert variant="destructive" className="mb-6">
-                            <AlertDescription>{validationError || "This invitation is invalid or has expired."}</AlertDescription>
-                        </Alert>
-                    </CardContent>
-                    <CardFooter>
-                        <Button onClick={() => router.push("/signin")} className="w-full">
-                            Go to Sign In
-                        </Button>
-                    </CardFooter>
-                </Card>
+            <div className="relative min-h-screen" style={{ backgroundColor: 'var(--primary-dark)' }}>
+                <div 
+                    className="absolute inset-0"
+                    style={{
+                        background: 'radial-gradient(ellipse at bottom left, hsl(var(--primary) / 0.2) 0%, transparent 50%)'
+                    }}
+                />
+                <div className="relative min-h-screen flex flex-col items-center justify-center px-4">
+                    <div className="flex justify-center mb-8">
+                        <Image
+                            src="/logo-light.png"
+                            alt="Level 9 Virtual"
+                            width={200}
+                            height={200}
+                            className="object-contain"
+                            priority
+                        />
+                    </div>
+                    <Card className="w-full max-w-md">
+                        <CardHeader>
+                            <CardTitle className="text-2xl font-semibold text-center">Invalid Invitation</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <Alert variant="destructive" className="mb-6">
+                                <AlertDescription>{validationError || "This invitation is invalid or has expired."}</AlertDescription>
+                            </Alert>
+                        </CardContent>
+                        <CardFooter>
+                            <Button onClick={() => router.push("/signin")} className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-base font-bold">
+                                Go to Sign In
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                </div>
             </div>
         );
     }
 
     return (
-        <>
-            <AuthForm
-                mode="signup"
-                onSubmit={handleSubmit}
-                isSubmitting={loading}
-                errorMessage={error}
-                submitLabel="Accept Invitation & Create Account"
-                initialValues={{
-                    email: inviteDetails.email,
+        <div className="relative min-h-screen" style={{ backgroundColor: 'var(--primary-dark)' }}>
+            <div 
+                className="absolute inset-0"
+                style={{
+                    background: 'radial-gradient(ellipse at bottom left, hsl(var(--primary) / 0.2) 0%, transparent 50%)'
                 }}
             />
+            <div className="relative">
+                <AuthForm
+                    mode="signup"
+                    onSubmit={handleSubmit}
+                    isSubmitting={loading}
+                    errorMessage={error}
+                    submitLabel="Accept Invitation & Create Account"
+                    initialValues={{
+                        email: inviteDetails.email,
+                    }}
+                />
+            </div>
 
             <AnimatePresence>
                 {showSuccessModal && (
@@ -200,7 +245,7 @@ function AcceptInviteContent() {
                     />
                 )}
             </AnimatePresence>
-        </>
+        </div>
     );
 }
 
@@ -208,30 +253,48 @@ export default function AcceptInvitePage() {
     return (
         <Suspense
             fallback={
-                <div className="min-h-screen flex items-center justify-center px-4 bg-[var(--background)] text-[var(--text-primary)]">
-                    <Card className="w-full max-w-md">
-                        <CardContent className="pt-6">
-                            <div className="text-center">
-                                <svg className="animate-spin h-8 w-8 mx-auto mb-4 text-[var(--primary)]" viewBox="0 0 24 24">
-                                    <circle
-                                        className="opacity-25"
-                                        cx="12"
-                                        cy="12"
-                                        r="10"
-                                        stroke="currentColor"
-                                        strokeWidth="4"
-                                        fill="none"
-                                    />
-                                    <path
-                                        className="opacity-75"
-                                        fill="currentColor"
-                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                    />
-                                </svg>
-                                <p className="text-[var(--text-primary)]">Loading...</p>
-                            </div>
-                        </CardContent>
-                    </Card>
+                <div className="relative min-h-screen" style={{ backgroundColor: 'var(--primary-dark)' }}>
+                    <div 
+                        className="absolute inset-0"
+                        style={{
+                            background: 'radial-gradient(ellipse at bottom left, hsl(var(--primary) / 0.2) 0%, transparent 50%)'
+                        }}
+                    />
+                    <div className="relative min-h-screen flex flex-col items-center justify-center px-4">
+                        <div className="flex justify-center mb-8">
+                            <Image
+                                src="/logo-light.png"
+                                alt="Level 9 Virtual"
+                                width={200}
+                                height={200}
+                                className="object-contain"
+                                priority
+                            />
+                        </div>
+                        <Card className="w-full max-w-md">
+                            <CardContent className="pt-6">
+                                <div className="text-center">
+                                    <svg className="animate-spin h-8 w-8 mx-auto mb-4 text-[var(--primary)]" viewBox="0 0 24 24">
+                                        <circle
+                                            className="opacity-25"
+                                            cx="12"
+                                            cy="12"
+                                            r="10"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                            fill="none"
+                                        />
+                                        <path
+                                            className="opacity-75"
+                                            fill="currentColor"
+                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                        />
+                                    </svg>
+                                    <p className="text-[var(--text-primary)]">Loading...</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
             }
         >

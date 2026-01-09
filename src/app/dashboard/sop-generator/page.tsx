@@ -552,44 +552,45 @@ export default function SopPage() {
 
   return (
     <>
-      <div className="flex items-center gap-2 p-4 border-b bg-background">
-        <SidebarTrigger />
-      </div>
-      <div className="transition-all duration-300 ease-in-out min-h-screen bg-background">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <div className="space-y-6">
-            {/* Header Section */}
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="text-2xl sm:text-3xl">SOP Builder AI</CardTitle>
-                    <CardDescription className="text-sm sm:text-base">
-                      Automatically generate standard operating procedures for your business
-                    </CardDescription>
-                  </div>
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                    <Button
-                      onClick={() => setIsModalOpen(true)}
-                      size="default"
-                      className="w-full sm:w-auto"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      <span>Generate SOP</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => router.push("/dashboard/sop-generator/history")}
-                      size="default"
-                      className="w-full sm:w-auto"
-                    >
-                      <History className="h-4 w-4 mr-2" />
-                      <span>History</span>
-                    </Button>
-                  </div>
+      <div className="w-full max-w-screen overflow-x-hidden">
+        <div className="flex items-center gap-2 p-4 border-b">
+          <SidebarTrigger />
+        </div>
+        <div
+          className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full"
+        >
+          <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col h-full">
+            <div className="flex-shrink-0 p-2">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+                <div className="space-y-1">
+                  <h1 className="text-2xl font-semibold mb-1">
+                    SOP Builder AI
+                  </h1>
+                  <p className="text-base text-muted-foreground">
+                    Automatically generate standard operating procedures for your business
+                  </p>
                 </div>
-              </CardHeader>
-            </Card>
+                <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-4 mt-1 md:mt-0">
+                  <Button
+                    onClick={() => setIsModalOpen(true)}
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Generate SOP</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => router.push("/dashboard/sop-generator/history")}
+                  >
+                    <History className="h-4 w-4" />
+                    History
+                  </Button>
+                </div>
+              </div>
+              <Separator />
+            </div>
+
+            {/* Scrollable Content Area */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden">
 
             {/* Loading Latest SOP */}
             {isLoadingLatest && !generatedSOP && !isProcessing && (
@@ -598,7 +599,7 @@ export default function SopPage() {
                   <div className="flex items-center gap-3">
                     <Loader2 className="h-5 w-5 animate-spin text-primary" />
                     <div className="space-y-2 flex-1">
-                      <p className="text-sm font-medium text-foreground">
+                      <p className="text-base font-medium text-foreground">
                         Loading your latest SOP...
                       </p>
                       <div className="space-y-2">
@@ -618,7 +619,7 @@ export default function SopPage() {
                   <div className="flex items-center gap-3">
                     <Loader2 className="h-5 w-5 animate-spin text-primary" />
                     <div className="space-y-1 flex-1">
-                      <p className="text-sm font-medium text-foreground">
+                      <p className="text-base font-medium text-foreground">
                         {statusMessage || "Processing your SOP..."}
                       </p>
                       <p className="text-xs text-muted-foreground">
@@ -675,7 +676,7 @@ export default function SopPage() {
                           <CardTitle className="text-xl sm:text-2xl">
                             {generatedSOP.metadata.title}
                           </CardTitle>
-                          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                          <div className="flex flex-wrap items-center gap-2 text-base text-muted-foreground">
                             <span>Generated on {new Date(generatedSOP.metadata.generatedAt).toLocaleString()}</span>
                             {generatedSOP.metadata.organizationProfileUsed && (
                               <>
@@ -695,11 +696,11 @@ export default function SopPage() {
                       {/* Version Selector */}
                       <div className="space-y-3">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                          <Label htmlFor="version-select" className="text-sm font-medium shrink-0">
+                          <Label htmlFor="version-select" className="text-base font-medium shrink-0">
                             Version:
                           </Label>
                           {isLoadingVersions ? (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2 text-base text-muted-foreground">
                               <Loader2 className="h-4 w-4 animate-spin" />
                               <span>Loading versions...</span>
                             </div>
@@ -742,7 +743,7 @@ export default function SopPage() {
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
-                              <span className="text-sm text-muted-foreground">
+                              <span className="text-base text-muted-foreground">
                                 Version {generatedSOP.versionNumber || 1}
                               </span>
                               {generatedSOP.isCurrentVersion && (
@@ -979,7 +980,7 @@ export default function SopPage() {
                                           </Button>
                                         </div>
                                       </div>
-                                      <div className="space-y-2 text-sm">
+                                      <div className="space-y-2 text-base">
                                         <div>
                                           <span className="text-muted-foreground font-medium">Original: </span>
                                           <span className="line-through text-muted-foreground">{suggestion.original}</span>
@@ -999,7 +1000,7 @@ export default function SopPage() {
                             </ScrollArea>
                             <Separator />
                             <div className="flex items-center justify-between">
-                              <p className="text-sm text-muted-foreground">
+                              <p className="text-base text-muted-foreground">
                                 {aiReviewSuggestions.suggestions?.length || 0} suggestion(s) remaining
                               </p>
                               <Button
@@ -1029,14 +1030,14 @@ export default function SopPage() {
                       {/* Edit Textarea */}
                       <div className="space-y-4">
                         <div className="space-y-2">
-                          <Label htmlFor="sop-edit" className="text-sm font-medium">
+                          <Label htmlFor="sop-edit" className="text-base font-medium">
                             Edit SOP Content
                           </Label>
                           <Textarea
                             id="sop-edit"
                             value={editedSOPContent}
                             onChange={(e) => setEditedSOPContent(e.target.value)}
-                            className="min-h-[600px] font-mono text-sm w-full max-w-full resize-y break-words whitespace-pre-wrap"
+                            className="min-h-[600px] font-mono text-base w-full max-w-full resize-y break-words whitespace-pre-wrap"
                             placeholder="Edit your SOP content here..."
                             style={{
                               wordWrap: 'break-word',
@@ -1060,7 +1061,7 @@ export default function SopPage() {
                           <div className="flex-1 space-y-1">
                             <Label
                               htmlFor="review-with-ai"
-                              className="text-sm font-medium cursor-pointer flex items-center gap-2"
+                              className="text-base font-medium cursor-pointer flex items-center gap-2"
                             >
                               <Sparkles className="h-4 w-4 text-primary" />
                               Review with AI before submitting
@@ -1251,7 +1252,7 @@ export default function SopPage() {
                     </div>
                     <div className="space-y-2">
                       <CardTitle className="text-xl sm:text-2xl">No SOPs Generated Yet</CardTitle>
-                      <CardDescription className="text-sm sm:text-base">
+                      <CardDescription className="text-base sm:text-base">
                         Create your first Standard Operating Procedure to get started with automated documentation for your business processes.
                       </CardDescription>
                     </div>
@@ -1267,6 +1268,7 @@ export default function SopPage() {
                 </CardContent>
               </Card>
             )}
+            </div>
           </div>
         </div>
       </div>

@@ -15,6 +15,10 @@ import {
     Eye,
     Download,
     ArrowLeft,
+    ChevronDown,
+    ChevronUp,
+    Layers,
+    List,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +29,15 @@ import {
     CardTitle,
     CardDescription,
 } from "@/components/ui/card";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { useUser } from "@/context/UserContext";
 
 interface SavedSOP {
@@ -58,10 +71,21 @@ interface SavedSOP {
     };
 }
 
+interface SOPGroup {
+    rootSOPId: string;
+    title: string;
+    currentVersion: SavedSOP;
+    versions: SavedSOP[];
+    mostRecentVersionDate: string;
+    oldestVersionDate: string;
+    versionCount: number;
+}
+
 interface SOPsResponse {
     success: boolean;
     data: {
-        sops: SavedSOP[];
+        sops?: SavedSOP[];
+        groups?: SOPGroup[];
         total: number;
         page: number;
         limit: number;
@@ -72,24 +96,35 @@ export default function SOPHistoryPage() {
     const { user } = useUser();
     const router = useRouter();
     const [sops, setSops] = useState<SavedSOP[]>([]);
+    const [sopGroups, setSopGroups] = useState<SOPGroup[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [total, setTotal] = useState(0);
+    const [viewMode, setViewMode] = useState<"grouped" | "individual">("grouped");
+    const [sortBy, setSortBy] = useState<"recent" | "oldest">("recent");
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const limit = 12; // Items per page
 
     useEffect(() => {
         if (user) {
             loadSOPs();
         }
-    }, [user, currentPage]);
+    }, [user, currentPage, viewMode, sortBy]);
 
     const loadSOPs = async () => {
         setIsLoading(true);
         try {
+            const params = new URLSearchParams({
+                page: currentPage.toString(),
+                limit: limit.toString(),
+                groupBySOP: viewMode === "grouped" ? "true" : "false",
+                sortBy: sortBy,
+            });
+
             const response = await fetch(
-                `/api/sop/saved?page=${currentPage}&limit=${limit}`,
+                `/api/sop/saved?${params.toString()}`,
                 {
                     method: "GET",
                     credentials: "include",
@@ -103,11 +138,21 @@ export default function SOPHistoryPage() {
             const data: SOPsResponse = await response.json();
 
             if (data.success && data.data) {
-                setSops(data.data.sops);
+                if (viewMode === "grouped" && data.data.groups) {
+                    setSopGroups(data.data.groups);
+                    setSops([]);
+                } else if (viewMode === "individual" && data.data.sops) {
+                    setSops(data.data.sops);
+                    setSopGroups([]);
+                } else {
+                    setSops([]);
+                    setSopGroups([]);
+                }
                 setTotal(data.data.total);
                 setTotalPages(Math.ceil(data.data.total / limit));
             } else {
                 setSops([]);
+                setSopGroups([]);
                 setTotal(0);
                 setTotalPages(1);
             }
@@ -117,6 +162,7 @@ export default function SOPHistoryPage() {
                 description: error.message || "An error occurred while loading SOPs.",
             });
             setSops([]);
+            setSopGroups([]);
         } finally {
             setIsLoading(false);
         }
@@ -132,10 +178,14 @@ export default function SOPHistoryPage() {
         e.stopPropagation(); // Prevent card click
 
         try {
-            // Extract markdown content
-            const content = typeof sop.content === "string"
-                ? sop.content
-                : (sop.content as any)?.markdown || "";
+            // Extract content - prefer HTML, fallback to markdown
+            let content = "";
+            if (typeof sop.content === "string") {
+                content = sop.content;
+            } else if (sop.content && typeof sop.content === "object") {
+                const contentObj = sop.content as any;
+                content = contentObj.html || contentObj.markdown || "";
+            }
 
             if (!content) {
                 toast.error("SOP content not available");
@@ -149,7 +199,9 @@ export default function SOPHistoryPage() {
                 },
                 credentials: "include",
                 body: JSON.stringify({
-                    sopContent: content,
+                    sopHtml: typeof sop.content === "object" && (sop.content as any)?.html 
+                        ? (sop.content as any).html 
+                        : content,
                     title: sop.title,
                 }),
             });
@@ -186,8 +238,24 @@ export default function SOPHistoryPage() {
         }
     };
 
+    const toggleGroupExpansion = (rootSOPId: string) => {
+        setExpandedGroups((prev) => {
+            const newSet = new Set(prev);
+            if (newSet.has(rootSOPId)) {
+                newSet.delete(rootSOPId);
+            } else {
+                newSet.add(rootSOPId);
+            }
+            return newSet;
+        });
+    };
+
     const filteredSOPs = sops.filter((sop) =>
         sop.title.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const filteredGroups = sopGroups.filter((group) =>
+        group.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const formatDate = (dateString: string) => {
@@ -222,7 +290,7 @@ export default function SOPHistoryPage() {
                 <SidebarTrigger />
             </div>
             <div className="min-h-screen">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="max-w-7xl mx-auto py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
                     {/* Header */}
                     <div className="flex flex-col gap-4 mb-6">
                         <div className="flex items-center gap-4">
@@ -239,15 +307,69 @@ export default function SOPHistoryPage() {
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                                 <h1 className="text-2xl font-semibold">SOP History</h1>
-                                <p className="text-sm text-muted-foreground">
+                                <p className="text-base text-muted-foreground">
                                     View and manage all your generated Standard Operating Procedures
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    {/* Search */}
-                    <div className="mb-6">
+                    {/* View Controls and Search */}
+                    <div className="mb-6 space-y-4">
+                        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                            {/* View Mode Toggle */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-base text-muted-foreground">View:</span>
+                                <div className="flex border rounded-md">
+                                    <Button
+                                        variant={viewMode === "grouped" ? "default" : "ghost"}
+                                        size="sm"
+                                        onClick={() => {
+                                            setViewMode("grouped");
+                                            setCurrentPage(1);
+                                        }}
+                                        className="rounded-r-none"
+                                    >
+                                        <Layers className="h-4 w-4 mr-2" />
+                                        Grouped
+                                    </Button>
+                                    <Button
+                                        variant={viewMode === "individual" ? "default" : "ghost"}
+                                        size="sm"
+                                        onClick={() => {
+                                            setViewMode("individual");
+                                            setCurrentPage(1);
+                                        }}
+                                        className="rounded-l-none"
+                                    >
+                                        <List className="h-4 w-4 mr-2" />
+                                        All Versions
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Sort Dropdown */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-base text-muted-foreground">Sort by:</span>
+                                <Select
+                                    value={sortBy}
+                                    onValueChange={(value: "recent" | "oldest") => {
+                                        setSortBy(value);
+                                        setCurrentPage(1);
+                                    }}
+                                >
+                                    <SelectTrigger className="w-[140px]">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="recent">Most Recent</SelectItem>
+                                        <SelectItem value="oldest">Oldest</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        {/* Search */}
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
@@ -264,13 +386,15 @@ export default function SOPHistoryPage() {
                         <Card>
                             <CardContent className="flex items-center justify-center gap-3 py-12">
                                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                                <p className="text-sm font-medium">Loading SOPs...</p>
+                                <p className="text-base font-medium">Loading SOPs...</p>
                             </CardContent>
                         </Card>
                     )}
 
                     {/* Empty State */}
-                    {!isLoading && sops.length === 0 && (
+                    {!isLoading && 
+                        ((viewMode === "grouped" && filteredGroups.length === 0) ||
+                         (viewMode === "individual" && filteredSOPs.length === 0)) && (
                         <Card className="text-center">
                             <CardContent className="py-12 space-y-4">
                                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
@@ -278,7 +402,7 @@ export default function SOPHistoryPage() {
                                 </div>
                                 <div className="space-y-2">
                                     <h3 className="text-lg font-semibold">No SOPs Found</h3>
-                                    <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                                    <p className="text-base text-muted-foreground max-w-sm mx-auto">
                                         {searchQuery
                                             ? "No SOPs match your search criteria."
                                             : "You haven't generated any SOPs yet. Create your first one to get started."}
@@ -296,8 +420,200 @@ export default function SOPHistoryPage() {
                         </Card>
                     )}
 
-                    {/* SOPs Grid */}
-                    {!isLoading && filteredSOPs.length > 0 && (
+                    {/* Grouped SOPs View */}
+                    {!isLoading && viewMode === "grouped" && filteredGroups.length > 0 && (
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                                {filteredGroups.map((group) => {
+                                    const isExpanded = expandedGroups.has(group.rootSOPId);
+                                    const currentVersion = group.currentVersion;
+                                    
+                                    return (
+                                        <Card
+                                            key={group.rootSOPId}
+                                            className="group transition-all duration-200 hover:shadow-lg hover:border-primary/50"
+                                        >
+                                            <CardHeader className="pb-3">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex-1 min-w-0">
+                                                        <CardTitle className="text-lg mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+                                                            {group.title}
+                                                        </CardTitle>
+                                                        <CardDescription className="text-xs space-y-1">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <Calendar className="h-3 w-3" />
+                                                                <span>
+                                                                    {formatDate(
+                                                                        sortBy === "recent"
+                                                                            ? group.mostRecentVersionDate
+                                                                            : group.oldestVersionDate
+                                                                    )}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <User className="h-3 w-3" />
+                                                                <span>{getUserName(currentVersion)}</span>
+                                                            </div>
+                                                        </CardDescription>
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDownloadPDF(currentVersion, e);
+                                                            }}
+                                                            title="Download PDF"
+                                                        >
+                                                            <Download className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <Badge variant="secondary">
+                                                            {group.versionCount} version{group.versionCount !== 1 ? "s" : ""}
+                                                        </Badge>
+                                                        {currentVersion.metadata?.organizationProfileUsed && (
+                                                            <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">
+                                                                Org Profile
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="w-full"
+                                                        onClick={() => handleViewSOP(currentVersion.id)}
+                                                    >
+                                                        <Eye className="h-4 w-4 mr-2" />
+                                                        View Current Version
+                                                    </Button>
+
+                                                    {group.versions.length > 1 && (
+                                                        <>
+                                                            <Separator />
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="w-full justify-between"
+                                                                onClick={() => toggleGroupExpansion(group.rootSOPId)}
+                                                            >
+                                                                <span className="text-xs">
+                                                                    {isExpanded ? "Hide" : "Show"} All Versions
+                                                                </span>
+                                                                {isExpanded ? (
+                                                                    <ChevronUp className="h-4 w-4" />
+                                                                ) : (
+                                                                    <ChevronDown className="h-4 w-4" />
+                                                                )}
+                                                            </Button>
+
+                                                            {isExpanded && (
+                                                                <div className="space-y-2 pt-2 border-t">
+                                                                    {group.versions.map((version) => (
+                                                                        <div
+                                                                            key={version.id}
+                                                                            className="flex items-center justify-between p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors"
+                                                                        >
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="text-xs font-medium">
+                                                                                        v{getVersion(version)}
+                                                                                    </span>
+                                                                                    {version.id === currentVersion.id && (
+                                                                                        <Badge variant="default" className="text-xs">
+                                                                                            Current
+                                                                                        </Badge>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="text-xs text-muted-foreground mt-1">
+                                                                                    {formatDate(version.createdAt)}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex gap-1">
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    className="h-7 w-7"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleViewSOP(version.id);
+                                                                                    }}
+                                                                                    title="View"
+                                                                                >
+                                                                                    <Eye className="h-3 w-3" />
+                                                                                </Button>
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    className="h-7 w-7"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleDownloadPDF(version, e);
+                                                                                    }}
+                                                                                    title="Download"
+                                                                                >
+                                                                                    <Download className="h-3 w-3" />
+                                                                                </Button>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Pagination for Groups */}
+                            {totalPages > 1 && (
+                                <div className="flex items-center justify-between">
+                                    <div className="text-base text-muted-foreground">
+                                        Showing {(currentPage - 1) * limit + 1} to{" "}
+                                        {Math.min(currentPage * limit, total)} of {total} SOP groups
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                            disabled={currentPage === 1 || isLoading}
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                            Previous
+                                        </Button>
+                                        <div className="text-base text-muted-foreground">
+                                            Page {currentPage} of {totalPages}
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() =>
+                                                setCurrentPage((p) => Math.min(totalPages, p + 1))
+                                            }
+                                            disabled={currentPage === totalPages || isLoading}
+                                        >
+                                            Next
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* Individual SOPs Grid */}
+                    {!isLoading && viewMode === "individual" && filteredSOPs.length > 0 && (
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                                 {filteredSOPs.map((sop) => (
@@ -354,7 +670,7 @@ export default function SOPHistoryPage() {
                             {/* Pagination */}
                             {totalPages > 1 && (
                                 <div className="flex items-center justify-between">
-                                    <div className="text-sm text-muted-foreground">
+                                    <div className="text-base text-muted-foreground">
                                         Showing {(currentPage - 1) * limit + 1} to{" "}
                                         {Math.min(currentPage * limit, total)} of {total} SOPs
                                     </div>
@@ -368,7 +684,7 @@ export default function SOPHistoryPage() {
                                             <ChevronLeft className="h-4 w-4" />
                                             Previous
                                         </Button>
-                                        <div className="text-sm text-muted-foreground">
+                                        <div className="text-base text-muted-foreground">
                                             Page {currentPage} of {totalPages}
                                         </div>
                                         <Button
@@ -389,7 +705,9 @@ export default function SOPHistoryPage() {
                     )}
 
                     {/* No Results for Search */}
-                    {!isLoading && sops.length > 0 && filteredSOPs.length === 0 && (
+                    {!isLoading && 
+                        ((viewMode === "grouped" && sopGroups.length > 0 && filteredGroups.length === 0) ||
+                         (viewMode === "individual" && sops.length > 0 && filteredSOPs.length === 0)) && (
                         <Card className="text-center">
                             <CardContent className="py-12 space-y-4">
                                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
@@ -397,7 +715,7 @@ export default function SOPHistoryPage() {
                                 </div>
                                 <div className="space-y-2">
                                     <h3 className="text-lg font-semibold">No Results Found</h3>
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="text-base text-muted-foreground">
                                         No SOPs match your search query: "{searchQuery}"
                                     </p>
                                 </div>

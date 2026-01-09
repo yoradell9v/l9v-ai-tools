@@ -584,7 +584,7 @@ export default function TenantsPage() {
     return (
         <>
             <Toaster />
-            <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+            <div className="flex-1 space-y-4 py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
                 <div className="flex items-center justify-between space-y-2">
                     <div>
                         <h2 className="text-3xl font-bold tracking-tight">Tenants</h2>
@@ -625,7 +625,7 @@ export default function TenantsPage() {
                                                         <Building2 className="h-10 w-10 text-muted-foreground" />
                                                     </div>
                                                     <h3 className="text-lg font-semibold mb-1">No current organization detected</h3>
-                                                    <p className="text-sm text-muted-foreground mb-4 max-w-sm">
+                                                    <p className="text-base text-muted-foreground mb-4 max-w-sm">
                                                         You are not currently associated with an organization.
                                                     </p>
                                                 </div>
@@ -654,7 +654,7 @@ export default function TenantsPage() {
                                                 </div>
 
                                                 <div>
-                                                    <h3 className="text-sm font-medium mb-3">Members</h3>
+                                                    <h3 className="text-base font-medium mb-3">Members</h3>
                                                     {currentTenantDetails.collaborators.length === 0 ? (
                                                         <div className="py-6 text-center rounded-lg border border-dashed">
                                                             <p className="text-xs text-muted-foreground">
@@ -698,7 +698,7 @@ export default function TenantsPage() {
 
                                                             {/* Desktop / tablet layout: table */}
                                                             <div className="hidden md:block rounded-lg border">
-                                                                <Table className="w-full text-sm">
+                                                                <Table className="w-full text-base">
                                                                     <TableHeader>
                                                                         <TableRow>
                                                                             <TableHead>Name</TableHead>
@@ -755,7 +755,7 @@ export default function TenantsPage() {
                                                 <h3 className="text-lg font-semibold mb-1">
                                                     {activeTab === "active" ? "No active tenants" : "No inactive tenants"}
                                                 </h3>
-                                                <p className="text-sm text-muted-foreground mb-4 max-w-sm">
+                                                <p className="text-base text-muted-foreground mb-4 max-w-sm">
                                                     {activeTab === "active"
                                                         ? "Create your first organization tenant to get started."
                                                         : "No deactivated tenants yet."}
@@ -893,7 +893,7 @@ export default function TenantsPage() {
                                     className={errors.name ? "border-destructive" : ""}
                                 />
                                 {errors.name && (
-                                    <p className="text-sm text-destructive">{errors.name}</p>
+                                    <p className="text-base text-destructive">{errors.name}</p>
                                 )}
                                 {submitError && (
                                     <Alert variant="destructive">
@@ -1060,7 +1060,7 @@ export default function TenantsPage() {
                                             <Separator />
 
                                             <div>
-                                                <h4 className="text-sm font-medium mb-3">Invite a collaborator</h4>
+                                                <h4 className="text-base font-medium mb-3">Invite a collaborator</h4>
                                                 <div className="space-y-3">
                                                     <div className="space-y-2">
                                                         <Label htmlFor="invite-email">Email</Label>
@@ -1109,7 +1109,7 @@ export default function TenantsPage() {
                                             <div>
                                                 <div className="flex items-center gap-2 mb-3">
                                                     <Mail className="h-4 w-4" />
-                                                    <h4 className="text-sm font-medium">Pending Invites</h4>
+                                                    <h4 className="text-base font-medium">Pending Invites</h4>
                                                     {selectedTenant.pendingInvites && selectedTenant.pendingInvites.length > 0 && (
                                                         <Badge>{selectedTenant.pendingInvites.length}</Badge>
                                                     )}
@@ -1162,7 +1162,7 @@ export default function TenantsPage() {
                                             <div>
                                                 <div className="flex items-center gap-2 mb-3">
                                                     <UserPlus className="h-4 w-4" />
-                                                    <h4 className="text-sm font-medium">Collaborators</h4>
+                                                    <h4 className="text-base font-medium">Collaborators</h4>
                                                     {selectedTenant.collaborators && selectedTenant.collaborators.length > 0 && (
                                                         <Badge>{selectedTenant.collaborators.length}</Badge>
                                                     )}

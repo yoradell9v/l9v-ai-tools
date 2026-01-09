@@ -894,14 +894,14 @@ export default function JdBuilderPage() {
                 <div
                     className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full"
                 >
-                    <div className="w-full max-w-full p-4 md:p-8 pt-6 flex flex-col h-full">
+                    <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col h-full">
                         <div className="flex-shrink-0 p-2">
                             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
                                 <div className="space-y-1">
                                     <h1 className="text-2xl font-semibold mb-1">
                                         Job Description Builder AI
                                     </h1>
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="text-base text-muted-foreground">
                                         Create comprehensive job descriptions with AI-powered analysis
                                     </p>
                                 </div>
@@ -967,7 +967,7 @@ export default function JdBuilderPage() {
                                     <h3 className="text-lg font-semibold mb-1">
                                         {currentStage || "Processing your analysis"}
                                     </h3>
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="text-base text-muted-foreground">
                                         {currentStage ? "Please wait..." : "This may take a moment..."}
                                     </p>
                                 </div>
@@ -980,7 +980,7 @@ export default function JdBuilderPage() {
                                     <h3 className="text-lg font-semibold mb-1">
                                         Preparing download...
                                     </h3>
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="text-base text-muted-foreground">
                                         Generating PDF file
                                     </p>
                                 </div>
@@ -990,7 +990,7 @@ export default function JdBuilderPage() {
                             {isLoadingLatest && !analysisResult && !isProcessing && !isDownloading && (
                                 <div className="flex flex-col items-center justify-center py-16">
                                     <Loader2 className="h-8 w-8 mb-3 animate-spin" />
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="text-base text-muted-foreground">
                                         Loading your latest analysis...
                                     </p>
                                 </div>
@@ -1005,7 +1005,7 @@ export default function JdBuilderPage() {
                                     <h3 className="text-base font-medium mb-1">
                                         {getCurrentGreeting()}
                                     </h3>
-                                    <p className="text-sm mb-6 max-w-sm text-muted-foreground">
+                                    <p className="text-base mb-6 max-w-sm text-muted-foreground">
                                         Let's find your perfect virtual assistant. Start by creating a new analysis.
                                     </p>
                                     <Button
@@ -1138,7 +1138,7 @@ export default function JdBuilderPage() {
                                                                     </div>
                                                                     <div className="flex-1 min-w-0">
                                                                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Company Stage</span>
-                                                                        <p className="text-sm mt-0.5 font-medium">{summary?.company_stage}</p>
+                                                                        <p className="text-base mt-0.5 font-medium">{summary?.company_stage}</p>
                                                                     </div>
                                                                 </div>
                                                             </Card>
@@ -1151,7 +1151,7 @@ export default function JdBuilderPage() {
                                                                     </div>
                                                                     <div className="flex-1 min-w-0">
                                                                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">90-Day Outcome</span>
-                                                                        <p className="text-sm mt-0.5 font-medium leading-relaxed">{summary?.outcome_90d}</p>
+                                                                        <p className="text-base mt-0.5 font-medium leading-relaxed">{summary?.outcome_90d}</p>
                                                                     </div>
                                                                 </div>
                                                             </Card>
@@ -1167,7 +1167,7 @@ export default function JdBuilderPage() {
                                                                             <span className="text-xs uppercase tracking-wide text-muted-foreground">Primary Bottleneck</span>
                                                                             <Badge variant="destructive">High Priority</Badge>
                                                                         </div>
-                                                                        <p className="text-sm font-medium leading-relaxed">
+                                                                        <p className="text-base font-medium leading-relaxed">
                                                                             {summary?.primary_bottleneck}
                                                                         </p>
                                                                     </div>
@@ -1182,7 +1182,7 @@ export default function JdBuilderPage() {
                                                                     </div>
                                                                     <div className="flex-1 min-w-0">
                                                                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1 block">Workflow Analysis</span>
-                                                                        <p className="text-sm leading-relaxed">{summary?.workflow_analysis}</p>
+                                                                        <p className="text-base leading-relaxed">{summary?.workflow_analysis}</p>
                                                                     </div>
                                                                 </div>
                                                             </Card>
@@ -1197,7 +1197,7 @@ export default function JdBuilderPage() {
                                                                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1 block">
                                                                             Documentation Status
                                                                         </span>
-                                                                        <p className="text-sm leading-relaxed mb-3">
+                                                                        <p className="text-base leading-relaxed mb-3">
                                                                             {typeof summary?.sop_status === 'string'
                                                                                 ? summary.sop_status
                                                                                 : summary?.sop_status?.summary}
@@ -1251,7 +1251,7 @@ export default function JdBuilderPage() {
                                                                         </div>
                                                                         <div className="flex-1 min-w-0">
                                                                             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1 block">Role Recommendation</span>
-                                                                            <p className="text-sm leading-relaxed">{summary.role_recommendation}</p>
+                                                                            <p className="text-base leading-relaxed">{summary.role_recommendation}</p>
                                                                         </div>
                                                                     </div>
                                                                 </Card>
@@ -1268,7 +1268,7 @@ export default function JdBuilderPage() {
                                                                             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 block">Key Insights</span>
                                                                             <ul className="space-y-2">
                                                                                 {analysisResult.full_package.executive_summary.key_insights.map((insight: string, idx: number) => (
-                                                                                    <li key={idx} className="text-sm leading-relaxed flex items-start gap-2">
+                                                                                    <li key={idx} className="text-base leading-relaxed flex items-start gap-2">
                                                                                         <span className="text-primary mt-0.5 flex-shrink-0">•</span>
                                                                                         <span>{insight}</span>
                                                                                     </li>
@@ -1312,7 +1312,7 @@ export default function JdBuilderPage() {
                                                                 </CardTitle>
                                                             </div>
                                                             {analysisResult.preview.service_reasoning && (
-                                                                <p className="text-sm leading-relaxed mb-4">
+                                                                <p className="text-base leading-relaxed mb-4">
                                                                     {analysisResult.preview.service_reasoning}
                                                                 </p>
                                                             )}
@@ -1322,7 +1322,7 @@ export default function JdBuilderPage() {
                                                                         <span className="text-xs font-semibold text-muted-foreground uppercase">
                                                                             Confidence
                                                                         </span>
-                                                                        <span className="text-sm font-semibold">
+                                                                        <span className="text-base font-semibold">
                                                                             {analysisResult.preview.service_confidence}
                                                                         </span>
                                                                     </div>
@@ -1353,7 +1353,7 @@ export default function JdBuilderPage() {
                                                         <CardContent>
                                                             <ul className="space-y-2">
                                                                 {analysisResult.preview.key_risks.map((risk: string, idx: number) => (
-                                                                    <li key={idx} className="flex items-start gap-2 text-sm">
+                                                                    <li key={idx} className="flex items-start gap-2 text-base">
                                                                         <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
                                                                         <span className="leading-relaxed">{risk}</span>
                                                                     </li>
@@ -1378,7 +1378,7 @@ export default function JdBuilderPage() {
                                                         <CardContent>
                                                             <ul className="space-y-3">
                                                                 {analysisResult.preview.critical_questions.map((question: string, idx: number) => (
-                                                                    <li key={idx} className="flex items-start gap-2 text-sm">
+                                                                    <li key={idx} className="flex items-start gap-2 text-base">
                                                                         <span className="font-semibold text-primary mt-0.5 flex-shrink-0">Q{idx + 1}:</span>
                                                                         <span className="leading-relaxed">{question}</span>
                                                                     </li>
@@ -1411,7 +1411,7 @@ export default function JdBuilderPage() {
                                                                         <span className="text-xs font-semibold text-muted-foreground uppercase">
                                                                             Hours per Week:
                                                                         </span>
-                                                                        <span className="text-sm ml-2">
+                                                                        <span className="text-base ml-2">
                                                                             {analysisResult.preview.hours_per_week}
                                                                         </span>
                                                                     </div>
@@ -1421,7 +1421,7 @@ export default function JdBuilderPage() {
                                                                         <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
                                                                             Primary Outcome
                                                                         </p>
-                                                                        <p className="text-sm leading-relaxed">
+                                                                        <p className="text-base leading-relaxed">
                                                                             {analysisResult.preview.primary_outcome}
                                                                         </p>
                                                                     </div>
@@ -1454,7 +1454,7 @@ export default function JdBuilderPage() {
                                                                         <span className="text-xs font-semibold text-muted-foreground uppercase">
                                                                             Hours per Week:
                                                                         </span>
-                                                                        <span className="text-sm ml-2">
+                                                                        <span className="text-base ml-2">
                                                                             {analysisResult.preview.core_va_hours}
                                                                         </span>
                                                                     </div>
@@ -1464,7 +1464,7 @@ export default function JdBuilderPage() {
                                                                         <span className="text-xs font-semibold text-muted-foreground uppercase">
                                                                             Team Support Areas:
                                                                         </span>
-                                                                        <span className="text-sm ml-2">
+                                                                        <span className="text-base ml-2">
                                                                             {analysisResult.preview.team_support_areas}
                                                                         </span>
                                                                     </div>
@@ -1497,7 +1497,7 @@ export default function JdBuilderPage() {
                                                                         <span className="text-xs font-semibold text-muted-foreground uppercase">
                                                                             Total Hours:
                                                                         </span>
-                                                                        <span className="text-sm ml-2">
+                                                                        <span className="text-base ml-2">
                                                                             {analysisResult.preview.total_hours}
                                                                         </span>
                                                                     </div>
@@ -1507,7 +1507,7 @@ export default function JdBuilderPage() {
                                                                         <span className="text-xs font-semibold text-muted-foreground uppercase">
                                                                             Estimated Timeline:
                                                                         </span>
-                                                                        <span className="text-sm ml-2">
+                                                                        <span className="text-base ml-2">
                                                                             {analysisResult.preview.estimated_timeline}
                                                                         </span>
                                                                     </div>
@@ -1538,7 +1538,7 @@ export default function JdBuilderPage() {
                                                                                     {analysisResult.full_package.service_structure.dedicated_va_role.title}
                                                                                 </h4>
                                                                             </div>
-                                                                            <p className="text-sm text-[var(--text-secondary)]">
+                                                                            <p className="text-base text-[var(--text-secondary)]">
                                                                                 {analysisResult.full_package.service_structure.dedicated_va_role.hours_per_week} hrs/week
                                                                             </p>
                                                                         </div>
@@ -1558,7 +1558,7 @@ export default function JdBuilderPage() {
                                                                             <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                 Core Responsibility
                                                                             </p>
-                                                                            <p className="text-sm text-[var(--text-primary)] leading-relaxed">
+                                                                            <p className="text-base text-[var(--text-primary)] leading-relaxed">
                                                                                 {analysisResult.full_package.service_structure.dedicated_va_role.core_responsibility}
                                                                             </p>
                                                                         </div>
@@ -1568,7 +1568,7 @@ export default function JdBuilderPage() {
                                                                             <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                 Tasks
                                                                             </p>
-                                                                            <ul className="list-disc pl-5 space-y-1 text-sm text-[var(--text-primary)]">
+                                                                            <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
                                                                                 {analysisResult.full_package.service_structure.dedicated_va_role.task_allocation.from_intake.map((task: string, i: number) => (
                                                                                     <li key={i}>{task}</li>
                                                                                 ))}
@@ -1583,7 +1583,7 @@ export default function JdBuilderPage() {
                                                                             <div className="space-y-3">
                                                                                 {analysisResult.full_package.service_structure.dedicated_va_role.skill_requirements.required?.length > 0 && (
                                                                                     <div>
-                                                                                        <p className="text-sm font-medium text-[var(--primary)] mb-1">
+                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
                                                                                             Required
                                                                                         </p>
                                                                                         <div className="flex flex-wrap gap-2">
@@ -1597,7 +1597,7 @@ export default function JdBuilderPage() {
                                                                                 )}
                                                                                 {analysisResult.full_package.service_structure.dedicated_va_role.skill_requirements.nice_to_have?.length > 0 && (
                                                                                     <div>
-                                                                                        <p className="text-sm font-medium text-[var(--primary)] mb-1">
+                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
                                                                                             Nice to Have
                                                                                         </p>
                                                                                         <div className="flex flex-wrap gap-2">
@@ -1645,7 +1645,7 @@ export default function JdBuilderPage() {
                                                                             <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                 Mission Statement
                                                                             </p>
-                                                                            <p className="text-sm text-[var(--text-primary)] leading-relaxed">
+                                                                            <p className="text-base text-[var(--text-primary)] leading-relaxed">
                                                                                 {analysisResult.full_package.detailed_specifications.mission_statement}
                                                                             </p>
                                                                         </div>
@@ -1655,7 +1655,7 @@ export default function JdBuilderPage() {
                                                                             <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                 Core Outcomes
                                                                             </p>
-                                                                            <ul className="list-disc pl-5 space-y-1 text-sm text-[var(--text-primary)]">
+                                                                            <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
                                                                                 {analysisResult.full_package.detailed_specifications.core_outcomes.map((outcome: string, i: number) => (
                                                                                     <li key={i}>{outcome}</li>
                                                                                 ))}
@@ -1670,7 +1670,7 @@ export default function JdBuilderPage() {
                                                                             <div className="space-y-3">
                                                                                 {analysisResult.full_package.detailed_specifications.skills_required.technical?.length > 0 && (
                                                                                     <div>
-                                                                                        <p className="text-sm font-medium text-[var(--primary)] mb-1">
+                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
                                                                                             Technical
                                                                                         </p>
                                                                                         <div className="flex flex-wrap gap-2">
@@ -1706,7 +1706,7 @@ export default function JdBuilderPage() {
                                                                                     {analysisResult.full_package.service_structure.core_va_role.title}
                                                                                 </h4>
                                                                             </div>
-                                                                            <p className="text-sm text-[var(--text-secondary)]">
+                                                                            <p className="text-base text-[var(--text-secondary)]">
                                                                                 {analysisResult.full_package.service_structure.core_va_role.hours_per_week} hrs/week
                                                                             </p>
                                                                         </div>
@@ -1726,7 +1726,7 @@ export default function JdBuilderPage() {
                                                                             <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                 Core Responsibility
                                                                             </p>
-                                                                            <p className="text-sm text-[var(--text-primary)] leading-relaxed">
+                                                                            <p className="text-base text-[var(--text-primary)] leading-relaxed">
                                                                                 {analysisResult.full_package.service_structure.core_va_role.core_responsibility}
                                                                             </p>
                                                                         </div>
@@ -1736,7 +1736,7 @@ export default function JdBuilderPage() {
                                                                             <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                 Recurring Tasks
                                                                             </p>
-                                                                            <ul className="list-disc pl-5 space-y-1 text-sm text-[var(--text-primary)]">
+                                                                            <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
                                                                                 {analysisResult.full_package.service_structure.core_va_role.recurring_tasks.map((task: string, i: number) => (
                                                                                     <li key={i}>{task}</li>
                                                                                 ))}
@@ -1751,7 +1751,7 @@ export default function JdBuilderPage() {
                                                                             <div className="space-y-3">
                                                                                 {analysisResult.full_package.service_structure.core_va_role.skill_requirements.required?.length > 0 && (
                                                                                     <div>
-                                                                                        <p className="text-sm font-medium text-[var(--primary)] mb-1">
+                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
                                                                                             Required
                                                                                         </p>
                                                                                         <div className="flex flex-wrap gap-2">
@@ -1765,7 +1765,7 @@ export default function JdBuilderPage() {
                                                                                 )}
                                                                                 {analysisResult.full_package.service_structure.core_va_role.skill_requirements.nice_to_have?.length > 0 && (
                                                                                     <div>
-                                                                                        <p className="text-sm font-medium text-[var(--primary)] mb-1">
+                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
                                                                                             Nice to Have
                                                                                         </p>
                                                                                         <div className="flex flex-wrap gap-2">
@@ -1785,7 +1785,7 @@ export default function JdBuilderPage() {
                                                                             <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                 Workflow Ownership
                                                                             </p>
-                                                                            <ul className="list-disc pl-5 space-y-1 text-sm text-[var(--text-primary)]">
+                                                                            <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
                                                                                 {analysisResult.full_package.service_structure.core_va_role.workflow_ownership.map((workflow: string, i: number) => (
                                                                                     <li key={i}>{workflow}</li>
                                                                                 ))}
@@ -1809,7 +1809,7 @@ export default function JdBuilderPage() {
                                                                     </CardDescription>
                                                                 </CardHeader>
                                                                 <CardContent>
-                                                                    <p className="text-sm leading-relaxed">{analysisResult.full_package.service_structure.coordination_model}</p>
+                                                                    <p className="text-base leading-relaxed">{analysisResult.full_package.service_structure.coordination_model}</p>
                                                                 </CardContent>
                                                             </Card>
                                                         )}
@@ -1828,7 +1828,7 @@ export default function JdBuilderPage() {
                                                                         <CardContent>
                                                                             <ul className="space-y-2">
                                                                                 {analysisResult.full_package.service_structure.pros.map((pro: string, i: number) => (
-                                                                                    <li key={i} className="text-sm flex items-start gap-2">
+                                                                                    <li key={i} className="text-base flex items-start gap-2">
                                                                                         <span className="text-green-500 mt-0.5">•</span>
                                                                                         <span>{pro}</span>
                                                                                     </li>
@@ -1848,7 +1848,7 @@ export default function JdBuilderPage() {
                                                                         <CardContent>
                                                                             <ul className="space-y-2">
                                                                                 {analysisResult.full_package.service_structure.cons.map((con: string, i: number) => (
-                                                                                    <li key={i} className="text-sm flex items-start gap-2">
+                                                                                    <li key={i} className="text-base flex items-start gap-2">
                                                                                         <span className="text-amber-500 mt-0.5">•</span>
                                                                                         <span>{con}</span>
                                                                                     </li>
@@ -1873,7 +1873,7 @@ export default function JdBuilderPage() {
                                                                     </CardDescription>
                                                                 </CardHeader>
                                                                 <CardContent>
-                                                                    <p className="text-sm leading-relaxed">{analysisResult.full_package.service_structure.scaling_path}</p>
+                                                                    <p className="text-base leading-relaxed">{analysisResult.full_package.service_structure.scaling_path}</p>
                                                                 </CardContent>
                                                             </Card>
                                                         )}
@@ -1891,7 +1891,7 @@ export default function JdBuilderPage() {
                                                                     </CardDescription>
                                                                 </CardHeader>
                                                                 <CardContent>
-                                                                    <p className="text-sm leading-relaxed">{analysisResult.full_package.service_structure.alternative_consideration}</p>
+                                                                    <p className="text-base leading-relaxed">{analysisResult.full_package.service_structure.alternative_consideration}</p>
                                                                 </CardContent>
                                                             </Card>
                                                         )}
@@ -1899,7 +1899,7 @@ export default function JdBuilderPage() {
                                                         {/* Unicorn VA Service - Team Support Areas */}
                                                         {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package.service_structure.team_support_areas && Array.isArray(analysisResult.full_package.service_structure.team_support_areas) && analysisResult.full_package.service_structure.team_support_areas.length > 0 && (
                                                             <div className="space-y-4">
-                                                                <h4 className="text-sm font-semibold text-[var(--text-primary)] uppercase tracking-wide">
+                                                                <h4 className="text-base font-semibold text-[var(--text-primary)] uppercase tracking-wide">
                                                                     Team Support Areas
                                                                 </h4>
                                                                 {analysisResult.full_package.service_structure.team_support_areas.map((support: any, idx: number) => (
@@ -1930,7 +1930,7 @@ export default function JdBuilderPage() {
                                                                                     <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                         Why Team Support
                                                                                     </p>
-                                                                                    <p className="text-sm text-[var(--text-primary)] leading-relaxed">
+                                                                                    <p className="text-base text-[var(--text-primary)] leading-relaxed">
                                                                                         {support.why_team_not_va}
                                                                                     </p>
                                                                                 </div>
@@ -1940,7 +1940,7 @@ export default function JdBuilderPage() {
                                                                                     <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                         Use Cases
                                                                                     </p>
-                                                                                    <ul className="list-disc pl-5 space-y-1 text-sm text-[var(--text-primary)]">
+                                                                                    <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
                                                                                         {support.use_cases.map((useCase: string, i: number) => (
                                                                                             <li key={i}>{useCase}</li>
                                                                                         ))}
@@ -1952,7 +1952,7 @@ export default function JdBuilderPage() {
                                                                                     <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                         Deliverables
                                                                                     </p>
-                                                                                    <ul className="list-disc pl-5 space-y-1 text-sm text-[var(--text-primary)]">
+                                                                                    <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
                                                                                         {support.deliverables.map((deliverable: string, i: number) => (
                                                                                             <li key={i}>{deliverable}</li>
                                                                                         ))}
@@ -1964,7 +1964,7 @@ export default function JdBuilderPage() {
                                                                                     <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                         Example Requests
                                                                                     </p>
-                                                                                    <ul className="list-disc pl-5 space-y-1 text-sm text-[var(--text-primary)]">
+                                                                                    <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
                                                                                         {support.example_requests.map((request: string, i: number) => (
                                                                                             <li key={i}>{request}</li>
                                                                                         ))}
@@ -1980,7 +1980,7 @@ export default function JdBuilderPage() {
                                                         {/* Unicorn VA Service - Team Support Specs (from detailed_specifications) */}
                                                         {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package.detailed_specifications?.team_support_specs && Array.isArray(analysisResult.full_package.detailed_specifications.team_support_specs) && analysisResult.full_package.detailed_specifications.team_support_specs.length > 0 && (
                                                             <div className="space-y-4 mt-4">
-                                                                <h4 className="text-sm font-semibold text-[var(--text-primary)] uppercase tracking-wide">
+                                                                <h4 className="text-base font-semibold text-[var(--text-primary)] uppercase tracking-wide">
                                                                     Team Support Specifications
                                                                 </h4>
                                                                 {analysisResult.full_package.detailed_specifications.team_support_specs.map((support: any, idx: number) => (
@@ -1997,7 +1997,7 @@ export default function JdBuilderPage() {
                                                                                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
                                                                                         Why Team Support
                                                                                     </p>
-                                                                                    <p className="text-sm leading-relaxed">
+                                                                                    <p className="text-base leading-relaxed">
                                                                                         {support.why_team_not_va}
                                                                                     </p>
                                                                                 </div>
@@ -2007,7 +2007,7 @@ export default function JdBuilderPage() {
                                                                                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                                                                                         Use Cases
                                                                                     </p>
-                                                                                    <ul className="list-disc pl-5 space-y-1 text-sm">
+                                                                                    <ul className="list-disc pl-5 space-y-1 text-base">
                                                                                         {support.use_cases.map((useCase: string, i: number) => (
                                                                                             <li key={i}>{useCase}</li>
                                                                                         ))}
@@ -2019,7 +2019,7 @@ export default function JdBuilderPage() {
                                                                                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                                                                                         Deliverables
                                                                                     </p>
-                                                                                    <ul className="list-disc pl-5 space-y-1 text-sm">
+                                                                                    <ul className="list-disc pl-5 space-y-1 text-base">
                                                                                         {support.deliverables.map((deliverable: string, i: number) => (
                                                                                             <li key={i}>{deliverable}</li>
                                                                                         ))}
@@ -2031,7 +2031,7 @@ export default function JdBuilderPage() {
                                                                                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                                                                                         Example Requests
                                                                                     </p>
-                                                                                    <ul className="list-disc pl-5 space-y-1 text-sm">
+                                                                                    <ul className="list-disc pl-5 space-y-1 text-base">
                                                                                         {support.example_requests.map((request: string, i: number) => (
                                                                                             <li key={i}>{request}</li>
                                                                                         ))}
@@ -2073,7 +2073,7 @@ export default function JdBuilderPage() {
                                                                             <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                 Mission Statement
                                                                             </p>
-                                                                            <p className="text-sm text-[var(--text-primary)] leading-relaxed">
+                                                                            <p className="text-base text-[var(--text-primary)] leading-relaxed">
                                                                                 {analysisResult.full_package.detailed_specifications.core_va_jd.mission_statement}
                                                                             </p>
                                                                         </div>
@@ -2083,7 +2083,7 @@ export default function JdBuilderPage() {
                                                                             <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                 Primary Outcome
                                                                             </p>
-                                                                            <p className="text-sm text-[var(--text-primary)] leading-relaxed">
+                                                                            <p className="text-base text-[var(--text-primary)] leading-relaxed">
                                                                                 {analysisResult.full_package.detailed_specifications.core_va_jd.primary_outcome}
                                                                             </p>
                                                                         </div>
@@ -2093,7 +2093,7 @@ export default function JdBuilderPage() {
                                                                             <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                 Core Outcomes
                                                                             </p>
-                                                                            <ul className="list-disc pl-5 space-y-1 text-sm text-[var(--text-primary)]">
+                                                                            <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
                                                                                 {analysisResult.full_package.detailed_specifications.core_va_jd.core_outcomes.map((outcome: string, i: number) => (
                                                                                     <li key={i}>{outcome}</li>
                                                                                 ))}
@@ -2108,11 +2108,11 @@ export default function JdBuilderPage() {
                                                                             <div className="space-y-3">
                                                                                 {analysisResult.full_package.detailed_specifications.core_va_jd.responsibilities.map((resp: any, i: number) => (
                                                                                     <div key={i} className="border-l-2 pl-3 border-primary/20">
-                                                                                        <p className="text-sm font-medium text-[var(--primary)] mb-1">
+                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
                                                                                             {resp.category}
                                                                                         </p>
                                                                                         {Array.isArray(resp.details) && (
-                                                                                            <ul className="list-disc pl-5 space-y-1 text-sm text-[var(--text-primary)]">
+                                                                                            <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
                                                                                                 {resp.details.map((detail: string, j: number) => (
                                                                                                     <li key={j}>{detail}</li>
                                                                                                 ))}
@@ -2131,7 +2131,7 @@ export default function JdBuilderPage() {
                                                                             <div className="space-y-3">
                                                                                 {analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.technical && Array.isArray(analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.technical) && analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.technical.length > 0 && (
                                                                                     <div>
-                                                                                        <p className="text-sm font-medium text-[var(--primary)] mb-1">
+                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
                                                                                             Technical
                                                                                         </p>
                                                                                         <div className="flex flex-wrap gap-2">
@@ -2145,7 +2145,7 @@ export default function JdBuilderPage() {
                                                                                 )}
                                                                                 {analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.soft && Array.isArray(analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.soft) && analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.soft.length > 0 && (
                                                                                     <div>
-                                                                                        <p className="text-sm font-medium text-[var(--primary)] mb-1">
+                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
                                                                                             Soft Skills
                                                                                         </p>
                                                                                         <div className="flex flex-wrap gap-2">
@@ -2159,7 +2159,7 @@ export default function JdBuilderPage() {
                                                                                 )}
                                                                                 {analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.domain && Array.isArray(analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.domain) && analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.domain.length > 0 && (
                                                                                     <div>
-                                                                                        <p className="text-sm font-medium text-[var(--primary)] mb-1">
+                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
                                                                                             Domain Knowledge
                                                                                         </p>
                                                                                         <div className="flex flex-wrap gap-2">
@@ -2182,7 +2182,7 @@ export default function JdBuilderPage() {
                                                                             <div className="space-y-2">
                                                                                 {analysisResult.full_package.detailed_specifications.core_va_jd.kpis.map((kpi: any, i: number) => (
                                                                                     <div key={i} className="p-3 rounded-lg bg-muted/50">
-                                                                                        <p className="text-sm font-medium mb-1">{kpi.metric}</p>
+                                                                                        <p className="text-base font-medium mb-1">{kpi.metric}</p>
                                                                                         {kpi.target && <p className="text-xs text-muted-foreground"><span className="font-medium">Target:</span> {kpi.target}</p>}
                                                                                         {kpi.frequency && <p className="text-xs text-muted-foreground"><span className="font-medium">Frequency:</span> {kpi.frequency}</p>}
                                                                                     </div>
@@ -2228,7 +2228,7 @@ export default function JdBuilderPage() {
                                                                                     <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                         Objective
                                                                                     </p>
-                                                                                    <p className="text-sm text-[var(--text-primary)] leading-relaxed">
+                                                                                    <p className="text-base text-[var(--text-primary)] leading-relaxed">
                                                                                         {project.objective}
                                                                                     </p>
                                                                                 </div>
@@ -2238,7 +2238,7 @@ export default function JdBuilderPage() {
                                                                                     <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
                                                                                         Deliverables
                                                                                     </p>
-                                                                                    <ul className="list-disc pl-5 space-y-1 text-sm text-[var(--text-primary)]">
+                                                                                    <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
                                                                                         {project.deliverables.map((del: any, i: number) => (
                                                                                             <li key={i}>
                                                                                                 {typeof del === "string" ? del : del.item || del}
@@ -2274,7 +2274,7 @@ export default function JdBuilderPage() {
                                                                                 <span className="text-xs font-semibold text-primary">{index + 1}</span>
                                                                             </div>
                                                                             <div className="flex-1 space-y-2">
-                                                                                <h5 className="text-sm font-semibold">
+                                                                                <h5 className="text-base font-semibold">
                                                                                     {item.step}
                                                                                 </h5>
                                                                                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -2308,7 +2308,7 @@ export default function JdBuilderPage() {
                                                             <div className="space-y-4">
                                                                 {implementationPlan.onboarding_roadmap.week_1 && (
                                                                     <div>
-                                                                        <h5 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                                                        <h5 className="text-base font-semibold mb-2 flex items-center gap-2">
                                                                             <div className="w-2 h-2 rounded-full bg-primary"></div>
                                                                             Week 1
                                                                         </h5>
@@ -2346,7 +2346,7 @@ export default function JdBuilderPage() {
                                                                 )}
                                                                 {implementationPlan.onboarding_roadmap.week_2 && (
                                                                     <div>
-                                                                        <h5 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                                                        <h5 className="text-base font-semibold mb-2 flex items-center gap-2">
                                                                             <div className="w-2 h-2 rounded-full bg-primary"></div>
                                                                             Week 2
                                                                         </h5>
@@ -2384,7 +2384,7 @@ export default function JdBuilderPage() {
                                                                 )}
                                                                 {implementationPlan.onboarding_roadmap.week_3_4 && (
                                                                     <div>
-                                                                        <h5 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                                                        <h5 className="text-base font-semibold mb-2 flex items-center gap-2">
                                                                             <div className="w-2 h-2 rounded-full bg-primary"></div>
                                                                             Weeks 3-4
                                                                         </h5>
@@ -2443,7 +2443,7 @@ export default function JdBuilderPage() {
                                                                         </div>
                                                                         <div className="flex-1">
                                                                             <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Week 2</p>
-                                                                            <p className="text-sm">{implementationPlan.success_milestones.week_2}</p>
+                                                                            <p className="text-base">{implementationPlan.success_milestones.week_2}</p>
                                                                         </div>
                                                                     </div>
                                                                 )}
@@ -2454,7 +2454,7 @@ export default function JdBuilderPage() {
                                                                         </div>
                                                                         <div className="flex-1">
                                                                             <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Week 4</p>
-                                                                            <p className="text-sm">{implementationPlan.success_milestones.week_4}</p>
+                                                                            <p className="text-base">{implementationPlan.success_milestones.week_4}</p>
                                                                         </div>
                                                                     </div>
                                                                 )}
@@ -2465,7 +2465,7 @@ export default function JdBuilderPage() {
                                                                         </div>
                                                                         <div className="flex-1">
                                                                             <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Week 8</p>
-                                                                            <p className="text-sm">{implementationPlan.success_milestones.week_8}</p>
+                                                                            <p className="text-base">{implementationPlan.success_milestones.week_8}</p>
                                                                         </div>
                                                                     </div>
                                                                 )}
@@ -2476,7 +2476,7 @@ export default function JdBuilderPage() {
                                                                         </div>
                                                                         <div className="flex-1">
                                                                             <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Week 12</p>
-                                                                            <p className="text-sm">{implementationPlan.success_milestones.week_12}</p>
+                                                                            <p className="text-base">{implementationPlan.success_milestones.week_12}</p>
                                                                         </div>
                                                                     </div>
                                                                 )}
@@ -2506,7 +2506,7 @@ export default function JdBuilderPage() {
                                                                         {riskManagement.risks.map((r: any, i: number) => (
                                                                             <div key={i} className="border-l-2 pl-4 border-destructive/20">
                                                                                 <div className="flex items-start justify-between mb-2">
-                                                                                    <p className="text-sm font-semibold">
+                                                                                    <p className="text-base font-semibold">
                                                                                         {r.risk}
                                                                                     </p>
                                                                                     <div className="flex items-center gap-2">
@@ -2569,7 +2569,7 @@ export default function JdBuilderPage() {
                                                                     <div className="space-y-4">
                                                                         {riskManagement.assumptions.map((a: any, i: number) => (
                                                                             <div key={i} className="border-l-2 pl-4 border-amber-500/20">
-                                                                                <p className="text-sm font-semibold mb-2">
+                                                                                <p className="text-base font-semibold mb-2">
                                                                                     {a.assumption}
                                                                                 </p>
                                                                                 <div className="space-y-1 text-xs text-muted-foreground">
@@ -2613,7 +2613,7 @@ export default function JdBuilderPage() {
                                                                     <div className="space-y-4">
                                                                         {riskManagement.red_flags.map((flag: any, i: number) => (
                                                                             <div key={i} className="border-l-2 pl-4 border-destructive">
-                                                                                <p className="text-sm font-semibold text-destructive mb-2">
+                                                                                <p className="text-base font-semibold text-destructive mb-2">
                                                                                     {flag.flag}
                                                                                 </p>
                                                                                 <div className="space-y-1 text-xs text-muted-foreground">
@@ -2649,11 +2649,11 @@ export default function JdBuilderPage() {
                                                                     <div className="space-y-4">
                                                                         {monitoringPlan.high_priority_risks && monitoringPlan.high_priority_risks.length > 0 && (
                                                                             <div>
-                                                                                <h5 className="text-sm font-semibold mb-3">High Priority Risks</h5>
+                                                                                <h5 className="text-base font-semibold mb-3">High Priority Risks</h5>
                                                                                 <div className="space-y-3">
                                                                                     {monitoringPlan.high_priority_risks.map((risk: any, i: number) => (
                                                                                         <div key={i} className="p-3 rounded-lg bg-muted/50">
-                                                                                            <p className="text-sm font-medium mb-2">{risk.risk}</p>
+                                                                                            <p className="text-base font-medium mb-2">{risk.risk}</p>
                                                                                             <p className="text-xs text-muted-foreground mb-2">
                                                                                                 <span className="font-medium">Check-in:</span> {risk.check_in}
                                                                                             </p>
@@ -2677,11 +2677,11 @@ export default function JdBuilderPage() {
                                                                         )}
                                                                         {monitoringPlan.quality_checks && monitoringPlan.quality_checks.length > 0 && (
                                                                             <div>
-                                                                                <h5 className="text-sm font-semibold mb-3">Quality Checkpoints</h5>
+                                                                                <h5 className="text-base font-semibold mb-3">Quality Checkpoints</h5>
                                                                                 <div className="space-y-3">
                                                                                     {monitoringPlan.quality_checks.map((check: any, i: number) => (
                                                                                         <div key={i} className="p-3 rounded-lg bg-muted/50">
-                                                                                            <p className="text-sm font-medium mb-2">{check.checkpoint}</p>
+                                                                                            <p className="text-base font-medium mb-2">{check.checkpoint}</p>
                                                                                             {check.assess && Array.isArray(check.assess) && (
                                                                                                 <ul className="space-y-1">
                                                                                                     {check.assess.map((item: string, idx: number) => (
@@ -2699,11 +2699,11 @@ export default function JdBuilderPage() {
                                                                         )}
                                                                         {monitoringPlan.adjustment_triggers && monitoringPlan.adjustment_triggers.length > 0 && (
                                                                             <div>
-                                                                                <h5 className="text-sm font-semibold mb-3">Adjustment Triggers</h5>
+                                                                                <h5 className="text-base font-semibold mb-3">Adjustment Triggers</h5>
                                                                                 <div className="space-y-2">
                                                                                     {monitoringPlan.adjustment_triggers.map((trigger: any, i: number) => (
                                                                                         <div key={i} className="p-3 rounded-lg border border-border">
-                                                                                            <p className="text-sm font-medium mb-1">{trigger.trigger}</p>
+                                                                                            <p className="text-base font-medium mb-1">{trigger.trigger}</p>
                                                                                             <p className="text-xs text-muted-foreground">
                                                                                                 <span className="font-medium">Action:</span> {trigger.action}
                                                                                             </p>
@@ -3059,7 +3059,7 @@ export default function JdBuilderPage() {
                                         />
                                     ) : (
                                         <div className="p-4 text-center text-muted-foreground">
-                                            <p className="text-sm">Please save your analysis first before refining.</p>
+                                            <p className="text-base">Please save your analysis first before refining.</p>
                                         </div>
                                     )}
                                 </div>

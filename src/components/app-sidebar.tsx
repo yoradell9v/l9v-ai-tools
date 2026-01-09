@@ -4,19 +4,20 @@ import { useUser } from "@/context/UserContext";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-    Building2,
-    User,
-    LayoutDashboard,
-    FileText,
-    BookOpen,
     Brain,
-    Users,
     MoreVertical,
     LogOut,
     UserCircle,
-    Lightbulb,
     AlertCircle,
 } from "lucide-react";
+import {
+    Squares2X2Icon,
+    UserPlusIcon,
+    LightBulbIcon,
+    BriefcaseIcon,
+    ListBulletIcon,
+    UserIcon,
+} from "@heroicons/react/24/outline";
 import { useState, useEffect } from "react";
 import Modal from "@/components/ui/Modal";
 import { GlobalRole } from "@prisma/client";
@@ -80,7 +81,7 @@ export function AppSidebar() {
                     setOnboardingStatus(status);
                 }
             } else {
-                const status = checkOnboardingStatus(null);0
+                const status = checkOnboardingStatus(null);
                 setOnboardingStatus(status);
             }
         } catch (err) {
@@ -153,12 +154,12 @@ export function AppSidebar() {
         {
             title: "Dashboard",
             url: "/dashboard",
-            icon: LayoutDashboard,
+            icon: Squares2X2Icon,
         },
         {
             title: "Tenants",
             url: "/dashboard/tenants",
-            icon: Building2,
+            icon: UserPlusIcon,
         },
     ];
 
@@ -167,12 +168,12 @@ export function AppSidebar() {
         {
             title: "Dashboard",
             url: "/dashboard",
-            icon: LayoutDashboard,
+            icon: Squares2X2Icon,
         },
         {
             title: "Members",
             url: "/dashboard/members",
-            icon: Users,
+            icon: UserPlusIcon,
         },
     ];
 
@@ -181,7 +182,7 @@ export function AppSidebar() {
         {
             title: "Dashboard",
             url: "/dashboard",
-            icon: LayoutDashboard,
+            icon: Squares2X2Icon,
         },
     ];
 
@@ -190,12 +191,12 @@ export function AppSidebar() {
         {
             title: "JD Builder",
             url: "/dashboard/jd-builder",
-            icon: FileText,
+            icon: BriefcaseIcon,
         },
         {
             title: "SOP Generator",
             url: "/dashboard/sop-generator",
-            icon: BookOpen,
+            icon: ListBulletIcon,
         },
         {
             title: "AI Business Brain",
@@ -206,30 +207,25 @@ export function AppSidebar() {
 
     return (
         <>
-            <Sidebar>
-                <SidebarHeader>
+            <Sidebar className="bg-[var(--primary-dark)]">
+                <SidebarHeader className="bg-[var(--primary-dark)]">
                     <SidebarMenu>
                         <SidebarMenuItem>
-                            <SidebarMenuButton size="lg" asChild>
-                                <a href="/">
-                                    <div className="flex aspect-square size-8 items-center justify-center text-sidebar-primary-foreground">
-                                        <Image
-                                            src="/icon.png"
-                                            alt="L9V Logo"
-                                            width={32}
-                                            height={32}
-                                            className="rounded"
-                                        />
-                                    </div>
-                                    <div className="grid flex-1 text-left text-sm leading-tight">
-                                        <span className="truncate font-semibold">L9V AI Tools</span>
-                                    </div>
-                                </a>
-                            </SidebarMenuButton>
+                            <div className="flex justify-center py-6">
+                                <Image
+                                    src="/logo-light.png"
+                                    alt="Level 9 Virtual"
+                                    width={120}
+                                    height={120}
+                                    className="object-contain"
+                                    priority
+                                />
+                            </div>
                         </SidebarMenuItem>
                     </SidebarMenu>
+                    <div className="border-t border-white/20 mx-4"></div>
                 </SidebarHeader>
-                <SidebarContent>
+                <SidebarContent className="bg-[var(--primary-dark)]">
                     {/* SUPERADMIN Navigation */}
                     {user.globalRole === "SUPERADMIN" && (
                         <SidebarGroup>
@@ -240,6 +236,10 @@ export function AppSidebar() {
                                             <SidebarMenuButton
                                                 asChild
                                                 isActive={isActive(item.url)}
+                                                className={`text-base ${isActive(item.url)
+                                                    ? "!bg-[#f0b214] !text-white [&[data-active=true]]:!bg-[#f0b214] [&[data-active=true]]:!text-white hover:!bg-[#f0b214] hover:!text-white [&>a>svg]:text-white [&>a>span]:text-white"
+                                                    : "text-white hover:bg-white/10 hover:text-white [&>a>svg]:text-white [&>a>span]:text-white"
+                                                    }`}
                                             >
                                                 <Link href={item.url}>
                                                     <item.icon />
@@ -263,6 +263,10 @@ export function AppSidebar() {
                                             <SidebarMenuButton
                                                 asChild
                                                 isActive={isActive(item.url)}
+                                                className={`text-base ${isActive(item.url)
+                                                    ? "!bg-[#f0b214] !text-white [&[data-active=true]]:!bg-[#f0b214] [&[data-active=true]]:!text-white hover:!bg-[#f0b214] hover:!text-white [&>a>svg]:text-white [&>a>span]:text-white"
+                                                    : "text-white hover:bg-white/10 hover:text-white [&>a>svg]:text-white [&>a>span]:text-white"
+                                                    }`}
                                             >
                                                 <Link href={item.url}>
                                                     <item.icon />
@@ -286,6 +290,10 @@ export function AppSidebar() {
                                             <SidebarMenuButton
                                                 asChild
                                                 isActive={isActive(item.url)}
+                                                className={`text-base ${isActive(item.url)
+                                                    ? "!bg-[#f0b214] !text-white [&[data-active=true]]:!bg-[#f0b214] [&[data-active=true]]:!text-white hover:!bg-[#f0b214] hover:!text-white [&>a>svg]:text-white [&>a>span]:text-white"
+                                                    : "text-white hover:bg-white/10 hover:text-white [&>a>svg]:text-white [&>a>span]:text-white"
+                                                    }`}
                                             >
                                                 <Link href={item.url}>
                                                     <item.icon />
@@ -304,16 +312,20 @@ export function AppSidebar() {
                         user.globalRole === "MEMBER" ||
                         user.globalRole === "SUPERADMIN") && (
                             <SidebarGroup>
-                                <SidebarGroupLabel>Organization</SidebarGroupLabel>
+                                <SidebarGroupLabel className="text-white/70">Organization</SidebarGroupLabel>
                                 <SidebarGroupContent>
                                     <SidebarMenu>
                                         <SidebarMenuItem>
                                             <SidebarMenuButton
                                                 asChild
                                                 isActive={isActive("/dashboard/organization-profile")}
+                                                className={`text-base ${isActive("/dashboard/organization-profile")
+                                                    ? "!bg-[#f0b214] !text-white [&[data-active=true]]:!bg-[#f0b214] [&[data-active=true]]:!text-white hover:!bg-[#f0b214] hover:!text-white [&>a>svg:not(.text-amber-500)]:text-white [&>a>span]:text-white"
+                                                    : "text-white hover:bg-white/10 hover:text-white [&>a>svg:not(.text-amber-500)]:text-white [&>a>span]:text-white"
+                                                    }`}
                                             >
                                                 <Link href="/dashboard/organization-profile" className="flex items-center gap-2 w-full">
-                                                    <Lightbulb className="h-4 w-4" />
+                                                    <LightBulbIcon className="h-4 w-4" />
                                                     <span className="flex-1">Knowledge Base</span>
                                                     {onboardingStatus && onboardingStatus.needsOnboarding && (
                                                         <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
@@ -331,7 +343,7 @@ export function AppSidebar() {
                         user.globalRole === "ADMIN" ||
                         user.globalRole === "MEMBER") && (
                             <SidebarGroup>
-                                <SidebarGroupLabel>Tools</SidebarGroupLabel>
+                                <SidebarGroupLabel className="text-white/70">Tools</SidebarGroupLabel>
                                 <SidebarGroupContent>
                                     <SidebarMenu>
                                         {toolsItems.map((item) => (
@@ -339,6 +351,10 @@ export function AppSidebar() {
                                                 <SidebarMenuButton
                                                     asChild
                                                     isActive={isActive(item.url)}
+                                                    className={`text-base ${isActive(item.url)
+                                                        ? "bg-[var(--accent-strong)] !text-white hover:!text-white [&>a>svg]:text-white [&>a>span]:text-white"
+                                                        : "text-white hover:bg-white/10 hover:text-white [&>a>svg]:text-white [&>a>span]:text-white"
+                                                        }`}
                                                 >
                                                     <Link href={item.url}>
                                                         <item.icon />
@@ -352,16 +368,16 @@ export function AppSidebar() {
                             </SidebarGroup>
                         )}
                 </SidebarContent>
-                <SidebarFooter>
+                <SidebarFooter className="bg-[var(--primary-dark)]">
                     <SidebarMenu>
                         <SidebarMenuItem>
-                            <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
-                                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                                    <User className="size-4" />
+                            <SidebarMenuButton size="lg" className="text-white hover:bg-white/10 hover:text-white data-[state=open]:!bg-white/10 data-[state=open]:!text-white">
+                                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-white/10 text-white">
+                                    <UserIcon className="size-4" />
                                 </div>
                                 <div className="grid flex-1 text-left text-sm leading-tight">
-                                    <span className="truncate font-semibold">{user.firstname} {user.lastname}</span>
-                                    <span className="truncate text-xs">{user.email}</span>
+                                    <span className="truncate font-semibold text-white">{user.firstname} {user.lastname}</span>
+                                    <span className="truncate text-xs text-white/70">{user.email}</span>
                                 </div>
                             </SidebarMenuButton>
                             <DropdownMenu>

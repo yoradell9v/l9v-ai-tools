@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -121,11 +122,21 @@ export default function AuthForm({
     const buttonLabel = submitLabel || (isSignup ? 'Sign up' : 'Sign in')
 
     return (
-        <div className="min-h-screen flex items-center justify-center px-4 transition-colors duration-150 bg-[var(--background)] text-[var(--text-primary)]">
+        <div className="min-h-screen flex flex-col items-center justify-center px-4 pt-12 pb-6 sm:pt-16 sm:pb-8 transition-colors duration-150 text-[var(--text-primary)]">
+            <div className="flex justify-center mb-8">
+                <Image
+                    src="/logo-light.png"
+                    alt="Level 9 Virtual"
+                    width={200}
+                    height={200}
+                    className="object-contain"
+                    priority
+                />
+            </div>
             <Card className="w-full max-w-md">
-                <CardHeader>
-                    <CardTitle className="text-3xl font-semibold">{heading}</CardTitle>
-                    <CardDescription>Please enter details</CardDescription>
+                <CardHeader className="pt-4 pb-2">
+                    <CardTitle className="text-4xl font-semibold text-center">{heading}</CardTitle>
+                    <CardDescription className="text-center text-md">Please enter details</CardDescription>
                     {errorMessage && (
                         <Alert variant="destructive" className="mt-4">
                             <AlertDescription>{errorMessage}</AlertDescription>
@@ -139,24 +150,24 @@ export default function AuthForm({
                             {isSignup && (
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="grid gap-2">
-                                        <Label htmlFor="firstname">First name</Label>
+                                        <Label htmlFor="firstname" className="text-base">First name</Label>
                                         <Input id="firstname" name="firstname" type="text" placeholder="John" value={values.firstname || ''} onChange={handleChange} autoComplete="firstname" />
                                     </div>
                                     <div className="grid gap-2">
-                                        <Label htmlFor="lastname">Last name</Label>
+                                        <Label htmlFor="lastname" className="text-base">Last name</Label>
                                         <Input id="lastname" name="lastname" type="text" placeholder="Doe" value={values.lastname || ''} onChange={handleChange} autoComplete="lastname" />
                                     </div>
                                 </div>
                             )}
 
                             <div className="grid gap-2">
-                                <Label htmlFor="email">Email</Label>
+                                <Label htmlFor="email" className="text-base">Email</Label>
                                 <Input id="email" name="email" type="email" placeholder="you@example.com" value={values.email} onChange={handleChange} autoComplete="email" required />
                             </div>
 
                             <div className="grid gap-2">
                                 <div className="flex items-center">
-                                    <Label htmlFor="password">Password</Label>
+                                    <Label htmlFor="password" className="text-base">Password</Label>
                                     {!isSignup && (
                                         <Link href="/forgot-password" className="ml-auto inline-block text-sm underline-offset-4 hover:underline transition-colors duration-150 text-[var(--text-muted)] hover:text-[var(--primary)] dark:hover:text-[var(--accent)]">
                                             Forgot password?
@@ -191,7 +202,7 @@ export default function AuthForm({
 
                             {isSignup && (
                                 <div className="grid gap-2">
-                                    <Label htmlFor="confirmPassword">Confirm password</Label>
+                                    <Label htmlFor="confirmPassword" className="text-base">Confirm password</Label>
                                     <div className="relative">
                                         <Input
                                             id="confirmPassword"
@@ -217,16 +228,17 @@ export default function AuthForm({
                             )}
                         </div>
                     </CardContent>
-                    <CardFooter className="pt-6">
+                    <CardFooter className="pt-6 pb-4">
                         <Button
                             type="submit"
                             disabled={isSubmitting || (isSignup && !passwordStrength.valid)}
-                            className="w-full"
+                            className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-base font-bold py-2 h-auto"
+                            size="lg"
                         >
                             <div className="flex items-center justify-center gap-2">
                                 {isSubmitting ? (
                                     <>
-                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                         </svg>

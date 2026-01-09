@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Poppins } from "next/font/google";
+import { Geist, Geist_Mono, Poppins, Figtree } from "next/font/google";
 import "@/styles/globals.css";
 import { UserProvider } from "@/context/UserContext";
 import { ClientProviders } from "@/components/forms/ClientProviders";
@@ -9,6 +9,12 @@ const poppins = Poppins({
   weight: ["400", "700"],
   subsets: ["latin"],
   variable: "--font-poppins",
+});
+
+const figtree = Figtree({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  variable: "--font-figtree",
 });
 
 export const metadata: Metadata = {
@@ -22,7 +28,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="light">
-      <body className={`${poppins.className} antialiased`}>
+      <body className={`${figtree.className} antialiased`}>
         <UserProvider>
           <ClientProviders>
             <NavigationLoader />

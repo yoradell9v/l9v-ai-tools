@@ -120,10 +120,10 @@ export default function SavedPage() {
                     <SidebarTrigger />
                 </div>
                 <div className="transition-all duration-300 ease-in-out min-h-screen">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <div className="max-w-7xl mx-auto py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
                         <div className="flex flex-col items-center justify-center py-16">
                             <Loader2 className="h-8 w-8 mb-3 animate-spin" />
-                            <p className="text-sm text-muted-foreground">Loading...</p>
+                            <p className="text-base text-muted-foreground">Loading...</p>
                         </div>
                     </div>
                 </div>
@@ -138,7 +138,7 @@ export default function SavedPage() {
                     <SidebarTrigger />
                 </div>
                 <div className="transition-all duration-300 ease-in-out min-h-screen">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <div className="max-w-7xl mx-auto py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
                         <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
                             <Alert variant="destructive" className="max-w-md">
                                 <AlertCircle className="h-4 w-4" />
@@ -167,9 +167,9 @@ export default function SavedPage() {
                     <SidebarTrigger />
                 </div>
                 <div className="transition-all duration-300 ease-in-out min-h-screen">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <div className="max-w-7xl mx-auto py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
                         {/* Breadcrumb */}
-                        <div className="flex items-center gap-2 mb-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2 mb-4 text-base text-muted-foreground">
                             <a
                                 href="/dashboard/jd-builder"
                                 className="hover:underline transition-colors text-amber-500"
@@ -187,7 +187,7 @@ export default function SavedPage() {
                             <h3 className="text-lg font-medium mb-3">
                                 No saved analyses
                             </h3>
-                            <p className="text-sm mb-4 max-w-sm text-muted-foreground">
+                            <p className="text-base mb-4 max-w-sm text-muted-foreground">
                                 Start by creating your first job description analysis. Your saved analyses will appear here.
                             </p>
                             <Button asChild>
@@ -213,7 +213,7 @@ export default function SavedPage() {
                     {/* Fixed Header */}
                     <div className="flex-shrink-0 pt-0">
                         {/* Breadcrumb */}
-                        <div className="flex items-center gap-2 mb-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2 mb-4 text-base text-muted-foreground">
                             <a
                                 href="/dashboard/jd-builder"
                                 className="hover:underline transition-colors text-amber-500"
@@ -230,7 +230,7 @@ export default function SavedPage() {
                                 <h1 className="text-2xl font-semibold mb-1">
                                     Saved Analyses
                                 </h1>
-                                <p className="text-sm text-muted-foreground">
+                                <p className="text-base text-muted-foreground">
                                     {savedItems.length} {savedItems.length === 1 ? "analysis" : "analyses"} from your organization
                                 </p>
                             </div>

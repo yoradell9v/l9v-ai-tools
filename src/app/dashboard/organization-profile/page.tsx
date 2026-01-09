@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Building2, Loader2, CheckCircle2, Users, Calendar, Edit, AlertCircle, Sparkles, Globe, Briefcase, Database, DollarSign, User, Lightbulb, Target, TrendingUp, FileText, Brain, Zap, Award, BarChart3, Sparkle, Info, HelpCircle } from "lucide-react";
+import { Building2, Loader2, Users, Calendar, AlertCircle, Globe, Briefcase, Database, DollarSign, User, Target, Brain, BarChart3, Info } from "lucide-react";
+import { LightBulbIcon, PencilIcon, DocumentTextIcon, BoltIcon, SparklesIcon, CheckCircleIcon, CheckBadgeIcon, ArrowTrendingUpIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import {
     Card,
@@ -496,10 +497,10 @@ export default function OrganizationProfilePage() {
                     <SidebarTrigger />
                 </div>
                 <div className="min-h-screen">
-                    <div className="p-6">
+                    <div className="py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
                         <Card className="border-destructive/30 bg-destructive/10">
                             <CardContent className="py-4">
-                                <p className="text-sm text-destructive">{error}</p>
+                                <p className="text-base text-destructive">{error}</p>
                             </CardContent>
                         </Card>
                     </div>
@@ -514,7 +515,7 @@ export default function OrganizationProfilePage() {
                 <SidebarTrigger />
             </div>
             <div className="min-h-screen">
-                <div className="p-6 space-y-6">
+                <div className="py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 space-y-6">
                     <div className="flex flex-col gap-4">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div>
@@ -522,34 +523,14 @@ export default function OrganizationProfilePage() {
 
                             </div>
                             {!isEditing && (
-                                <Button onClick={() => setIsEditing(true)}>
-                                    <Edit className="h-4 w-4 mr-2" />
+                                <Button onClick={() => setIsEditing(true)} size="lg" className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
+                                    <PencilIcon className="h-5 w-5 mr-2" />
                                     {profile ? "Edit Knowledge Base" : "Setup Knowledge Base"}
                                 </Button>
                             )}
                         </div>
 
-                        {/* Help Text Card */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <Info className="h-5 w-5 text-[color:var(--accent-strong)]" />
-                                    Living Knowledge Base
-                                </CardTitle>
-                                <CardDescription>
-                                    This is your initial knowledge base setup. It will automatically improve and learn from your usage across all tools
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-                                    <li>Job Descriptions you create will enhance your organizational context</li>
-                                    <li>SOPs you generate will refine your operational knowledge</li>
-                                    <li>Business Brain conversations will capture insights and patterns</li>
-                                    <li>All tools contribute back to make your knowledge base smarter over time</li>
-                                </ul>
-                                <p className="mt-4 text-sm font-medium text-foreground">Start with the essential fields below—you can always refine and expand later!</p>
-                            </CardContent>
-                        </Card>
+
                     </div>
 
                     {/* Overall Completion Score Card */}
@@ -561,7 +542,7 @@ export default function OrganizationProfilePage() {
                                         <CardTitle className="text-lg flex items-center gap-2">
                                             Overall Knowledge Base Score
                                             {completionAnalysis.overallScore >= 80 && (
-                                                <Sparkles className="h-4 w-4 text-[color:var(--accent-strong)] animate-pulse" />
+                                                <SparklesIcon className="h-4 w-4 text-[color:var(--accent-strong)] animate-pulse" />
                                             )}
                                         </CardTitle>
                                         <CardDescription>
@@ -573,7 +554,7 @@ export default function OrganizationProfilePage() {
                                             <div className="text-2xl font-bold">
                                                 {completionAnalysis.overallScore}%
                                             </div>
-                                            <Badge variant="outline" className="text-xs mt-1">
+                                            <Badge variant="outline" className="text-xs mt-1 border-[var(--primary-dark)] text-[var(--primary-dark)]">
                                                 Completion
                                             </Badge>
                                         </div>
@@ -595,17 +576,17 @@ export default function OrganizationProfilePage() {
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="space-y-2">
-                                    <div className="flex items-center justify-between text-sm">
+                                    <div className="flex items-center justify-between text-base">
                                         <span className="text-muted-foreground">Completion</span>
                                         <span className="font-medium">{completionAnalysis.overallScore}%</span>
                                     </div>
                                     <Progress
                                         value={completionAnalysis.overallScore}
-                                        className="h-2"
+                                        className="h-2 [&>div]:bg-[var(--primary-dark)]"
                                     />
                                     {qualityAnalysis && (
                                         <>
-                                            <div className="flex items-center justify-between text-sm">
+                                            <div className="flex items-center justify-between text-base">
                                                 <span className="text-muted-foreground">Quality</span>
                                                 <span className="font-medium">{qualityAnalysis.overallScore}%</span>
                                             </div>
@@ -621,7 +602,7 @@ export default function OrganizationProfilePage() {
                                     <div className="space-y-2 p-4 rounded-lg border">
                                         <div className="flex items-center justify-between">
                                             <div>
-                                                <p className="text-sm font-medium">Quality Analysis</p>
+                                                <p className="text-base font-medium">Quality Analysis</p>
                                                 <p className="text-xs text-muted-foreground">
                                                     Get AI-powered quality scores for your knowledge base
                                                 </p>
@@ -629,17 +610,17 @@ export default function OrganizationProfilePage() {
                                             <Button
                                                 onClick={analyzeQuality}
                                                 disabled={isAnalyzingQuality}
-                                                size="sm"
-                                                variant="outline"
+                                                size="lg"
+                                                className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
                                             >
                                                 {isAnalyzingQuality ? (
                                                     <>
-                                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                                                         Analyzing...
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <Sparkle className="h-4 w-4 mr-2" />
+                                                        <SparklesIcon className="h-5 w-5 mr-2" />
                                                         Analyze Quality
                                                     </>
                                                 )}
@@ -652,7 +633,7 @@ export default function OrganizationProfilePage() {
                                     <div className="space-y-2 p-4 rounded-lg border">
                                         <div className="flex items-center justify-between">
                                             <div>
-                                                <p className="text-sm font-medium">Last Analyzed</p>
+                                                <p className="text-base font-medium">Last Analyzed</p>
                                                 <p className="text-xs text-muted-foreground">
                                                     {formatRelativeTime(qualityAnalysis.analyzedAt)}
                                                 </p>
@@ -660,17 +641,17 @@ export default function OrganizationProfilePage() {
                                             <Button
                                                 onClick={analyzeQuality}
                                                 disabled={isAnalyzingQuality}
-                                                size="sm"
-                                                variant="outline"
+                                                size="lg"
+                                                className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
                                             >
                                                 {isAnalyzingQuality ? (
                                                     <>
-                                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                                                         Analyzing...
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <Sparkle className="h-4 w-4 mr-2" />
+                                                        <SparklesIcon className="h-5 w-5 mr-2" />
                                                         Re-analyze
                                                     </>
                                                 )}
@@ -711,7 +692,7 @@ export default function OrganizationProfilePage() {
                                 <div className="flex items-start justify-between">
                                     <div>
                                         <CardTitle className="text-lg flex items-center gap-2">
-                                            <Zap className="h-5 w-5" />
+                                            <BoltIcon className="h-5 w-5" />
                                             Tool Readiness
                                         </CardTitle>
                                         <CardDescription>
@@ -721,7 +702,7 @@ export default function OrganizationProfilePage() {
                                     <TooltipProvider>
                                         <Tooltip>
                                             <TooltipTrigger>
-                                                <HelpCircle className="h-4 w-4 text-muted-foreground mt-1" />
+                                                <InformationCircleIcon className="h-4 w-4 text-muted-foreground mt-1" />
                                             </TooltipTrigger>
                                             <TooltipContent className="max-w-sm">
                                                 <p className="text-xs mb-2"><strong>Basic Readiness:</strong> Based on field completion. Shows if you have the minimum required fields filled.</p>
@@ -737,11 +718,11 @@ export default function OrganizationProfilePage() {
                                     <div className="space-y-2 p-4 rounded-lg border">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
-                                                <FileText className="h-4 w-4" />
-                                                <span className="font-medium text-sm">Job Descriptions</span>
+                                                <DocumentTextIcon className="h-4 w-4" />
+                                                <span className="font-medium text-base">Job Descriptions</span>
                                             </div>
                                             {completionAnalysis.toolReadiness.jobDescriptionBuilder.ready && (
-                                                <CheckCircle2 className="h-4 w-4 text-[color:var(--accent-strong)]" />
+                                                <CheckCircleIcon className="h-4 w-4 text-[color:var(--accent-strong)]" />
                                             )}
                                         </div>
                                         <div className="space-y-2">
@@ -749,13 +730,13 @@ export default function OrganizationProfilePage() {
                                             <div className="space-y-1">
                                                 <div className="flex items-center justify-between">
                                                     <span className="text-xs text-muted-foreground">Basic Readiness</span>
-                                                    <span className={`text-sm font-bold ${getQualityColor(completionAnalysis.toolReadiness.jobDescriptionBuilder.quality)}`}>
+                                                    <span className="text-base font-bold text-[color:var(--text-primary)]">
                                                         {completionAnalysis.toolReadiness.jobDescriptionBuilder.score}%
                                                     </span>
                                                 </div>
                                                 <Progress
                                                     value={completionAnalysis.toolReadiness.jobDescriptionBuilder.score}
-                                                    className="h-2"
+                                                    className="h-2 [&>div]:bg-[var(--primary-dark)]"
                                                 />
                                                 <Badge
                                                     variant={getQualityBadgeVariant(completionAnalysis.toolReadiness.jobDescriptionBuilder.quality) as any}
@@ -776,7 +757,7 @@ export default function OrganizationProfilePage() {
                                                                 <TooltipProvider>
                                                                     <Tooltip>
                                                                         <TooltipTrigger>
-                                                                            <HelpCircle className="h-3 w-3" />
+                                                                            <InformationCircleIcon className="h-3 w-3" />
                                                                         </TooltipTrigger>
                                                                         <TooltipContent>
                                                                             <p className="text-xs">Combined completion + quality score</p>
@@ -784,7 +765,7 @@ export default function OrganizationProfilePage() {
                                                                     </Tooltip>
                                                                 </TooltipProvider>
                                                             </span>
-                                                            <span className={`text-sm font-bold ${getQualityColor(completionAnalysis.toolReadiness.jobDescriptionBuilder.qualityReadiness.quality)}`}>
+                                                            <span className="text-base font-bold text-[color:var(--text-primary)]">
                                                                 {completionAnalysis.toolReadiness.jobDescriptionBuilder.qualityReadiness.score}%
                                                             </span>
                                                         </div>
@@ -826,11 +807,11 @@ export default function OrganizationProfilePage() {
                                     <div className="space-y-2 p-4 rounded-lg border">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
-                                                <FileText className="h-4 w-4" />
-                                                <span className="font-medium text-sm">SOP Generator</span>
+                                                <DocumentTextIcon className="h-4 w-4" />
+                                                <span className="font-medium text-base">SOP Generator</span>
                                             </div>
                                             {completionAnalysis.toolReadiness.sopGenerator.ready && (
-                                                <CheckCircle2 className="h-4 w-4 text-[color:var(--accent-strong)]" />
+                                                <CheckCircleIcon className="h-4 w-4 text-[color:var(--accent-strong)]" />
                                             )}
                                         </div>
                                         <div className="space-y-2">
@@ -838,13 +819,13 @@ export default function OrganizationProfilePage() {
                                             <div className="space-y-1">
                                                 <div className="flex items-center justify-between">
                                                     <span className="text-xs text-muted-foreground">Basic Readiness</span>
-                                                    <span className={`text-sm font-bold ${getQualityColor(completionAnalysis.toolReadiness.sopGenerator.quality)}`}>
+                                                    <span className="text-base font-bold text-[color:var(--text-primary)]">
                                                         {completionAnalysis.toolReadiness.sopGenerator.score}%
                                                     </span>
                                                 </div>
                                                 <Progress
                                                     value={completionAnalysis.toolReadiness.sopGenerator.score}
-                                                    className="h-2"
+                                                    className="h-2 [&>div]:bg-[var(--primary-dark)]"
                                                 />
                                                 <Badge
                                                     variant={getQualityBadgeVariant(completionAnalysis.toolReadiness.sopGenerator.quality) as any}
@@ -865,7 +846,7 @@ export default function OrganizationProfilePage() {
                                                                 <TooltipProvider>
                                                                     <Tooltip>
                                                                         <TooltipTrigger>
-                                                                            <HelpCircle className="h-3 w-3" />
+                                                                            <InformationCircleIcon className="h-3 w-3" />
                                                                         </TooltipTrigger>
                                                                         <TooltipContent>
                                                                             <p className="text-xs">Combined completion + quality score</p>
@@ -873,7 +854,7 @@ export default function OrganizationProfilePage() {
                                                                     </Tooltip>
                                                                 </TooltipProvider>
                                                             </span>
-                                                            <span className={`text-sm font-bold ${getQualityColor(completionAnalysis.toolReadiness.sopGenerator.qualityReadiness.quality)}`}>
+                                                            <span className="text-base font-bold text-[color:var(--text-primary)]">
                                                                 {completionAnalysis.toolReadiness.sopGenerator.qualityReadiness.score}%
                                                             </span>
                                                         </div>
@@ -916,10 +897,10 @@ export default function OrganizationProfilePage() {
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                 <Brain className="h-4 w-4" />
-                                                <span className="font-medium text-sm">Business Brain</span>
+                                                <span className="font-medium text-base">Business Brain</span>
                                             </div>
                                             {completionAnalysis.toolReadiness.businessBrain.ready && (
-                                                <CheckCircle2 className="h-4 w-4 text-[color:var(--accent-strong)]" />
+                                                <CheckCircleIcon className="h-4 w-4 text-[color:var(--accent-strong)]" />
                                             )}
                                         </div>
                                         <div className="space-y-2">
@@ -927,13 +908,13 @@ export default function OrganizationProfilePage() {
                                             <div className="space-y-1">
                                                 <div className="flex items-center justify-between">
                                                     <span className="text-xs text-muted-foreground">Basic Readiness</span>
-                                                    <span className={`text-sm font-bold ${getQualityColor(completionAnalysis.toolReadiness.businessBrain.quality)}`}>
+                                                    <span className="text-base font-bold text-[color:var(--text-primary)]">
                                                         {completionAnalysis.toolReadiness.businessBrain.score}%
                                                     </span>
                                                 </div>
                                                 <Progress
                                                     value={completionAnalysis.toolReadiness.businessBrain.score}
-                                                    className="h-2"
+                                                    className="h-2 [&>div]:bg-[var(--primary-dark)]"
                                                 />
                                                 <Badge
                                                     variant={getQualityBadgeVariant(completionAnalysis.toolReadiness.businessBrain.quality) as any}
@@ -954,7 +935,7 @@ export default function OrganizationProfilePage() {
                                                                 <TooltipProvider>
                                                                     <Tooltip>
                                                                         <TooltipTrigger>
-                                                                            <HelpCircle className="h-3 w-3" />
+                                                                            <InformationCircleIcon className="h-3 w-3" />
                                                                         </TooltipTrigger>
                                                                         <TooltipContent>
                                                                             <p className="text-xs">Combined completion + quality score</p>
@@ -962,7 +943,7 @@ export default function OrganizationProfilePage() {
                                                                     </Tooltip>
                                                                 </TooltipProvider>
                                                             </span>
-                                                            <span className={`text-sm font-bold ${getQualityColor(completionAnalysis.toolReadiness.businessBrain.qualityReadiness.quality)}`}>
+                                                            <span className="text-base font-bold text-[color:var(--text-primary)]">
                                                                 {completionAnalysis.toolReadiness.businessBrain.qualityReadiness.score}%
                                                             </span>
                                                         </div>
@@ -1009,7 +990,7 @@ export default function OrganizationProfilePage() {
                         <Card>
                             <CardHeader>
                                 <CardTitle className="text-lg flex items-center gap-2">
-                                    <TrendingUp className="h-5 w-5" />
+                                    <ArrowTrendingUpIcon className="h-5 w-5" />
                                     Recommendations
                                 </CardTitle>
                                 <CardDescription>
@@ -1021,12 +1002,12 @@ export default function OrganizationProfilePage() {
                                     {completionAnalysis.recommendations.map((rec, idx) => (
                                         <div key={idx} className="space-y-2 p-4 rounded-lg border">
                                             <div className="flex items-start gap-2">
-                                                <Award className={`h-4 w-4 mt-0.5 flex-shrink-0 ${rec.priority === 'high' ? 'text-red-500' :
+                                                <CheckBadgeIcon className={`h-4 w-4 mt-0.5 flex-shrink-0 ${rec.priority === 'high' ? 'text-red-500' :
                                                     rec.priority === 'medium' ? 'text-amber-500' :
                                                         'text-[color:var(--accent-strong)]'
                                                     }`} />
                                                 <div className="flex-1">
-                                                    <p className="text-sm font-medium">{rec.message}</p>
+                                                    <p className="text-base font-medium">{rec.message}</p>
                                                     {rec.benefit && (
                                                         <p className="text-xs text-muted-foreground mt-1">{rec.benefit}</p>
                                                     )}
@@ -1044,7 +1025,7 @@ export default function OrganizationProfilePage() {
                         <Card>
                             <CardHeader>
                                 <CardTitle className="text-lg flex items-center gap-2">
-                                    <Sparkle className="h-5 w-5" />
+                                    <SparklesIcon className="h-5 w-5" />
                                     Quality Improvement Recommendations
                                 </CardTitle>
                                 <CardDescription>
@@ -1056,17 +1037,17 @@ export default function OrganizationProfilePage() {
                                     {qualityAnalysis.topRecommendations.map((rec, idx) => (
                                         <div key={idx} className="space-y-2 p-4 rounded-lg border">
                                             <div className="flex items-start gap-2">
-                                                <Sparkle className={`h-4 w-4 mt-0.5 flex-shrink-0 ${rec.priority === 'high' ? 'text-red-500' :
+                                                <SparklesIcon className={`h-4 w-4 mt-0.5 flex-shrink-0 ${rec.priority === 'high' ? 'text-red-500' :
                                                     rec.priority === 'medium' ? 'text-amber-500' :
                                                         'text-[color:var(--accent-strong)]'
                                                     }`} />
                                                 <div className="flex-1">
-                                                    <p className="text-sm font-medium">{rec.message}</p>
+                                                    <p className="text-base font-medium">{rec.message}</p>
                                                     {rec.impact && (
                                                         <p className="text-xs text-muted-foreground mt-1">{rec.impact}</p>
                                                     )}
                                                     {rec.field && (
-                                                        <Badge variant="outline" className="text-xs mt-2">
+                                                        <Badge variant="outline" className="text-xs mt-2 border-[var(--primary-dark)] text-[var(--primary-dark)]">
                                                             {rec.field}
                                                         </Badge>
                                                     )}
@@ -1083,17 +1064,17 @@ export default function OrganizationProfilePage() {
                     {!profile && (
                         <Card className="text-center">
                             <CardContent className="py-12 space-y-4">
-                                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                                    <Lightbulb className="h-6 w-6 text-primary" />
+                                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--accent-strong)]/20">
+                                    <LightBulbIcon className="h-6 w-6 text-[color:var(--accent-strong)]" />
                                 </div>
                                 <div className="space-y-2">
                                     <h3 className="text-lg font-semibold">No Knowledge Base Setup Yet</h3>
-                                    <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                                    <p className="text-base text-muted-foreground max-w-sm mx-auto">
                                         Setup your organization's knowledge base to get started. This information will be used to pre-fill forms across the platform.
                                     </p>
                                 </div>
-                                <Button onClick={() => setIsEditing(true)} className="inline-flex items-center gap-2">
-                                    <Edit className="h-4 w-4" />
+                                <Button onClick={() => setIsEditing(true)} size="lg" className="inline-flex items-center gap-2 bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
+                                    <PencilIcon className="h-5 w-5" />
                                     Setup Knowledge Base
                                 </Button>
                             </CardContent>

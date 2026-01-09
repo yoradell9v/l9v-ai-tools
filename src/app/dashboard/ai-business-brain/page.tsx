@@ -383,7 +383,7 @@ export default function AIBusinessBrainPage() {
                             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                         />
                     </svg>
-                    <p className="text-sm text-[var(--text-secondary)]">Loading...</p>
+                    <p className="text-base text-[var(--text-secondary)]">Loading...</p>
                 </div>
             </div>
         );
@@ -395,7 +395,7 @@ export default function AIBusinessBrainPage() {
                 <div className="flex items-center gap-2 p-4 border-b">
                     <SidebarTrigger />
                 </div>
-                <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] p-6">
+                <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
                     <div className="max-w-2xl w-full space-y-6">
                         <div className="text-center space-y-4">
                             <div className="w-16 h-16 rounded-lg bg-[var(--accent)]/20 flex items-center justify-center mx-auto">
@@ -404,7 +404,7 @@ export default function AIBusinessBrainPage() {
                             <h1 className="text-2xl font-semibold text-[var(--text-primary)]">
                                 Setup Your AI Business Brain
                             </h1>
-                            <p className="text-sm text-[var(--text-secondary)] max-w-md mx-auto">
+                            <p className="text-base text-[var(--text-secondary)] max-w-md mx-auto">
                                 Complete your organization knowledge base to unlock the AI Business Brain.
                                 This will power all your AI tools and conversations.
                             </p>
@@ -423,7 +423,7 @@ export default function AIBusinessBrainPage() {
                                         <div className="flex items-start gap-3">
                                             <Lightbulb className="h-5 w-5 text-[color:var(--accent-strong)] mt-0.5 flex-shrink-0" />
                                             <div className="flex-1">
-                                                <p className="text-sm font-semibold text-[color:var(--text-primary)] mb-1">
+                                                <p className="text-base font-semibold text-[color:var(--text-primary)] mb-1">
                                                     Your Knowledge Base powers everything
                                                 </p>
                                                 <p className="text-xs text-[color:var(--text-secondary)] leading-relaxed">
@@ -434,8 +434,8 @@ export default function AIBusinessBrainPage() {
                                     </div>
 
                                     <div className="bg-muted/50 p-4 rounded-lg space-y-3 border border-[color:var(--border-color)]">
-                                        <p className="text-sm font-semibold text-[color:var(--text-primary)]">Why complete your Knowledge Base?</p>
-                                        <ul className="text-sm text-[color:var(--text-secondary)] space-y-2 list-none">
+                                        <p className="text-base font-semibold text-[color:var(--text-primary)]">Why complete your Knowledge Base?</p>
+                                        <ul className="text-base text-[color:var(--text-secondary)] space-y-2 list-none">
                                             <li className="flex items-start gap-2">
                                                 <span className="text-[color:var(--accent-strong)] mt-0.5">✓</span>
                                                 <span><strong>Auto-fill forms</strong> across all tools—save hours of repetitive data entry</span>
@@ -499,7 +499,7 @@ export default function AIBusinessBrainPage() {
                                 AI Business Brain
                             </h1>
                             {knowledgeBase.businessName && (
-                                <p className="text-sm text-[var(--text-secondary)]">
+                                <p className="text-base text-[var(--text-secondary)]">
                                     {knowledgeBase.businessName}
                                 </p>
                             )}
@@ -537,7 +537,7 @@ export default function AIBusinessBrainPage() {
                                     <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
                                         {getCurrentGreeting()}
                                     </h3>
-                                    <p className="text-sm text-[var(--text-secondary)] mb-6 max-w-md">
+                                    <p className="text-base text-[var(--text-secondary)] mb-6 max-w-md">
                                         Ask me anything about your business, or use a slash command to get started.
                                     </p>
                                     <div className="grid grid-cols-2 gap-2 max-w-md">
@@ -582,7 +582,7 @@ export default function AIBusinessBrainPage() {
                                                 }}
                                             >
                                                 <div
-                                                    className={`prose prose-xs max-w-none break-words text-sm ${message.role === "user" ? "prose-invert" : ""}`}
+                                                    className={`prose prose-xs max-w-none break-words text-base ${message.role === "user" ? "prose-invert" : ""}`}
                                                     style={{
                                                         wordWrap: 'break-word',
                                                         overflowWrap: 'break-word',
@@ -594,7 +594,7 @@ export default function AIBusinessBrainPage() {
                                                         components={{
                                                             p: ({ node, ...props }) => (
                                                                 <p
-                                                                    className="mb-2 leading-relaxed last:mb-0 text-sm"
+                                                                    className="mb-2 leading-relaxed last:mb-0 text-base"
                                                                     style={{
                                                                         wordWrap: 'break-word',
                                                                         overflowWrap: 'break-word',
@@ -624,7 +624,7 @@ export default function AIBusinessBrainPage() {
                                                             ),
                                                             h3: ({ node, ...props }: any) => (
                                                                 <h3
-                                                                    className="text-sm font-semibold mb-2 mt-3 first:mt-0"
+                                                                    className="text-base font-semibold mb-2 mt-3 first:mt-0"
                                                                     style={{
                                                                         wordWrap: 'break-word',
                                                                         overflowWrap: 'break-word',
@@ -634,7 +634,7 @@ export default function AIBusinessBrainPage() {
                                                             ),
                                                             strong: ({ node, ...props }) => (
                                                                 <strong
-                                                                    className="font-semibold text-sm"
+                                                                    className="font-semibold text-base"
                                                                     style={{
                                                                         wordWrap: 'break-word',
                                                                         overflowWrap: 'break-word',
@@ -644,7 +644,7 @@ export default function AIBusinessBrainPage() {
                                                             ),
                                                             ul: ({ node, ...props }: any) => (
                                                                 <ul
-                                                                    className="mb-2 ml-4 list-disc space-y-0.5 last:mb-0 text-sm"
+                                                                    className="mb-2 ml-4 list-disc space-y-0.5 last:mb-0 text-base"
                                                                     style={{
                                                                         wordWrap: 'break-word',
                                                                         overflowWrap: 'break-word',
@@ -654,7 +654,7 @@ export default function AIBusinessBrainPage() {
                                                             ),
                                                             ol: ({ node, ...props }: any) => (
                                                                 <ol
-                                                                    className="mb-2 ml-4 list-decimal space-y-0.5 last:mb-0 text-sm"
+                                                                    className="mb-2 ml-4 list-decimal space-y-0.5 last:mb-0 text-base"
                                                                     style={{
                                                                         wordWrap: 'break-word',
                                                                         overflowWrap: 'break-word',
@@ -664,7 +664,7 @@ export default function AIBusinessBrainPage() {
                                                             ),
                                                             li: ({ node, ...props }) => (
                                                                 <li
-                                                                    className="leading-relaxed text-sm"
+                                                                    className="leading-relaxed text-base"
                                                                     style={{
                                                                         wordWrap: 'break-word',
                                                                         overflowWrap: 'break-word',
@@ -674,7 +674,7 @@ export default function AIBusinessBrainPage() {
                                                             ),
                                                             blockquote: ({ node, ...props }: any) => (
                                                                 <blockquote
-                                                                    className="border-l-4 border-muted pl-4 italic my-2 text-sm"
+                                                                    className="border-l-4 border-muted pl-4 italic my-2 text-base"
                                                                     style={{
                                                                         wordWrap: 'break-word',
                                                                         overflowWrap: 'break-word',
@@ -758,7 +758,7 @@ export default function AIBusinessBrainPage() {
                                                 placeholder="Search commands..."
                                                 value={slashCommandFilter}
                                                 onChange={(e) => setSlashCommandFilter(e.target.value)}
-                                                className="text-sm"
+                                                className="text-base"
                                                 autoFocus
                                             />
                                         </div>
@@ -779,7 +779,7 @@ export default function AIBusinessBrainPage() {
                                                         className="text-[var(--primary)] flex-shrink-0"
                                                     />
                                                     <div className="flex-1 min-w-0 text-left">
-                                                        <div className="text-sm font-medium text-[var(--text-primary)]">
+                                                        <div className="text-base font-medium text-[var(--text-primary)]">
                                                             {cmd.command}
                                                         </div>
                                                         <div className="text-xs text-[var(--text-secondary)]">
@@ -836,7 +836,7 @@ export default function AIBusinessBrainPage() {
             >
                 <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)]">
                     <div className="space-y-0.5">
-                        <p className="text-sm font-semibold text-[var(--text-primary)]">Conversation History</p>
+                        <p className="text-base font-semibold text-[var(--text-primary)]">Conversation History</p>
 
                     </div>
                     <Button
@@ -852,13 +852,13 @@ export default function AIBusinessBrainPage() {
 
                 <div className="flex-1 overflow-y-auto">
                     {conversationsLoading && (
-                        <div className="px-4 py-3 text-sm text-[var(--text-secondary)]">Loading...</div>
+                        <div className="px-4 py-3 text-base text-[var(--text-secondary)]">Loading...</div>
                     )}
                     {conversationsError && (
-                        <div className="px-4 py-3 text-sm text-red-500">{conversationsError}</div>
+                        <div className="px-4 py-3 text-base text-red-500">{conversationsError}</div>
                     )}
                     {!conversationsLoading && !conversationsError && conversations.length === 0 && (
-                        <div className="px-4 py-6 text-sm text-[var(--text-secondary)]">
+                        <div className="px-4 py-6 text-base text-[var(--text-secondary)]">
                             No conversations yet. Start a new one to see it here.
                         </div>
                     )}
@@ -873,7 +873,7 @@ export default function AIBusinessBrainPage() {
                             >
                                 <div className="flex items-center justify-between">
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                                        <p className="text-base font-medium text-[var(--text-primary)] truncate">
                                             {conv.title || "Untitled conversation"}
                                         </p>
                                         <p className="text-xs text-[var(--text-secondary)]">

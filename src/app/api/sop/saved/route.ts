@@ -80,6 +80,10 @@ export async function GET(request: Request) {
     // Get query parameter to include all versions (for version selector)
     const includeAllVersions = searchParams.get("includeAllVersions") === "true";
     
+    // Get query parameters for grouping and sorting
+    const groupBySOP = searchParams.get("groupBySOP") === "true";
+    const sortBy = searchParams.get("sortBy") || "recent"; // "recent" or "oldest"
+    
     // Build where clause
     const where: any = {
       userOrganizationId: {
@@ -112,7 +116,8 @@ export async function GET(request: Request) {
       },
     };
     
-    if (hasVersionFields && !includeAllVersions) {
+    // When grouping, we need all versions to group them properly
+    if (hasVersionFields && !includeAllVersions && !groupBySOP) {
       whereClause.isCurrentVersion = true; // Only show latest versions by default
     }
 
@@ -149,21 +154,36 @@ export async function GET(request: Request) {
       baseSelect.versionNumber = true;
       baseSelect.rootSOPId = true;
       baseSelect.isCurrentVersion = true;
+      baseSelect.versionCreatedAt = true;
     }
 
     // Fetch saved SOPs - wrap in try-catch as fallback
     let sops: any[];
     let total: number;
     
+    // Determine orderBy based on sortBy parameter
+    let orderBy: any = { createdAt: "desc" };
+    if (hasVersionFields && groupBySOP && sortBy === "oldest") {
+      // When grouping, we'll sort groups after grouping
+      orderBy = { createdAt: "asc" };
+    } else if (hasVersionFields && baseSelect.versionCreatedAt) {
+      // Use versionCreatedAt if available for more accurate sorting
+      orderBy = sortBy === "oldest" 
+        ? { versionCreatedAt: "asc" }
+        : { versionCreatedAt: "desc" };
+    } else {
+      orderBy = sortBy === "oldest"
+        ? { createdAt: "asc" }
+        : { createdAt: "desc" };
+    }
+    
     try {
       [sops, total] = await Promise.all([
         prisma.sOP.findMany({
           where: whereClause,
-          skip,
-          take: limit,
-          orderBy: {
-            createdAt: "desc",
-          },
+          skip: groupBySOP ? 0 : skip, // Don't skip when grouping (we'll paginate groups)
+          take: groupBySOP ? 10000 : limit, // Fetch all when grouping (we'll paginate after grouping)
+          orderBy,
           select: baseSelect,
         }),
         prisma.sOP.count({ where: whereClause }),
@@ -207,8 +227,94 @@ export async function GET(request: Request) {
           versionNumber: sop.versionNumber ?? 1,
           rootSOPId: sop.rootSOPId ?? sop.id,
           isCurrentVersion: sop.isCurrentVersion ?? true,
+          versionCreatedAt: sop.versionCreatedAt ?? sop.createdAt,
         }));
 
+    // Group SOPs by rootSOPId if requested
+    if (groupBySOP) {
+      // Group by rootSOPId (or id if rootSOPId is null, meaning it's the root)
+      const groupsMap = new Map<string, {
+        rootSOPId: string;
+        versions: any[];
+        mostRecentVersionDate: Date;
+        oldestVersionDate: Date;
+      }>();
+
+      for (const sop of sopsWithVersions) {
+        const groupKey = sop.rootSOPId || sop.id;
+        const versionDate = sop.versionCreatedAt 
+          ? new Date(sop.versionCreatedAt) 
+          : new Date(sop.createdAt);
+
+        if (!groupsMap.has(groupKey)) {
+          groupsMap.set(groupKey, {
+            rootSOPId: groupKey,
+            versions: [],
+            mostRecentVersionDate: versionDate,
+            oldestVersionDate: versionDate,
+          });
+        }
+
+        const group = groupsMap.get(groupKey)!;
+        group.versions.push(sop);
+        
+        // Update date ranges
+        if (versionDate > group.mostRecentVersionDate) {
+          group.mostRecentVersionDate = versionDate;
+        }
+        if (versionDate < group.oldestVersionDate) {
+          group.oldestVersionDate = versionDate;
+        }
+      }
+
+      // Convert map to array and process groups
+      let groups = Array.from(groupsMap.values()).map((group) => {
+        // Sort versions within group (newest first)
+        group.versions.sort((a, b) => {
+          const dateA = a.versionCreatedAt ? new Date(a.versionCreatedAt) : new Date(a.createdAt);
+          const dateB = b.versionCreatedAt ? new Date(b.versionCreatedAt) : new Date(b.createdAt);
+          return dateB.getTime() - dateA.getTime();
+        });
+
+        // Find current version
+        const currentVersion = group.versions.find((v: any) => v.isCurrentVersion) || group.versions[0];
+
+        return {
+          rootSOPId: group.rootSOPId,
+          title: currentVersion.title,
+          currentVersion,
+          versions: group.versions,
+          mostRecentVersionDate: group.mostRecentVersionDate.toISOString(),
+          oldestVersionDate: group.oldestVersionDate.toISOString(),
+          versionCount: group.versions.length,
+        };
+      });
+
+      // Sort groups based on sortBy parameter
+      groups.sort((a, b) => {
+        const dateA = new Date(sortBy === "recent" ? a.mostRecentVersionDate : a.oldestVersionDate);
+        const dateB = new Date(sortBy === "recent" ? b.mostRecentVersionDate : b.oldestVersionDate);
+        return sortBy === "recent" 
+          ? dateB.getTime() - dateA.getTime()
+          : dateA.getTime() - dateB.getTime();
+      });
+
+      // Paginate groups
+      const totalGroups = groups.length;
+      const paginatedGroups = groups.slice(skip, skip + limit);
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          groups: paginatedGroups,
+          total: totalGroups,
+          page,
+          limit,
+        },
+      });
+    }
+
+    // Return individual SOPs (non-grouped)
     return NextResponse.json({
       success: true,
       data: {

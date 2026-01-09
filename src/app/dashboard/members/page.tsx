@@ -336,7 +336,7 @@ export default function TenantMembers() {
         if (activeMembers.length === 0) {
             return (
                 <Card>
-                    <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                    <CardContent className="py-10 text-center text-base text-muted-foreground">
                         No active members yet.
                     </CardContent>
                 </Card>
@@ -421,7 +421,7 @@ export default function TenantMembers() {
         if (deactivatedMembers.length === 0) {
             return (
                 <Card>
-                    <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                    <CardContent className="py-10 text-center text-base text-muted-foreground">
                         No deactivated members.
                     </CardContent>
                 </Card>
@@ -508,7 +508,7 @@ export default function TenantMembers() {
         if (invites.length === 0) {
             return (
                 <Card>
-                    <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                    <CardContent className="py-10 text-center text-base text-muted-foreground">
                         No pending invites.
                     </CardContent>
                 </Card>
@@ -592,13 +592,13 @@ export default function TenantMembers() {
             <div className="flex items-center gap-2 p-4 border-b">
                 <SidebarTrigger />
             </div>
-            <div className="min-h-screen p-6 space-y-6">
+            <div className="min-h-screen py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 space-y-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="space-y-1">
                         <h1 className="text-2xl font-semibold">
                             {selectedOrganization ? selectedOrganization.organization.name : "Tenant Members"}
                         </h1>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-base text-muted-foreground">
                             Manage members of your organization
                         </p>
                     </div>
@@ -614,7 +614,7 @@ export default function TenantMembers() {
                     <Card className="border-destructive/30 bg-destructive/10">
                         <CardContent className="py-4 flex items-center gap-3">
                             <AlertCircle className="h-5 w-5 text-destructive" />
-                            <p className="text-sm text-destructive">{error}</p>
+                            <p className="text-base text-destructive">{error}</p>
                         </CardContent>
                     </Card>
                 )}
@@ -623,7 +623,7 @@ export default function TenantMembers() {
                     <>
                         {isLoading ? (
                             <Card>
-                                <CardContent className="py-12 flex items-center justify-center gap-3 text-sm text-muted-foreground">
+                                <CardContent className="py-12 flex items-center justify-center gap-3 text-base text-muted-foreground">
                                     <Loader2 className="h-5 w-5 animate-spin" />
                                     Loading...
                                 </CardContent>
@@ -636,7 +636,7 @@ export default function TenantMembers() {
                                     </div>
                                     <div>
                                         <p className="font-medium">No organizations found</p>
-                                        <p className="text-sm text-muted-foreground">
+                                        <p className="text-base text-muted-foreground">
                                             You need to be a tenant admin to view and manage members.
                                         </p>
                                     </div>
@@ -669,7 +669,7 @@ export default function TenantMembers() {
                     </DialogHeader>
                     <div className="space-y-4">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium flex items-center gap-1">
+                            <label className="text-base font-medium flex items-center gap-1">
                                 <Mail className="h-4 w-4 text-muted-foreground" />
                                 Email Address <span className="text-destructive">*</span>
                             </label>
@@ -681,7 +681,7 @@ export default function TenantMembers() {
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">
+                            <label className="text-base font-medium">
                                 Role <span className="text-destructive">*</span>
                             </label>
                             <Select value={inviteRole} onValueChange={(v: "ADMIN" | "MEMBER") => setInviteRole(v)}>

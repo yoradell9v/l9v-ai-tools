@@ -2,6 +2,7 @@
 import AuthForm from "@/components/forms/AuthForm";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export default function SignInPage() {
     const [loading, setLoading] = useState(false);
@@ -54,11 +55,23 @@ export default function SignInPage() {
     };
 
     return (
-        <AuthForm
-            mode="signin"
-            onSubmit={handleSubmit}
-            isSubmitting={loading}
-            errorMessage={error}
-        />
+        <div className="relative min-h-screen" style={{ backgroundColor: 'var(--primary-dark)' }}>
+            {/* Radial Gradient Overlay */}
+            <div 
+                className="absolute inset-0"
+                style={{
+                    background: 'radial-gradient(ellipse at bottom left, hsl(var(--primary) / 0.2) 0%, transparent 50%)'
+                }}
+            />
+            
+            <div className="relative">
+                <AuthForm
+                    mode="signin"
+                    onSubmit={handleSubmit}
+                    isSubmitting={loading}
+                    errorMessage={error}
+                />
+            </div>
+        </div>
     );
 }
