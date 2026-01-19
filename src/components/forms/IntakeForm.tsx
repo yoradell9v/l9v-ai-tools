@@ -4,7 +4,7 @@ import { Fragment, useState, useEffect, useRef } from "react";
 import { Listbox, Transition } from "@headlessui/react";
 import { CheckIcon, ChevronUpDownIcon } from "@heroicons/react/20/solid";
 import Modal from "@/components/ui/Modal";
-import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from "@/lib/rate-limit-client";
+import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from "@/lib/rate-limiting/rate-limit-client";
 
 interface IntakeFormData {
     companyName: string;

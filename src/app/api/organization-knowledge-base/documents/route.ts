@@ -191,13 +191,14 @@ export async function POST(request: Request) {
     });
 
     if (!knowledgeBase) {
-      // Create knowledge base if it doesn't exist
       knowledgeBase = await prisma.organizationKnowledgeBase.create({
         data: {
           organizationId: userOrg.organizationId,
           lastEditedBy: decoded.userId,
           contributors: [decoded.userId],
           enrichmentVersion: 1,
+          customerJourney: "",
+          toolStack: [], 
         },
       });
     }

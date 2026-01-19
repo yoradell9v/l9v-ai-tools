@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { ExtractedFileContent } from "@/lib/extract-content";
+import { ExtractedFileContent } from "@/lib/extraction/extract-content";
 import { OrganizationKnowledgeBase } from "@prisma/client";
 
 const openai = new OpenAI({
@@ -30,7 +30,7 @@ export interface FieldMappingResult {
 
 export async function mapInsightsToFields(
   extractedContent: ExtractedFileContent,
-  knowledgeBase: OrganizationKnowledgeBase
+  knowledgeBase: OrganizationKnowledgeBase,
 ): Promise<FieldMappingResult> {
   const kbState = {
     businessName: knowledgeBase.businessName,
@@ -122,7 +122,8 @@ Guidelines:
       messages: [
         {
           role: "system",
-          content: "You are an expert at analyzing business documents and mapping insights to knowledge base fields. Always respond with valid JSON.",
+          content:
+            "You are an expert at analyzing business documents and mapping insights to knowledge base fields. Always respond with valid JSON.",
         },
         { role: "user", content: prompt },
       ],
@@ -171,4 +172,3 @@ Guidelines:
     };
   }
 }
-
