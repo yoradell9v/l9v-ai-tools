@@ -92,8 +92,8 @@ export default function Navbar() {
     };
 
     const isActive = (path: string) => {
-        if (path === "/dashboard/jd-builder") {
-            // Active for both /dashboard/jd-builder and /dashboard/jd-builder/history
+        if (path === "/dashboard/role-builder") {
+            // Active for both /dashboard/role-builder and /dashboard/role-builder/history
             return pathname === path || pathname?.startsWith(path + "/");
         }
         return pathname === path;
@@ -189,23 +189,23 @@ export default function Navbar() {
                         )}
                         <div>
                             <Link
-                                href="/dashboard/jd-builder"
-                                className={`${navItemClasses("/dashboard/jd-builder")} ${isCollapsed ? "justify-center" : ""}`}
-                                title={isCollapsed ? "JD Builder" : undefined}
+                                href="/dashboard/role-builder"
+                                className={`${navItemClasses("/dashboard/role-builder")} ${isCollapsed ? "justify-center" : ""}`}
+                                title={isCollapsed ? "Role Builder" : undefined}
                             >
                                 <FileText size={iconSize} className="flex-shrink-0" />
-                                {!isCollapsed && <span>JD Builder</span>}
+                                {!isCollapsed && <span>Role Builder</span>}
 
                             </Link>
 
                         </div>
                         <Link
-                            href="/dashboard/sop-generator"
-                            className={`${navItemClasses("/dashboard/sop-generator")} ${isCollapsed ? "justify-center" : ""}`}
-                            title={isCollapsed ? "SOP Generator" : undefined}
+                            href="/dashboard/process-builder"
+                            className={`${navItemClasses("/dashboard/process-builder")} ${isCollapsed ? "justify-center" : ""}`}
+                            title={isCollapsed ? "Process Builder" : undefined}
                         >
                             <BookOpen size={iconSize} className="flex-shrink-0" />
-                            {!isCollapsed && <span>SOP Generator</span>}
+                            {!isCollapsed && <span>Process Builder</span>}
                         </Link>
                         <Link
                             href="/dashboard/ai-business-brain"

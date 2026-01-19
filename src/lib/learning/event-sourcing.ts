@@ -1,9 +1,4 @@
-/**
- * Event Sourcing Utilities
- * Provides audit trail and state reconstruction capabilities
- */
-
-import { prisma } from "./prisma";
+import { prisma } from "@/lib/core/prisma";
 
 export interface EventAuditLog {
   eventId: string;
@@ -20,14 +15,12 @@ export interface KBStateSnapshot {
   knowledgeBaseId: string;
   version: number;
   enrichmentVersion: number;
-  snapshot: any; // Full KB state
+  snapshot: any; 
   createdAt: Date;
-  eventIds: string[]; // Events that led to this state
+  eventIds: string[];
 }
 
-/**
- * Record an audit log entry for an event action
- */
+
 export async function recordEventAudit(
   knowledgeBaseId: string,
   auditLog: EventAuditLog
@@ -48,7 +41,6 @@ export async function recordEventAudit(
 
     extractedKnowledge.auditLog.push(auditLog);
 
-    // Keep only last 1000 audit log entries
     if (extractedKnowledge.auditLog.length > 1000) {
       extractedKnowledge.auditLog = extractedKnowledge.auditLog.slice(-1000);
     }
@@ -59,13 +51,9 @@ export async function recordEventAudit(
     });
   } catch (error) {
     console.error("Error recording event audit:", error);
-    // Don't throw - audit is non-critical
   }
 }
 
-/**
- * Create a snapshot of KB state at a specific enrichment version
- */
 export async function createKBStateSnapshot(
   knowledgeBaseId: string,
   eventIds: string[]
@@ -77,23 +65,17 @@ export async function createKBStateSnapshot(
 
     if (!kb) return null;
 
-    // Get extractedKnowledge and create a copy without circular references
     const extractedKnowledge = (kb.extractedKnowledge as Record<string, any>) || {};
-    
-    // Create a deep copy of extractedKnowledge for the snapshot, excluding snapshots and auditLog
-    // to prevent circular references
+
     const extractedKnowledgeForSnapshot = { ...extractedKnowledge };
     delete extractedKnowledgeForSnapshot.snapshots;
     delete extractedKnowledgeForSnapshot.auditLog;
-    
-    // Deep clone the remaining extractedKnowledge to ensure no shared references
-    // This prevents circular references when storing the snapshot
+
     let clonedExtractedKnowledge: any;
     try {
       clonedExtractedKnowledge = JSON.parse(JSON.stringify(extractedKnowledgeForSnapshot));
     } catch (cloneError) {
-      // If deep clone fails (e.g., due to non-serializable values), use shallow copy
-      // This is a fallback to prevent the entire snapshot from failing
+      
       console.warn('[KB Snapshot] Deep clone failed, using shallow copy:', cloneError);
       clonedExtractedKnowledge = { ...extractedKnowledgeForSnapshot };
     }
@@ -103,7 +85,6 @@ export async function createKBStateSnapshot(
       version: kb.version || 1,
       enrichmentVersion: kb.enrichmentVersion || 0,
       snapshot: {
-        // Core fields
         businessName: kb.businessName,
         industry: kb.industry,
         biggestBottleNeck: kb.biggestBottleNeck,

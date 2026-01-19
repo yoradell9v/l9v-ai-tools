@@ -33,7 +33,7 @@ export default function SavedPage() {
         // 1. We haven't fetched yet, or
         // 2. The user ID has changed
         if (!user?.id) return;
-        
+
         // Skip if we've already fetched for this user ID
         if (hasFetchedRef.current && lastUserIdRef.current === user.id) return;
 
@@ -171,10 +171,10 @@ export default function SavedPage() {
                         {/* Breadcrumb */}
                         <div className="flex items-center gap-2 mb-4 text-base text-muted-foreground">
                             <a
-                                href="/dashboard/jd-builder"
+                                href="/dashboard/role-builder"
                                 className="hover:underline transition-colors text-amber-500"
                             >
-                                JD Builder
+                                Role Builder
                             </a>
                             <span>•</span>
                             <span>Saved Analyses</span>
@@ -191,7 +191,7 @@ export default function SavedPage() {
                                 Start by creating your first job description analysis. Your saved analyses will appear here.
                             </p>
                             <Button asChild>
-                                <a href="/dashboard/jd-builder">
+                                <a href="/dashboard/role-builder">
                                     <Plus className="h-4 w-4" />
                                     <span>Start Analysis</span>
                                 </a>
@@ -215,10 +215,10 @@ export default function SavedPage() {
                         {/* Breadcrumb */}
                         <div className="flex items-center gap-2 mb-4 text-base text-muted-foreground">
                             <a
-                                href="/dashboard/jd-builder"
+                                href="/dashboard/role-builder"
                                 className="hover:underline transition-colors text-amber-500"
                             >
-                                JD Builder
+                                Role Builder
                             </a>
                             <span>•</span>
                             <span>Saved Analyses</span>
@@ -235,7 +235,7 @@ export default function SavedPage() {
                                 </p>
                             </div>
                             <Button asChild>
-                                <a href="/dashboard/jd-builder">
+                                <a href="/dashboard/role-builder">
                                     <Plus className="h-4 w-4" />
                                     <span>New Analysis</span>
                                 </a>

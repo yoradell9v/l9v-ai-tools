@@ -60,7 +60,7 @@ export default function Home() {
     },
     {
       icon: BookOpen,
-      title: "SOP Generator",
+      title: "Process Builder",
       description: "Automatically generate standard operating procedures for your business processes and workflows.",
       benefits: [
         "Document processes automatically",

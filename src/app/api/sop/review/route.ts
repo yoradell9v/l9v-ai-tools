@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { cookies } from "next/headers";
-import { verifyAccessToken } from "@/lib/auth";
-import { withRateLimit, addRateLimitHeaders } from "@/lib/rate-limit-utils";
+import { verifyAccessToken } from "@/lib/core/auth";
+import {
+  withRateLimit,
+  addRateLimitHeaders,
+} from "@/lib/rate-limiting/rate-limit-utils";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// System prompt for AI review
 const AI_REVIEW_SYSTEM_PROMPT = `You are an expert editor specializing in Standard Operating Procedures (SOPs). Your task is to review edited SOP content and provide specific, actionable suggestions for improvement.
 
 Focus on:
@@ -40,7 +42,6 @@ Only suggest changes that genuinely improve the document. If no improvements are
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Authenticate user
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("accessToken")?.value;
 
@@ -59,7 +60,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1.5. Check rate limit (before expensive operations)
     const rateLimit = await withRateLimit(request, "/api/sop/review", {
       requireAuth: true,
     });
@@ -68,18 +68,19 @@ export async function POST(request: NextRequest) {
       return rateLimit.response!;
     }
 
-    // 2. Parse request body
     const body = await request.json();
     const { sopContent } = body;
 
     if (!sopContent || typeof sopContent !== "string") {
       return NextResponse.json(
-        { success: false, message: "sopContent is required and must be a string." },
+        {
+          success: false,
+          message: "sopContent is required and must be a string.",
+        },
         { status: 400 }
       );
     }
 
-    // 3. Call OpenAI for AI review
     try {
       const reviewCompletion = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
           },
         ],
         response_format: { type: "json_object" },
-        temperature: 0.3, // Lower temperature for more consistent review
+        temperature: 0.3,
         max_tokens: 2000,
       });
 
@@ -99,7 +100,6 @@ export async function POST(request: NextRequest) {
         reviewCompletion.choices[0].message.content || '{"suggestions": []}'
       );
 
-      // Validate and clean suggestions
       const suggestions = Array.isArray(reviewResult.suggestions)
         ? reviewResult.suggestions.filter((s: any) => {
             return (
@@ -121,14 +121,15 @@ export async function POST(request: NextRequest) {
         reviewed: true,
       });
 
-      // Add rate limit headers to response
       return addRateLimitHeaders(response, rateLimit.rateLimitResult);
     } catch (openaiError: any) {
       console.error("[SOP Review] OpenAI API error:", openaiError);
       return NextResponse.json(
         {
           success: false,
-          message: `AI review failed: ${openaiError.message || "Unknown error"}`,
+          message: `AI review failed: ${
+            openaiError.message || "Unknown error"
+          }`,
         },
         { status: 500 }
       );
@@ -144,4 +145,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

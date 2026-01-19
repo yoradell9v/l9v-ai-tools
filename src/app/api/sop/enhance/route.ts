@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { verifyAccessToken } from "@/lib/auth";
-import { withRateLimit, addRateLimitHeaders } from "@/lib/rate-limit-utils";
+import { verifyAccessToken } from "@/lib/core/auth";
+import {
+  withRateLimit,
+  addRateLimitHeaders,
+} from "@/lib/rate-limiting/rate-limit-utils";
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Authenticate user
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("accessToken")?.value;
 
@@ -24,7 +26,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check rate limit (before expensive operations)
     const rateLimit = await withRateLimit(request, "/api/sop/enhance", {
       requireAuth: true,
     });
@@ -33,7 +34,6 @@ export async function POST(request: NextRequest) {
       return rateLimit.response!;
     }
 
-    // This endpoint is not yet implemented
     const response = NextResponse.json(
       {
         success: false,
@@ -42,7 +42,6 @@ export async function POST(request: NextRequest) {
       { status: 501 }
     );
 
-    // Add rate limit headers to response
     return addRateLimitHeaders(response, rateLimit.rateLimitResult);
   } catch (error: any) {
     console.error("[SOP Enhance] Error:", error);
@@ -55,4 +54,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

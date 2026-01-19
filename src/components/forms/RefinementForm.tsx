@@ -18,7 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from "@/lib/rate-limit-client";
+import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from "@/lib/rate-limiting/rate-limit-client";
 import { toast } from "sonner";
 
 interface RefinementFormProps {

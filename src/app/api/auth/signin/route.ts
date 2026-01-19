@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { compare } from "bcrypt";
-import { prisma } from "../../../../lib/prisma";
+import { prisma } from "@/lib/core/prisma";
 import crypto from "crypto";
 
 export async function POST(request: Request) {
@@ -136,7 +136,7 @@ export async function POST(request: Request) {
 
     try {
       const { generateAccessToken, generateRefreshToken } = await import(
-        "@/lib/auth"
+        "@/lib/core/auth"
       );
 
       if (!generateAccessToken || !generateRefreshToken) {

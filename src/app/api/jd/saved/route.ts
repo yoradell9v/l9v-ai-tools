@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
-import { verifyAccessToken } from "@/lib/auth";
+import { prisma } from "@/lib/core/prisma";
+import { verifyAccessToken } from "@/lib/core/auth";
 
 export async function GET(request: Request) {
   try {
-    // Get user from session
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("accessToken")?.value;
 
@@ -24,14 +23,13 @@ export async function GET(request: Request) {
       );
     }
 
-    // Get user's organizations
     const userOrganizations = await prisma.userOrganization.findMany({
       where: {
         userId: decoded.userId,
         organization: {
-          deactivatedAt: null, // Only active organizations
+          deactivatedAt: null,
         },
-        deactivatedAt: null, // Only active user-organization relationships
+        deactivatedAt: null,
       },
       select: {
         id: true,
@@ -50,19 +48,17 @@ export async function GET(request: Request) {
       });
     }
 
-    // Get all organization IDs the user belongs to
     const organizationIds = userOrganizations.map((uo) => uo.organizationId);
 
-    // Get ALL userOrganization records for those organizations (all members)
     const allUserOrganizations = await prisma.userOrganization.findMany({
       where: {
         organizationId: {
           in: organizationIds,
         },
         organization: {
-          deactivatedAt: null, // Only active organizations
+          deactivatedAt: null,
         },
-        deactivatedAt: null, // Only active user-organization relationships
+        deactivatedAt: null,
       },
       select: {
         id: true,
@@ -71,14 +67,12 @@ export async function GET(request: Request) {
 
     const userOrganizationIds = allUserOrganizations.map((uo) => uo.id);
 
-    // Get query parameters for pagination and filtering
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "50", 10);
     const finalized = searchParams.get("finalized");
     const skip = (page - 1) * limit;
 
-    // Build where clause
     const where: any = {
       userOrganizationId: {
         in: userOrganizationIds,
@@ -89,7 +83,6 @@ export async function GET(request: Request) {
       where.isFinalized = finalized === "true";
     }
 
-    // Fetch all saved analyses with refinement count
     const allAnalyses = await prisma.savedAnalysis.findMany({
       where,
       include: {
@@ -117,37 +110,31 @@ export async function GET(request: Request) {
       },
     });
 
-    // Group analyses by parentAnalysisId (or id if no parent)
-    // For analyses with refinements, only keep the latest version
-    const analysisMap = new Map<string, typeof allAnalyses[0]>();
-    
+    const analysisMap = new Map<string, (typeof allAnalyses)[0]>();
+
     for (const analysis of allAnalyses) {
       const key = analysis.parentAnalysisId || analysis.id;
-      
+
       if (!analysisMap.has(key)) {
-        // First time seeing this analysis or its parent
         analysisMap.set(key, analysis);
       } else {
-        // Compare version numbers - keep the one with higher version
         const existing = analysisMap.get(key)!;
         const existingVersion = existing.versionNumber || 1;
         const currentVersion = analysis.versionNumber || 1;
-        
+
         if (currentVersion > existingVersion) {
           analysisMap.set(key, analysis);
         }
       }
     }
+    const filteredAnalyses = Array.from(analysisMap.values()).sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
-    // Convert map values to array and sort by createdAt
-    const filteredAnalyses = Array.from(analysisMap.values())
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    // Apply pagination
     const total = filteredAnalyses.length;
     const paginatedAnalyses = filteredAnalyses.slice(skip, skip + limit);
 
-    // Map to expected format
     const analyses = paginatedAnalyses.map((analysis) => ({
       id: analysis.id,
       userId: analysis.userOrganization.userId,
@@ -188,4 +175,3 @@ export async function GET(request: Request) {
     );
   }
 }
-

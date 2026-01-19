@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
-import { verifyAccessToken } from "@/lib/auth";
+import { prisma } from "@/lib/core/prisma";
+import { verifyAccessToken } from "@/lib/core/auth";
 import { TenantRole } from "@prisma/client";
 import crypto from "crypto";
-import { sendInviteEmail } from "@/lib/email";
+import { sendInviteEmail } from "@/lib/services/email";
 
 export async function POST(request: Request) {
   try {

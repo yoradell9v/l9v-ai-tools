@@ -190,6 +190,61 @@ model OrganizationKnowledgeBase{
     // "successPatterns": {...}
   // }
 
+  //JD-Specific Tracking Fields (from job description analyses)
+  hiringHistory Json? // {
+    //   "roles": [
+    //     {
+    //       "roleTitle": "Operations Manager",
+    //       "serviceType": "Dedicated VA",
+    //       "hoursPerWeek": 20,
+    //       "firstSeen": "2024-01-15T00:00:00Z",
+    //       "lastSeen": "2024-02-20T00:00:00Z",
+    //       "count": 3,
+    //       "sourceIds": ["jd-analysis-123", "jd-analysis-456"]
+    //     }
+    //   ],
+    //   "patterns": {
+    //     "mostRequestedRoles": ["Operations Manager", "Marketing VA"],
+    //     "preferredServiceTypes": ["Dedicated VA", "Unicorn VA Service"],
+    //     "averageHoursPerWeek": 18.5
+    //   }
+    // }
+  
+  servicePreferences Json? // {
+    //   "preferredServiceTypes": [
+    //     {
+    //       "serviceType": "Dedicated VA",
+    //       "confidence": 85,
+    //       "lastRecommended": "2024-02-20T00:00:00Z",
+    //       "reasoning": "Ongoing operational tasks fit dedicated model"
+    //     }
+    //   ],
+    //   "serviceFitScores": {
+    //     "dedicatedVA": [8, 9, 8],
+    //     "projectsOnDemand": [5, 6, 5],
+    //     "unicornVA": [7, 7, 8]
+    //   }
+    // }
+  
+  skillRequirements Json? // {
+    //   "technical": ["Slack", "Notion", "Google Workspace"],
+    //   "soft": ["Communication", "Problem-solving"],
+    //   "domain": ["E-commerce", "SaaS"],
+    //   "frequency": {
+    //     "Slack": 5,
+    //     "Communication": 8,
+    //     "E-commerce": 3
+    //   }
+    // }
+  
+  bottleneckHistory Json? // [
+    //   {
+    //     "bottleneck": "Manual data entry slowing down operations",
+    //     "identifiedAt": "2024-01-15T00:00:00Z",
+    //     "sourceId": "jd-analysis-123"
+    //   }
+    // ]
+
   //Completion and Quality (deterministic)
   completeness Int? // 0-100 overall score
   completenessBreakdown Json? // Tier breakdowns, tool readiness
@@ -216,6 +271,41 @@ model OrganizationKnowledgeBase{
   learningEvents LearningEvent[]
   conversations BusinessConversation[]
   enhancementAnalyses EnhancementAnalysis[]
+  documents OrganizationDocument[]
+}
+
+model OrganizationDocument {
+  id String @id @default(cuid())
+  knowledgeBaseId String
+  knowledgeBase OrganizationKnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  
+  name String
+  url String
+  key String
+  type String
+  size Int?
+  
+  extractionStatus ExtractionStatus @default(PENDING)
+  extractedContent Json?
+  extractionError String?
+  
+  uploadedBy String
+  uploadedAt DateTime @default(now())
+  extractedAt DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([knowledgeBaseId])
+  @@index([extractionStatus])
+  @@index([uploadedAt])
+}
+
+enum ExtractionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }
 
 model KnowledgeSource {
@@ -268,6 +358,10 @@ model LearningEvent {
   applied Boolean @default(false)
   appliedAt DateTime?
   appliedToFields String[]
+
+  
+  embedding Float[] @default([]) // Vector embedding (1536 dimensions for text-embedding-3-small)
+  embeddingModel String? // Track which model generated the embedding (e.g., "text-embedding-3-small")
 
   createdAt DateTime @default(now())
 

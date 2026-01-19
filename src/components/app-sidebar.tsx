@@ -17,6 +17,7 @@ import {
     BriefcaseIcon,
     ListBulletIcon,
     UserIcon,
+    DocumentTextIcon,
 } from "@heroicons/react/24/outline";
 import { useState, useEffect } from "react";
 import Modal from "@/components/ui/Modal";
@@ -36,7 +37,7 @@ import {
     SidebarMenuAction,
     SidebarMenuBadge,
 } from "@/components/ui/sidebar";
-import { checkOnboardingStatus, type OnboardingStatus } from "@/lib/organizationKnowledgeBase";
+import { checkOnboardingStatus, type OnboardingStatus } from "@/lib/knowledge-base/organization-knowledge-base";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -140,10 +141,14 @@ export function AppSidebar() {
     };
 
     const isActive = (path: string) => {
-        if (path === "/dashboard/jd-builder") {
+        if (path === "/dashboard/role-builder") {
             return pathname === path || pathname?.startsWith(path + "/");
         }
         if (path === "/dashboard/organization-profile") {
+            // Don't match documents page when checking organization-profile
+            return pathname === path || (pathname?.startsWith(path + "/") && !pathname?.startsWith(path + "/documents"));
+        }
+        if (path === "/dashboard/organization-profile/documents") {
             return pathname === path || pathname?.startsWith(path + "/");
         }
         return pathname === path;
@@ -189,13 +194,13 @@ export function AppSidebar() {
     // Tools items (for all roles)
     const toolsItems = [
         {
-            title: "JD Builder",
-            url: "/dashboard/jd-builder",
+            title: "Role Builder",
+            url: "/dashboard/role-builder",
             icon: BriefcaseIcon,
         },
         {
-            title: "SOP Generator",
-            url: "/dashboard/sop-generator",
+            title: "Process Builder",
+            url: "/dashboard/process-builder",
             icon: ListBulletIcon,
         },
         {
@@ -333,6 +338,21 @@ export function AppSidebar() {
                                                 </Link>
                                             </SidebarMenuButton>
                                         </SidebarMenuItem>
+                                        <SidebarMenuItem>
+                                            <SidebarMenuButton
+                                                asChild
+                                                isActive={isActive("/dashboard/organization-profile/documents")}
+                                                className={`text-base ${isActive("/dashboard/organization-profile/documents")
+                                                    ? "!bg-[#f0b214] !text-white [&[data-active=true]]:!bg-[#f0b214] [&[data-active=true]]:!text-white hover:!bg-[#f0b214] hover:!text-white [&>a>svg]:text-white [&>a>span]:text-white"
+                                                    : "text-white hover:bg-white/10 hover:text-white [&>a>svg]:text-white [&>a>span]:text-white"
+                                                    }`}
+                                            >
+                                                <Link href="/dashboard/organization-profile/documents">
+                                                    <DocumentTextIcon className="h-4 w-4" />
+                                                    <span>Documents</span>
+                                                </Link>
+                                            </SidebarMenuButton>
+                                        </SidebarMenuItem>
                                     </SidebarMenu>
                                 </SidebarGroupContent>
                             </SidebarGroup>
@@ -352,7 +372,7 @@ export function AppSidebar() {
                                                     asChild
                                                     isActive={isActive(item.url)}
                                                     className={`text-base ${isActive(item.url)
-                                                        ? "bg-[var(--accent-strong)] !text-white hover:!text-white [&>a>svg]:text-white [&>a>span]:text-white"
+                                                        ? "!bg-[#f0b214] !text-white [&[data-active=true]]:!bg-[#f0b214] [&[data-active=true]]:!text-white hover:!bg-[#f0b214] hover:!text-white [&>a>svg]:text-white [&>a>span]:text-white"
                                                         : "text-white hover:bg-white/10 hover:text-white [&>a>svg]:text-white [&>a>span]:text-white"
                                                         }`}
                                                 >

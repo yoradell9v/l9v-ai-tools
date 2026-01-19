@@ -12,12 +12,11 @@ export const prisma =
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
-// Handle Prisma connection errors
 prisma.$on("error" as never, (e: any) => {
   console.error("Prisma error:", e);
 });
 
-// Gracefully disconnect on process termination
+
 if (typeof process !== "undefined") {
   process.on("beforeExit", async () => {
     await prisma.$disconnect();

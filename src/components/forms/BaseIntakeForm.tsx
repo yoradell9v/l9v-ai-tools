@@ -161,9 +161,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
         });
         setExpandedSections(initialExpanded);
 
-        // Priority: initialData (merged with defaults) > localStorage > defaults
         if (initialData) {
-            // Merge initialData with defaultValues to ensure all fields have defaults
             const mergedData = { ...config.defaultValues, ...initialData };
             setFormData(mergedData);
             onFormChange?.(mergedData);
@@ -172,7 +170,6 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                 const saved = localStorage.getItem(`${config.storageKey}-${userId}`);
                 if (saved) {
                     const parsed = JSON.parse(saved);
-                    // Merge saved data with defaults to ensure all fields exist
                     const mergedData = { ...config.defaultValues, ...parsed };
                     setFormData(mergedData);
                     onFormChange?.(mergedData);
@@ -309,11 +306,10 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                 headers: {
                     "Content-Type": file.type || "application/octet-stream",
                 },
-                credentials: "omit", // Required: S3 presigned URLs don't need credentials, and wildcard CORS doesn't allow credentials
+                credentials: "omit", 
             });
 
             if (!uploadResponse.ok) {
-                // Try to read error response from S3
                 let errorText = "Failed to upload file to S3";
                 try {
                     const errorBody = await uploadResponse.text();
@@ -364,13 +360,11 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
         const validFiles: File[] = [];
         const errors: string[] = [];
 
-        // Validate each file
         newFiles.forEach((file) => {
             const error = validateFile(file, field);
             if (error) {
                 errors.push(error);
             } else {
-                // Check for duplicates (by name and size)
                 const isDuplicate = currentFiles.some(
                     (existingFile) => existingFile.name === file.name && existingFile.size === file.size
                 ) || currentUrls.some(
@@ -382,7 +376,6 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
             }
         });
 
-        // Set validation errors if any
         if (errors.length > 0) {
             setFileErrors((prev) => ({
                 ...prev,
@@ -396,7 +389,6 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
             });
         }
 
-        // Add valid files to UI state immediately
         if (validFiles.length > 0) {
             const startIndex = currentFiles.length;
             setFiles((prev) => ({
@@ -404,7 +396,6 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                 [fieldId]: [...currentFiles, ...validFiles],
             }));
 
-            // Initialize uploading state for all new files
             setUploadingFiles((prev) => {
                 const fieldUploading = prev[fieldId] || {};
                 validFiles.forEach((_, index) => {
@@ -416,13 +407,12 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                 };
             });
 
-            // Upload each file to S3
+
             validFiles.forEach((file, index) => {
                 const fileIndex = startIndex + index;
                 const fileKey = `${file.name}-${file.size}`;
 
                 uploadFileToS3(file, fieldId, fileIndex, field).then((uploadResult) => {
-                    // Remove from uploading state
                     setUploadingFiles((prev) => {
                         const fieldUploading = { ...(prev[fieldId] || {}) };
                         delete fieldUploading[fileIndex];
@@ -432,15 +422,11 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                         };
                     });
 
-                    // If upload successful, add to uploadedFileUrls
-                    // Match by file name to maintain correspondence
                     if (uploadResult) {
                         setUploadedFileUrls((prev) => {
                             const currentUrls = prev[fieldId] || [];
-                            // Check if this file is already in the list (by name)
                             const existingIndex = currentUrls.findIndex((url) => url.name === file.name);
                             if (existingIndex >= 0) {
-                                // Replace existing entry
                                 const newUrls = [...currentUrls];
                                 newUrls[existingIndex] = uploadResult;
                                 return {
@@ -448,7 +434,6 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                                     [fieldId]: newUrls,
                                 };
                             } else {
-                                // Add new entry
                                 return {
                                     ...prev,
                                     [fieldId]: [...currentUrls, uploadResult],
@@ -460,7 +445,6 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
             });
         }
 
-        // Clear input
         if (fileInputRefs.current[fieldId]) {
             fileInputRefs.current[fieldId]!.value = "";
         }
@@ -473,10 +457,8 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
     };
 
     const handleFileRemove = (fieldId: string, index: number) => {
-        // Get the file being removed to match by name
         const fileToRemove = files[fieldId]?.[index];
 
-        // Remove from files state
         setFiles((prev) => {
             const currentFiles = prev[fieldId] || [];
             const newFiles = currentFiles.filter((_, i) => i !== index);
@@ -488,7 +470,6 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
             return { ...prev, [fieldId]: newFiles };
         });
 
-        // Remove from uploadedFileUrls state (match by file name)
         if (fileToRemove) {
             setUploadedFileUrls((prev) => {
                 const currentUrls = prev[fieldId] || [];
@@ -501,8 +482,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                 return { ...prev, [fieldId]: newUrls };
             });
         }
-
-        // Remove from uploading state
+        
         setUploadingFiles((prev) => {
             const fieldUploading = { ...(prev[fieldId] || {}) };
             delete fieldUploading[index];

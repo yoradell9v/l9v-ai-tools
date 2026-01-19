@@ -171,7 +171,7 @@ export default function SOPHistoryPage() {
     const handleViewSOP = (sopId: string) => {
         // Navigate to the main SOP page with the SOP ID
         // The main page will load this SOP
-        router.push(`/dashboard/sop-generator?sopId=${sopId}`);
+        router.push(`/dashboard/process-builder?sopId=${sopId}`);
     };
 
     const handleDownloadPDF = async (sop: SavedSOP, e: React.MouseEvent) => {
@@ -199,8 +199,8 @@ export default function SOPHistoryPage() {
                 },
                 credentials: "include",
                 body: JSON.stringify({
-                    sopHtml: typeof sop.content === "object" && (sop.content as any)?.html 
-                        ? (sop.content as any).html 
+                    sopHtml: typeof sop.content === "object" && (sop.content as any)?.html
+                        ? (sop.content as any).html
                         : content,
                     title: sop.title,
                 }),
@@ -297,7 +297,7 @@ export default function SOPHistoryPage() {
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => router.push("/dashboard/sop-generator")}
+                                onClick={() => router.push("/dashboard/process-builder")}
                                 className="gap-2"
                             >
                                 <ArrowLeft className="h-4 w-4" />
@@ -392,33 +392,33 @@ export default function SOPHistoryPage() {
                     )}
 
                     {/* Empty State */}
-                    {!isLoading && 
+                    {!isLoading &&
                         ((viewMode === "grouped" && filteredGroups.length === 0) ||
-                         (viewMode === "individual" && filteredSOPs.length === 0)) && (
-                        <Card className="text-center">
-                            <CardContent className="py-12 space-y-4">
-                                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                                    <FileText className="h-6 w-6 text-primary" />
-                                </div>
-                                <div className="space-y-2">
-                                    <h3 className="text-lg font-semibold">No SOPs Found</h3>
-                                    <p className="text-base text-muted-foreground max-w-sm mx-auto">
-                                        {searchQuery
-                                            ? "No SOPs match your search criteria."
-                                            : "You haven't generated any SOPs yet. Create your first one to get started."}
-                                    </p>
-                                </div>
-                                {!searchQuery && (
-                                    <Button
-                                        onClick={() => router.push("/dashboard/sop-generator")}
-                                        className="inline-flex items-center gap-2"
-                                    >
-                                        Generate Your First SOP
-                                    </Button>
-                                )}
-                            </CardContent>
-                        </Card>
-                    )}
+                            (viewMode === "individual" && filteredSOPs.length === 0)) && (
+                            <Card className="text-center">
+                                <CardContent className="py-12 space-y-4">
+                                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                                        <FileText className="h-6 w-6 text-primary" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <h3 className="text-lg font-semibold">No SOPs Found</h3>
+                                        <p className="text-base text-muted-foreground max-w-sm mx-auto">
+                                            {searchQuery
+                                                ? "No SOPs match your search criteria."
+                                                : "You haven't generated any SOPs yet. Create your first one to get started."}
+                                        </p>
+                                    </div>
+                                    {!searchQuery && (
+                                        <Button
+                                            onClick={() => router.push("/dashboard/process-builder")}
+                                            className="inline-flex items-center gap-2"
+                                        >
+                                            Generate Your First SOP
+                                        </Button>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
 
                     {/* Grouped SOPs View */}
                     {!isLoading && viewMode === "grouped" && filteredGroups.length > 0 && (
@@ -427,7 +427,7 @@ export default function SOPHistoryPage() {
                                 {filteredGroups.map((group) => {
                                     const isExpanded = expandedGroups.has(group.rootSOPId);
                                     const currentVersion = group.currentVersion;
-                                    
+
                                     return (
                                         <Card
                                             key={group.rootSOPId}
@@ -484,7 +484,7 @@ export default function SOPHistoryPage() {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    
+
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
@@ -705,29 +705,29 @@ export default function SOPHistoryPage() {
                     )}
 
                     {/* No Results for Search */}
-                    {!isLoading && 
+                    {!isLoading &&
                         ((viewMode === "grouped" && sopGroups.length > 0 && filteredGroups.length === 0) ||
-                         (viewMode === "individual" && sops.length > 0 && filteredSOPs.length === 0)) && (
-                        <Card className="text-center">
-                            <CardContent className="py-12 space-y-4">
-                                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                                    <Search className="h-6 w-6 text-muted-foreground" />
-                                </div>
-                                <div className="space-y-2">
-                                    <h3 className="text-lg font-semibold">No Results Found</h3>
-                                    <p className="text-base text-muted-foreground">
-                                        No SOPs match your search query: "{searchQuery}"
-                                    </p>
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    onClick={() => setSearchQuery("")}
-                                >
-                                    Clear Search
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    )}
+                            (viewMode === "individual" && sops.length > 0 && filteredSOPs.length === 0)) && (
+                            <Card className="text-center">
+                                <CardContent className="py-12 space-y-4">
+                                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                                        <Search className="h-6 w-6 text-muted-foreground" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <h3 className="text-lg font-semibold">No Results Found</h3>
+                                        <p className="text-base text-muted-foreground">
+                                            No SOPs match your search query: "{searchQuery}"
+                                        </p>
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setSearchQuery("")}
+                                    >
+                                        Clear Search
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        )}
                 </div>
             </div>
         </>

@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/core/prisma";
 import { cookies } from "next/headers";
-import { verifyAccessToken } from "@/lib/auth";
+import { verifyAccessToken } from "@/lib/core/auth";
 import { extractInsights } from "@/lib/analysis/extractInsights";
-import { createLearningEvents } from "@/lib/learning-events";
-import { applyLearningEventsToKB } from "@/lib/apply-learning-events";
-import { markdownToHtml } from "@/lib/markdown-to-html";
-import { withRateLimit, addRateLimitHeaders } from "@/lib/rate-limit-utils";
+import { createLearningEvents } from "@/lib/learning/learning-events";
+import { applyLearningEventsToKB } from "@/lib/learning/apply-learning-events";
+import { markdownToHtml } from "@/lib/extraction/markdown-to-html";
+import { withRateLimit, addRateLimitHeaders } from "@/lib/rate-limiting/rate-limit-utils";
+import { CONFIDENCE_THRESHOLDS } from "@/lib/knowledge-base/insight-confidence-thresholds";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// System prompt for markdown to HTML conversion using OpenAI (fallback)
 const MARKDOWN_TO_HTML_SYSTEM_PROMPT = `You are a markdown to HTML converter. Your job is to convert markdown content into clean, semantic HTML.
 
 Rules:
@@ -424,7 +424,7 @@ interface SOPFormData {
 
 function buildUserPrompt(
   formData: SOPFormData,
-  organizationProfile: any
+  knowledgeBase: any
 ): string {
   let prompt = `# SOP Generation Request
 
@@ -448,7 +448,6 @@ ${formData.mainSteps}
 **Success Criteria**: ${formData.successCriteria}
 `;
 
-  // Add optional context fields if provided
   if (formData.department) {
     prompt += `\n**Department/Team**: ${formData.department}`;
   }
@@ -493,64 +492,63 @@ ${formData.mainSteps}
     prompt += `\n\n## Additional Context (Brain Dump)\n${formData.additionalContext}`;
   }
 
-  // Add organization profile context
-  if (organizationProfile) {
+  if (knowledgeBase) {
     prompt += `\n\n## Organization Context\n`;
     
-    if (organizationProfile.businessName) {
-      prompt += `**Business Name**: ${organizationProfile.businessName}\n`;
+    if (knowledgeBase.businessName) {
+      prompt += `**Business Name**: ${knowledgeBase.businessName}\n`;
     }
     
-    if (organizationProfile.website) {
-      prompt += `**Website**: ${organizationProfile.website}\n`;
+    if (knowledgeBase.website) {
+      prompt += `**Website**: ${knowledgeBase.website}\n`;
     }
     
-    if (organizationProfile.industry) {
-      prompt += `**Industry**: ${organizationProfile.industry}`;
-      if (organizationProfile.industryOther && organizationProfile.industry.toLowerCase() === "other") {
-        prompt += ` - ${organizationProfile.industryOther}`;
+    if (knowledgeBase.industry) {
+      prompt += `**Industry**: ${knowledgeBase.industry}`;
+      if (knowledgeBase.industryOther && knowledgeBase.industry.toLowerCase() === "other") {
+        prompt += ` - ${knowledgeBase.industryOther}`;
       }
       prompt += `\n`;
     }
     
-    if (organizationProfile.primaryTools) {
-      prompt += `**Organization's Primary Tools**: ${organizationProfile.primaryTools}\n`;
+    if (knowledgeBase.toolStack && knowledgeBase.toolStack.length > 0) {
+      prompt += `**Organization's Primary Tools**: ${knowledgeBase.toolStack.join(", ")}\n`;
     }
     
-    if (organizationProfile.primaryCRM) {
-      prompt += `**Primary CRM/Platform**: ${organizationProfile.primaryCRM}\n`;
+    if (knowledgeBase.primaryCRM) {
+      prompt += `**Primary CRM/Platform**: ${knowledgeBase.primaryCRM}\n`;
     }
     
-    if (organizationProfile.managementStyle) {
-      prompt += `**Management Style**: ${organizationProfile.managementStyle}\n`;
+    if (knowledgeBase.defaultManagementStyle) {
+      prompt += `**Management Style**: ${knowledgeBase.defaultManagementStyle}\n`;
     }
     
-    if (organizationProfile.defaultTimezone) {
-      prompt += `**Default Timezone**: ${organizationProfile.defaultTimezone}\n`;
+    if (knowledgeBase.defaultTimeZone) {
+      prompt += `**Default Timezone**: ${knowledgeBase.defaultTimeZone}\n`;
     }
     
-    if (organizationProfile.isRegulated === "yes") {
+    if (knowledgeBase.isRegulated) {
       prompt += `**Regulated Industry**: Yes`;
-      if (organizationProfile.regulatedIndustryType) {
-        prompt += ` (${organizationProfile.regulatedIndustryType})`;
+      if (knowledgeBase.regulatedIndustry) {
+        prompt += ` (${knowledgeBase.regulatedIndustry})`;
       }
       prompt += `\n`;
     }
     
-    if (organizationProfile.forbiddenWords) {
-      prompt += `**Forbidden Words/Claims**: ${organizationProfile.forbiddenWords}\n`;
+    if (knowledgeBase.forbiddenWords) {
+      prompt += `**Forbidden Words/Claims**: ${knowledgeBase.forbiddenWords}\n`;
     }
     
-    if (organizationProfile.disclaimers) {
-      prompt += `**Required Disclaimers**: ${organizationProfile.disclaimers}\n`;
+    if (knowledgeBase.disclaimers) {
+      prompt += `**Required Disclaimers**: ${knowledgeBase.disclaimers}\n`;
     }
     
-    if (organizationProfile.brandVoiceStyle) {
-      prompt += `**Brand Voice Style**: ${organizationProfile.brandVoiceStyle}\n`;
+    if (knowledgeBase.brandVoiceStyle) {
+      prompt += `**Brand Voice Style**: ${knowledgeBase.brandVoiceStyle}\n`;
     }
     
-    if (organizationProfile.riskBoldnessLevel) {
-      prompt += `**Risk/Boldness Level**: ${organizationProfile.riskBoldnessLevel}\n`;
+    if (knowledgeBase.riskBoldness) {
+      prompt += `**Risk/Boldness Level**: ${knowledgeBase.riskBoldness}\n`;
     }
   }
 
@@ -559,27 +557,22 @@ ${formData.mainSteps}
   return prompt;
 }
 
-/**
- * Convert markdown to HTML using OpenAI as a fallback
- * This is used when the library-based conversion fails or produces poor results
- */
 async function convertMarkdownToHtmlWithOpenAI(markdown: string): Promise<string> {
   try {
     console.log("[SOP Generate] Converting markdown to HTML with OpenAI, length:", markdown.length);
     
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Fast and cheap for conversion
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: MARKDOWN_TO_HTML_SYSTEM_PROMPT },
         { role: "user", content: markdown },
       ],
-      temperature: 0, // Deterministic output
-      max_tokens: 16000, // Large enough for full SOP HTML
+      temperature: 0,
+      max_tokens: 16000,
     });
 
     let html = completion.choices[0].message.content || "";
     
-    // Remove any markdown code fences that might have slipped through
     html = html.replace(/```html\n?/g, "").replace(/```\n?/g, "").trim();
     
     console.log("[SOP Generate] OpenAI HTML conversion complete, length:", html.length);
@@ -593,7 +586,6 @@ async function convertMarkdownToHtmlWithOpenAI(markdown: string): Promise<string
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Authenticate user
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("accessToken")?.value;
 
@@ -612,7 +604,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1.5. Check rate limit (before expensive operations)
     const rateLimit = await withRateLimit(request, "/api/sop/generate", {
       requireAuth: true,
     });
@@ -621,7 +612,6 @@ export async function POST(request: NextRequest) {
       return rateLimit.response!;
     }
 
-    // 2. Get user's organization
     const userOrg = await prisma.userOrganization.findFirst({
       where: {
         userId: decoded.userId,
@@ -649,11 +639,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Get organization profile (legacy - using knowledgeBase as fallback)
-    // Note: OrganizationProfile model doesn't exist in schema, using knowledgeBase data instead
-    let organizationProfile = null;
-
-    // 3.5. Get organization knowledge base (for learning events)
     let knowledgeBase = null;
     let knowledgeBaseVersion: number | null = null;
     let knowledgeBaseSnapshot: any = null;
@@ -663,53 +648,42 @@ export async function POST(request: NextRequest) {
         select: {
           id: true,
           version: true,
-          // Core Identity
           businessName: true,
           website: true,
           industry: true,
           industryOther: true,
           whatYouSell: true,
-          // Business Context
           monthlyRevenue: true,
           teamSize: true,
           primaryGoal: true,
           biggestBottleNeck: true,
-          // Customer and Market
           idealCustomer: true,
           topObjection: true,
           coreOffer: true,
           customerJourney: true,
-          // Operations and Tools
           toolStack: true,
           primaryCRM: true,
           defaultTimeZone: true,
           bookingLink: true,
           supportEmail: true,
-          // Brand & Voice
           brandVoiceStyle: true,
           riskBoldness: true,
           voiceExampleGood: true,
           voiceExamplesAvoid: true,
           contentLinks: true,
-          // Compliance
           isRegulated: true,
           regulatedIndustry: true,
           forbiddenWords: true,
           disclaimers: true,
-          // HR Defaults
           defaultWeeklyHours: true,
           defaultManagementStyle: true,
           defaultEnglishLevel: true,
-          // Proof & Credibility
           proofAssets: true,
-          // Additional Context
           pipeLineStages: true,
           emailSignOff: true,
-          // Versioning
           lastEditedBy: true,
           lastEditedAt: true,
           contributors: true,
-          // Enrichment tracking
           lastEnrichedAt: true,
           enrichmentVersion: true,
         },
@@ -719,25 +693,6 @@ export async function POST(request: NextRequest) {
         knowledgeBaseVersion = knowledgeBase.version;
         console.log(`[SOP Generate] Found KB for org ${userOrg.organizationId}, version: ${knowledgeBaseVersion}`);
         
-        // Populate organizationProfile from knowledgeBase (for backward compatibility with buildUserPrompt)
-        organizationProfile = {
-          businessName: knowledgeBase.businessName,
-          website: knowledgeBase.website,
-          industry: knowledgeBase.industry,
-          industryOther: knowledgeBase.industryOther,
-          primaryTools: knowledgeBase.toolStack?.join(", ") || null,
-          primaryCRM: knowledgeBase.primaryCRM,
-          managementStyle: knowledgeBase.defaultManagementStyle,
-          defaultTimezone: knowledgeBase.defaultTimeZone,
-          isRegulated: knowledgeBase.isRegulated ? "yes" : "no",
-          regulatedIndustryType: knowledgeBase.regulatedIndustry,
-          forbiddenWords: knowledgeBase.forbiddenWords,
-          disclaimers: knowledgeBase.disclaimers,
-          brandVoiceStyle: knowledgeBase.brandVoiceStyle,
-          riskBoldnessLevel: knowledgeBase.riskBoldness,
-        };
-        
-        // Create snapshot of KB state (non-Json fields only, similar to JD flow)
         knowledgeBaseSnapshot = {
           version: knowledgeBase.version,
           businessName: knowledgeBase.businessName,
@@ -782,10 +737,8 @@ export async function POST(request: NextRequest) {
       }
     } catch (error) {
       console.error("[SOP Generate] Error fetching knowledge base:", error);
-      // Continue without KB - learning events are optional
     }
 
-    // 4. Parse request body
     const body = await request.json();
     const formData: SOPFormData = {
       sopTitle: body.sopTitle || "",
@@ -809,7 +762,6 @@ export async function POST(request: NextRequest) {
       additionalContext: body.additionalContext || undefined,
     };
 
-    // 5. Validate required fields
     if (!formData.sopTitle || !formData.sopTitle.trim()) {
       return NextResponse.json(
         { success: false, message: "SOP Title is required." },
@@ -866,10 +818,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 6. Build user prompt
-    const userPrompt = buildUserPrompt(formData, organizationProfile);
+    const userPrompt = buildUserPrompt(formData, knowledgeBase);
 
-    // 7. Call OpenAI API
     let generatedSOP: string = "";
     let generatedSOPHtml: string = "";
     let promptTokens: number = 0;
@@ -884,8 +834,8 @@ export async function POST(request: NextRequest) {
           { role: "system", content: SOP_GENERATOR_SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
         ],
-        temperature: 0.7, // Balanced creativity and consistency
-        max_tokens: 8000, // Large token budget for comprehensive SOPs
+        temperature: 0.7, 
+        max_tokens: 8000,
       });
 
       generatedSOP = completion.choices[0].message.content || "";
@@ -899,79 +849,64 @@ export async function POST(request: NextRequest) {
       totalTokens = completion.usage?.total_tokens || 0;
       finishReason = completion.choices[0].finish_reason || "stop";
 
-      // Check if response was truncated
+  
       if (finishReason === "length") {
         console.warn("OpenAI response was truncated due to token limit");
         generatedSOP += "\n\n[Note: This SOP may have been truncated. Consider refining specific sections if needed.]";
       }
 
-      // Convert markdown to HTML for frontend display
-      // Try library-based conversion first (fast and free), fallback to OpenAI if needed
-      // HTML conversion is REQUIRED - we must have HTML for display
       console.log("[SOP Generate] Converting markdown to HTML, markdown length:", generatedSOP.length);
       
-      // First, try the library-based conversion
       try {
         generatedSOPHtml = await markdownToHtml(generatedSOP);
         console.log("[SOP Generate] Library conversion successful, HTML length:", generatedSOPHtml.length);
-        
-        // Verify we got valid HTML
+      
         if (!generatedSOPHtml || generatedSOPHtml.trim().length === 0) {
           throw new Error("Library conversion returned empty result");
         }
         
-        // Check if it actually looks like HTML (has tags)
         if (!generatedSOPHtml.includes("<")) {
           throw new Error("Library conversion did not produce HTML tags");
         }
         
-        // Check if it still contains markdown syntax (indicates conversion failed)
         if (generatedSOPHtml.includes("```") && !generatedSOPHtml.includes("<code>")) {
           throw new Error("Library conversion may have failed (contains markdown code fences)");
         }
         
-        // Check if the entire content is wrapped in a code block (conversion failed)
         const trimmed = generatedSOPHtml.trim();
         if (trimmed.startsWith('<pre><code') && trimmed.includes('language-markdown')) {
           throw new Error("Library conversion failed - entire content wrapped in code block");
         }
-        
-        // Check if it's just escaped markdown (conversion failed)
+       
         if (trimmed.startsWith('<pre>') && !trimmed.includes('<h') && !trimmed.includes('<p>') && !trimmed.includes('<ul>')) {
           throw new Error("Library conversion failed - result is escaped markdown, not HTML");
         }
       } catch (libraryError: any) {
         console.warn("[SOP Generate] Library conversion failed or produced poor results, falling back to OpenAI:", libraryError.message);
         
-        // Fallback to OpenAI conversion - this MUST succeed
         try {
           generatedSOPHtml = await convertMarkdownToHtmlWithOpenAI(generatedSOP);
           console.log("[SOP Generate] OpenAI fallback conversion successful, HTML length:", generatedSOPHtml.length);
           
-          // Verify OpenAI conversion result
           if (!generatedSOPHtml || generatedSOPHtml.trim().length === 0) {
             throw new Error("OpenAI conversion returned empty result");
           }
         } catch (openaiError: any) {
           console.error("[SOP Generate] Both HTML conversion methods failed:", openaiError);
-          // This is a critical error - we need HTML for display
           throw new Error(`Failed to convert markdown to HTML: ${openaiError.message || "Unknown error"}`);
         }
       }
       
-      // Final verification - HTML is required and must be valid HTML (not markdown)
       if (!generatedSOPHtml || generatedSOPHtml.trim().length === 0) {
         throw new Error("HTML conversion failed - no HTML content generated");
       }
-      
-      // Critical validation: ensure it's actually HTML, not markdown
+    
       if (!generatedSOPHtml.includes("<")) {
         console.error("[SOP Generate] Generated HTML does not contain HTML tags - appears to be markdown");
         console.error("[SOP Generate] Preview:", generatedSOPHtml.substring(0, 500));
         throw new Error("HTML conversion failed - output is not valid HTML (missing HTML tags)");
       }
       
-      // Check for markdown syntax that shouldn't be in HTML
       if (generatedSOPHtml.includes("```") && !generatedSOPHtml.includes("<code>")) {
         console.error("[SOP Generate] Generated HTML contains markdown code fences - conversion may have failed");
         console.error("[SOP Generate] Preview:", generatedSOPHtml.substring(0, 500));
@@ -990,7 +925,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 7.5. Extract insights from generated SOP (non-blocking)
     let contributedInsights: any[] = [];
     try {
       const sopDataForExtraction = {
@@ -999,7 +933,6 @@ export async function POST(request: NextRequest) {
           markdown: generatedSOP,
         },
         intakeData: formData,
-        organizationProfile: organizationProfile,
         metadata: {
           title: formData.sopTitle,
           generatedAt: new Date().toISOString(),
@@ -1011,24 +944,22 @@ export async function POST(request: NextRequest) {
         },
       };
 
-      contributedInsights = extractInsights("SOP_GENERATION", sopDataForExtraction);
+      contributedInsights = await extractInsights("SOP_GENERATION", sopDataForExtraction);
       
       console.log(`[SOP Generate] Extracted ${contributedInsights.length} insights from SOP`);
     } catch (insightError: any) {
       console.error("[SOP Generate] Error extracting insights (non-blocking):", insightError);
-      // Continue without insights - SOP generation should still succeed
     }
 
-    // 8. Save SOP to database
     let savedSOP = null;
     try {
       savedSOP = await prisma.sOP.create({
         data: {
           userOrganizationId: userOrg.id,
-          organizationId: userOrg.organizationId, // Add organizationId
+          organizationId: userOrg.organizationId,
           title: formData.sopTitle,
           content: {
-            html: generatedSOPHtml, // Store only HTML (primary format)
+            html: generatedSOPHtml, 
             version: "1.0",
             generatedAt: new Date().toISOString(),
           },
@@ -1036,9 +967,8 @@ export async function POST(request: NextRequest) {
           usedKnowledgeBaseVersion: knowledgeBaseVersion ?? undefined,
           knowledgeBaseSnapshot: knowledgeBaseSnapshot ?? undefined,
           contributedInsights: contributedInsights.length > 0 ? contributedInsights : undefined,
-          // VERSIONING: New SOP starts at version 1
           versionNumber: 1,
-          rootSOPId: null, // Will be set to its own id after creation
+          rootSOPId: null,
           isCurrentVersion: true,
           versionCreatedBy: decoded.userId,
           versionCreatedAt: new Date(),
@@ -1052,8 +982,9 @@ export async function POST(request: NextRequest) {
             temperature: 0.7,
             maxTokens: 8000,
             finishReason: finishReason,
-            organizationProfileUsed: organizationProfile !== null,
-            organizationProfileSnapshot: organizationProfile || null, // Store in metadata
+            knowledgeBaseUsed: knowledgeBase !== null,
+            knowledgeBaseVersion: knowledgeBaseVersion,
+            knowledgeBaseSnapshot: knowledgeBaseSnapshot || null,
             generatedAt: new Date().toISOString(),
           },
         },
@@ -1064,13 +995,12 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Set rootSOPId to itself (first version is its own root)
       await prisma.sOP.update({
         where: { id: savedSOP.id },
         data: { rootSOPId: savedSOP.id },
       });
 
-      // Log KB metadata that was saved
+  
       if (knowledgeBaseVersion || knowledgeBaseSnapshot || contributedInsights.length > 0) {
         console.log(`[SOP Generate] Saved SOP ${savedSOP.id} with KB metadata:`, {
           usedKnowledgeBaseVersion: knowledgeBaseVersion,
@@ -1080,11 +1010,8 @@ export async function POST(request: NextRequest) {
       }
     } catch (dbError: any) {
       console.error("[SOP Generate] Database save error:", dbError);
-      // Don't fail the request if save fails - still return the SOP
-      // Log the error for monitoring
     }
 
-    // 9. Create learning events and apply to knowledge base (non-blocking)
     if (
       savedSOP &&
       contributedInsights.length > 0 &&
@@ -1104,11 +1031,10 @@ export async function POST(request: NextRequest) {
             `[SOP Generate] Created ${learningEventsResult.eventsCreated} LearningEvents for SOP ${savedSOP.id}`
           );
 
-          // Apply learning events to KB immediately (light enrichment for MVP)
           try {
             const enrichmentResult = await applyLearningEventsToKB({
               knowledgeBaseId: knowledgeBase.id,
-              minConfidence: 80, // MVP: only high confidence insights
+              minConfidence: CONFIDENCE_THRESHOLDS.HIGH,
             });
 
             if (enrichmentResult.success) {
@@ -1124,7 +1050,6 @@ export async function POST(request: NextRequest) {
               );
             }
           } catch (enrichmentError) {
-            // Don't fail the request if enrichment fails (non-critical)
             console.error(
               "[SOP Generate] Error applying learning events to KB (non-critical):",
               enrichmentError
@@ -1137,16 +1062,16 @@ export async function POST(request: NextRequest) {
           );
         }
       } catch (learningEventError) {
-        // Don't fail the request if learning events fail (non-critical)
+    
         console.error("[SOP Generate] Error creating LearningEvents (non-critical):", learningEventError);
       }
     }
 
-    // 10. Return success response with HTML only
+
     console.log("[SOP Generate] Returning response, sopHtml length:", generatedSOPHtml?.length || 0);
     const response = NextResponse.json({
       success: true,
-      sopHtml: generatedSOPHtml, // Return only HTML (primary format)
+      sopHtml: generatedSOPHtml, 
       sopId: savedSOP?.id || null,
       metadata: {
         title: formData.sopTitle,
@@ -1156,11 +1081,11 @@ export async function POST(request: NextRequest) {
           completion: completionTokens,
           total: totalTokens,
         },
-        organizationProfileUsed: organizationProfile !== null,
+        knowledgeBaseUsed: knowledgeBase !== null,
       },
     });
 
-    // Add rate limit headers to response
+    
     return addRateLimitHeaders(response, rateLimit.rateLimitResult);
   } catch (error: any) {
     console.error("[SOP Generate] Error:", error);

@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/core/prisma";
 import { cookies } from "next/headers";
-import { verifyAccessToken } from "@/lib/auth";
+import { verifyAccessToken } from "@/lib/core/auth";
 import { extractInsights } from "@/lib/analysis/extractInsights";
-import { createLearningEvents } from "@/lib/learning-events";
-import { applyLearningEventsToKB } from "@/lib/apply-learning-events";
-import { markdownToHtml } from "@/lib/markdown-to-html";
-import { withRateLimit, addRateLimitHeaders } from "@/lib/rate-limit-utils";
+import { createLearningEvents } from "@/lib/learning/learning-events";
+import { applyLearningEventsToKB } from "@/lib/learning/apply-learning-events";
+import { CONFIDENCE_THRESHOLDS } from "@/lib/knowledge-base/insight-confidence-thresholds";
+import { markdownToHtml } from "@/lib/extraction/markdown-to-html";
+import {
+  withRateLimit,
+  addRateLimitHeaders,
+} from "@/lib/rate-limiting/rate-limit-utils";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// System prompt for markdown to HTML conversion using OpenAI (fallback)
 const MARKDOWN_TO_HTML_SYSTEM_PROMPT = `You are a markdown to HTML converter. Your job is to convert markdown content into clean, semantic HTML.
 
 Rules:
@@ -35,38 +38,47 @@ Rules:
 6. Do not add <!DOCTYPE>, <html>, <head>, or <body> tags - just the content HTML
 7. Ensure proper HTML entity encoding for special characters`;
 
-/**
- * Convert markdown to HTML using OpenAI as a fallback
- */
-async function convertMarkdownToHtmlWithOpenAI(markdown: string): Promise<string> {
+async function convertMarkdownToHtmlWithOpenAI(
+  markdown: string
+): Promise<string> {
   try {
-    console.log("[SOP Update] Converting markdown to HTML with OpenAI, length:", markdown.length);
-    
+    console.log(
+      "[SOP Update] Converting markdown to HTML with OpenAI, length:",
+      markdown.length
+    );
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Fast and cheap for conversion
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: MARKDOWN_TO_HTML_SYSTEM_PROMPT },
         { role: "user", content: markdown },
       ],
-      temperature: 0, // Deterministic output
-      max_tokens: 16000, // Large enough for full SOP HTML
+      temperature: 0,
+      max_tokens: 16000,
     });
 
     let html = completion.choices[0].message.content || "";
-    
-    // Remove any markdown code fences that might have slipped through
-    html = html.replace(/```html\n?/g, "").replace(/```\n?/g, "").trim();
-    
-    console.log("[SOP Update] OpenAI HTML conversion complete, length:", html.length);
-    
+
+    html = html
+      .replace(/```html\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
+
+    console.log(
+      "[SOP Update] OpenAI HTML conversion complete, length:",
+      html.length
+    );
+
     return html;
   } catch (error) {
-    console.error("[SOP Update] Error converting markdown to HTML with OpenAI:", error);
+    console.error(
+      "[SOP Update] Error converting markdown to HTML with OpenAI:",
+      error
+    );
     throw error;
   }
 }
 
-// System prompt for AI review
 const AI_REVIEW_SYSTEM_PROMPT = `You are an expert editor specializing in Standard Operating Procedures (SOPs). Your task is to review edited SOP content and provide specific, actionable suggestions for improvement.
 
 Focus on:
@@ -86,7 +98,6 @@ Return your suggestions as a JSON array. Only suggest changes that genuinely imp
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Authenticate user
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("accessToken")?.value;
 
@@ -104,8 +115,6 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
-
-    // 1.5. Check rate limit (before expensive operations)
     const rateLimit = await withRateLimit(request, "/api/sop/update", {
       requireAuth: true,
     });
@@ -114,7 +123,6 @@ export async function POST(request: NextRequest) {
       return rateLimit.response!;
     }
 
-    // 2. Parse request body
     const body = await request.json();
     const { sopId, sopContent, reviewWithAI } = body;
 
@@ -124,8 +132,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    // 3. Get existing SOP and verify ownership
     const existingSOP = await prisma.sOP.findUnique({
       where: { id: sopId },
       include: {
@@ -145,21 +151,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify user has access to this SOP
     if (existingSOP.userOrganization.userId !== decoded.userId) {
       return NextResponse.json(
-        { success: false, message: "You don't have permission to edit this SOP." },
+        {
+          success: false,
+          message: "You don't have permission to edit this SOP.",
+        },
         { status: 403 }
       );
     }
 
-    // 4. Get current version information
     const currentContent = existingSOP.content as any;
     const currentVersionNumber = existingSOP.versionNumber || 1;
     const rootSOPId = existingSOP.rootSOPId || existingSOP.id;
-    const nextVersionNumber = currentVersionNumber + 1; // Integer increment: 1 -> 2 -> 3
+    const nextVersionNumber = currentVersionNumber + 1;
 
-    // 5. AI Review (if requested)
     let aiReviewSuggestions: any[] = [];
     if (reviewWithAI) {
       try {
@@ -173,7 +179,7 @@ export async function POST(request: NextRequest) {
             },
           ],
           response_format: { type: "json_object" },
-          temperature: 0.3, // Lower temperature for more consistent review
+          temperature: 0.3,
           max_tokens: 2000,
         });
 
@@ -181,65 +187,76 @@ export async function POST(request: NextRequest) {
           reviewCompletion.choices[0].message.content || "{}"
         );
 
-        if (reviewResult.suggestions && Array.isArray(reviewResult.suggestions)) {
+        if (
+          reviewResult.suggestions &&
+          Array.isArray(reviewResult.suggestions)
+        ) {
           aiReviewSuggestions = reviewResult.suggestions;
         }
       } catch (reviewError: any) {
         console.error("[SOP Update] AI review error:", reviewError);
-        // Continue without review - don't fail the update
       }
     }
 
-    // 6. Convert updated markdown to HTML
-    // HTML conversion is REQUIRED - we must have HTML for display
     let updatedHtml: string;
-    console.log("[SOP Update] Converting markdown to HTML, markdown length:", sopContent.length);
-    
-    // Try library-based conversion first (fast and free), fallback to OpenAI if needed
+    console.log(
+      "[SOP Update] Converting markdown to HTML, markdown length:",
+      sopContent.length
+    );
+
     try {
       updatedHtml = await markdownToHtml(sopContent);
-      console.log("[SOP Update] Library conversion successful, HTML length:", updatedHtml.length);
-      
-      // Verify we got valid HTML
+      console.log(
+        "[SOP Update] Library conversion successful, HTML length:",
+        updatedHtml.length
+      );
+
       if (!updatedHtml || updatedHtml.trim().length === 0) {
         throw new Error("Library conversion returned empty result");
       }
-      
-      // Check if it actually looks like HTML (has tags)
+
       if (!updatedHtml.includes("<")) {
         throw new Error("Library conversion did not produce HTML tags");
       }
-      
-      // Check if it still contains markdown syntax (indicates conversion failed)
+
       if (updatedHtml.includes("```") && !updatedHtml.includes("<code>")) {
-        throw new Error("Library conversion may have failed (contains markdown code fences)");
+        throw new Error(
+          "Library conversion may have failed (contains markdown code fences)"
+        );
       }
     } catch (libraryError: any) {
-      console.warn("[SOP Update] Library conversion failed or produced poor results, falling back to OpenAI:", libraryError.message);
-      
-      // Fallback to OpenAI conversion - this MUST succeed
+      console.warn(
+        "[SOP Update] Library conversion failed or produced poor results, falling back to OpenAI:",
+        libraryError.message
+      );
+
       try {
         updatedHtml = await convertMarkdownToHtmlWithOpenAI(sopContent);
-        console.log("[SOP Update] OpenAI fallback conversion successful, HTML length:", updatedHtml.length);
-        
-        // Verify OpenAI conversion result
+        console.log(
+          "[SOP Update] OpenAI fallback conversion successful, HTML length:",
+          updatedHtml.length
+        );
+
         if (!updatedHtml || updatedHtml.trim().length === 0) {
           throw new Error("OpenAI conversion returned empty result");
         }
       } catch (openaiError: any) {
-        console.error("[SOP Update] Both HTML conversion methods failed:", openaiError);
-        // This is a critical error - we need HTML for display
+        console.error(
+          "[SOP Update] Both HTML conversion methods failed:",
+          openaiError
+        );
         return NextResponse.json(
           {
             success: false,
-            message: `Failed to convert markdown to HTML: ${openaiError.message || "Unknown error"}`,
+            message: `Failed to convert markdown to HTML: ${
+              openaiError.message || "Unknown error"
+            }`,
           },
           { status: 500 }
         );
       }
     }
-    
-    // Final verification - HTML is required and must be valid HTML (not markdown)
+
     if (!updatedHtml || updatedHtml.trim().length === 0) {
       return NextResponse.json(
         {
@@ -249,23 +266,26 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-    
-    // Critical validation: ensure it's actually HTML, not markdown
+
     if (!updatedHtml.includes("<")) {
-      console.error("[SOP Update] Generated HTML does not contain HTML tags - appears to be markdown");
+      console.error(
+        "[SOP Update] Generated HTML does not contain HTML tags - appears to be markdown"
+      );
       console.error("[SOP Update] Preview:", updatedHtml.substring(0, 500));
       return NextResponse.json(
         {
           success: false,
-          message: "HTML conversion failed - output is not valid HTML (missing HTML tags)",
+          message:
+            "HTML conversion failed - output is not valid HTML (missing HTML tags)",
         },
         { status: 500 }
       );
     }
-    
-    // Check for markdown syntax that shouldn't be in HTML
+
     if (updatedHtml.includes("```") && !updatedHtml.includes("<code>")) {
-      console.error("[SOP Update] Generated HTML contains markdown code fences - conversion may have failed");
+      console.error(
+        "[SOP Update] Generated HTML contains markdown code fences - conversion may have failed"
+      );
       console.error("[SOP Update] Preview:", updatedHtml.substring(0, 500));
       return NextResponse.json(
         {
@@ -275,10 +295,12 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-    
-    console.log("[SOP Update] HTML validation passed - valid HTML generated, length:", updatedHtml.length);
 
-    // 7. Mark old version as not current (if it was current)
+    console.log(
+      "[SOP Update] HTML validation passed - valid HTML generated, length:",
+      updatedHtml.length
+    );
+
     if (existingSOP.isCurrentVersion) {
       await prisma.sOP.update({
         where: { id: sopId },
@@ -286,23 +308,23 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 8. Create new version record
     const updatedSOP = await prisma.sOP.create({
       data: {
         userOrganizationId: existingSOP.userOrganizationId,
         organizationId: existingSOP.organizationId,
         title: existingSOP.title,
         content: {
-          html: updatedHtml, // Store only HTML (primary format)
+          html: updatedHtml,
           version: nextVersionNumber.toString(),
           generatedAt: currentContent?.generatedAt || new Date().toISOString(),
           lastEditedAt: new Date().toISOString(),
         },
         intakeData: existingSOP.intakeData ?? undefined,
-        usedKnowledgeBaseVersion: existingSOP.usedKnowledgeBaseVersion ?? undefined,
+        usedKnowledgeBaseVersion:
+          existingSOP.usedKnowledgeBaseVersion ?? undefined,
         knowledgeBaseSnapshot: existingSOP.knowledgeBaseSnapshot ?? undefined,
         contributedInsights: existingSOP.contributedInsights ?? undefined,
-        // VERSIONING: Create new version
+
         versionNumber: nextVersionNumber,
         rootSOPId: rootSOPId,
         isCurrentVersion: true,
@@ -334,11 +356,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 7. Extract insights from updated SOP (for learning events)
     let contributedInsights: any[] = [];
     try {
       const intakeData = existingSOP.intakeData as any;
-      const organizationProfile = (existingSOP.metadata as any)?.organizationProfileSnapshot || null;
+      const organizationProfile =
+        (existingSOP.metadata as any)?.organizationProfileSnapshot || null;
 
       const sopDataForExtraction = {
         sopContent: sopContent,
@@ -354,25 +376,31 @@ export async function POST(request: NextRequest) {
         },
       };
 
-      contributedInsights = extractInsights("SOP_GENERATION", sopDataForExtraction);
+      contributedInsights = await extractInsights(
+        "SOP_GENERATION",
+        sopDataForExtraction
+      );
     } catch (insightError: any) {
-      console.error("[SOP Update] Error extracting insights (non-blocking):", insightError);
+      console.error(
+        "[SOP Update] Error extracting insights (non-blocking):",
+        insightError
+      );
     }
 
-    // 8. Create learning events if insights found (non-blocking)
     if (contributedInsights.length > 0) {
       try {
-        // Get knowledge base
-        const knowledgeBase = await prisma.organizationKnowledgeBase.findUnique({
-          where: { organizationId: existingSOP.organizationId },
-          select: { id: true },
-        });
+        const knowledgeBase = await prisma.organizationKnowledgeBase.findUnique(
+          {
+            where: { organizationId: existingSOP.organizationId },
+            select: { id: true },
+          }
+        );
 
         if (knowledgeBase) {
           const learningEventsResult = await createLearningEvents({
             knowledgeBaseId: knowledgeBase.id,
             sourceType: "SOP_GENERATION",
-            sourceId: updatedSOP.id, // Use new version ID
+            sourceId: updatedSOP.id,
             insights: contributedInsights,
             triggeredBy: existingSOP.userOrganizationId,
           });
@@ -382,35 +410,39 @@ export async function POST(request: NextRequest) {
               `[SOP Update] Created ${learningEventsResult.eventsCreated} LearningEvents for SOP ${sopId}`
             );
 
-            // Apply learning events to KB (non-blocking)
             try {
               await applyLearningEventsToKB({
                 knowledgeBaseId: knowledgeBase.id,
-                minConfidence: 80,
+                minConfidence: CONFIDENCE_THRESHOLDS.HIGH,
               });
             } catch (enrichmentError) {
-              console.error("[SOP Update] Error applying learning events (non-critical):", enrichmentError);
+              console.error(
+                "[SOP Update] Error applying learning events (non-critical):",
+                enrichmentError
+              );
             }
           }
         }
       } catch (learningEventError) {
-        console.error("[SOP Update] Error creating LearningEvents (non-critical):", learningEventError);
+        console.error(
+          "[SOP Update] Error creating LearningEvents (non-critical):",
+          learningEventError
+        );
       }
     }
 
-    // 9. Return success response with HTML only
     const responseContent = updatedSOP.content as any;
     const response = NextResponse.json({
       success: true,
       sop: {
         id: updatedSOP.id,
         title: updatedSOP.title,
-        content: responseContent, // Contains only HTML now
+        content: responseContent,
         version: nextVersionNumber,
         versionNumber: nextVersionNumber,
         updatedAt: updatedSOP.updatedAt,
       },
-      sopHtml: responseContent?.html || updatedHtml, // Return HTML directly for convenience
+      sopHtml: responseContent?.html || updatedHtml,
       aiReview: reviewWithAI
         ? {
             suggestions: aiReviewSuggestions,
@@ -418,8 +450,6 @@ export async function POST(request: NextRequest) {
           }
         : null,
     });
-
-    // Add rate limit headers to response
     return addRateLimitHeaders(response, rateLimit.rateLimitResult);
   } catch (error: any) {
     console.error("[SOP Update] Error:", error);
@@ -432,4 +462,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

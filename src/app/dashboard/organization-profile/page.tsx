@@ -33,6 +33,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import BaseIntakeForm from "@/components/forms/BaseIntakeForm";
 import { organizationKnowledgeBaseConfig } from "@/components/forms/configs/organizationKnowledgeBaseConfig";
 import { useUser } from "@/context/UserContext";
+import { Document } from "@/components/organization/DocumentLibrary";
+import DocumentUploader from "@/components/organization/DocumentUploader";
+import { useRouter } from "next/navigation";
 
 type CompletionAnalysis = {
     overallScore: number;
@@ -241,6 +244,7 @@ type OrganizationProfile = {
 
 export default function OrganizationProfilePage() {
     const { user } = useUser();
+    const router = useRouter();
     const [profile, setProfile] = useState<OrganizationProfile | null>(null);
     const [completionAnalysis, setCompletionAnalysis] = useState<CompletionAnalysis | null>(null);
     const [qualityAnalysis, setQualityAnalysis] = useState<QualityAnalysis | null>(null);
@@ -249,6 +253,8 @@ export default function OrganizationProfilePage() {
     const [error, setError] = useState<string | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [documents, setDocuments] = useState<Document[]>([]);
+    const [allDocuments, setAllDocuments] = useState<Document[]>([]);
     const previousCompletionState = useRef<boolean | null>(null);
 
     useEffect(() => {
@@ -270,6 +276,25 @@ export default function OrganizationProfilePage() {
         }
     }, [profile?.requiredFieldsComplete]);
 
+    const loadDocuments = async () => {
+        try {
+            const response = await fetch("/api/organization-knowledge-base/documents");
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success && result.documents) {
+                    setAllDocuments(result.documents);
+                    // Only show PENDING and PROCESSING documents on profile page
+                    const activeDocs = result.documents.filter(
+                        (doc: Document) => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING"
+                    );
+                    setDocuments(activeDocs);
+                }
+            }
+        } catch (error) {
+            console.error("Error loading documents:", error);
+        }
+    };
+
     const loadProfile = async () => {
         try {
             setIsLoading(true);
@@ -282,6 +307,16 @@ export default function OrganizationProfilePage() {
                 setCompletionAnalysis(result.completionAnalysis || null);
                 if (result.qualityAnalysis) {
                     setQualityAnalysis(result.qualityAnalysis);
+                }
+
+                if (result.documents) {
+                    setAllDocuments(result.documents);
+                    const activeDocs = result.documents.filter(
+                        (doc: Document) => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING"
+                    );
+                    setDocuments(activeDocs);
+                } else {
+                    loadDocuments();
                 }
             } else {
                 setError(result.message || "Failed to load organization profile");
@@ -685,6 +720,72 @@ export default function OrganizationProfilePage() {
                         </Card>
                     )}
 
+                    {/* Document Upload Section */}
+                    {profile && (
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-lg font-semibold">Documents</h2>
+                                    <p className="text-sm text-muted-foreground">
+                                        {allDocuments.length > 0
+                                            ? `${allDocuments.length} document${allDocuments.length === 1 ? '' : 's'} uploaded`
+                                            : "Upload documents to enhance your knowledge base"}
+                                    </p>
+                                </div>
+                                {allDocuments.length > 0 && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => router.push("/dashboard/organization-profile/documents")}
+                                        className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white"
+                                    >
+                                        View All Documents
+                                    </Button>
+                                )}
+                            </div>
+                            <DocumentUploader
+                                documents={documents}
+                                onDocumentsChange={(updatedDocs) => {
+                                    setDocuments(updatedDocs);
+                                    // Update all documents list
+                                    const completedDocs = allDocuments.filter(
+                                        (doc) => doc.extractionStatus !== "PENDING" && doc.extractionStatus !== "PROCESSING"
+                                    );
+                                    const activeDocs = updatedDocs.filter(
+                                        (doc) => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING"
+                                    );
+                                    setAllDocuments([...completedDocs, ...activeDocs]);
+                                }}
+                                onDocumentComplete={(completedDoc: Document) => {
+                                    // Remove from active documents list
+                                    setDocuments((prev) => prev.filter((doc) => doc.id !== completedDoc.id));
+                                    // Add to all documents if not already there
+                                    setAllDocuments((prev) => {
+                                        const exists = prev.find((d) => d.id === completedDoc.id);
+                                        if (exists) {
+                                            return prev.map((d) => d.id === completedDoc.id ? completedDoc : d);
+                                        }
+                                        return [...prev, completedDoc];
+                                    });
+
+                                    // Show success toast when document processing completes
+                                    if (completedDoc.extractionStatus === "COMPLETED") {
+                                        toast.success(`"${completedDoc.name}" processed successfully!`, {
+                                            description: completedDoc.insights && completedDoc.insights.length > 0
+                                                ? `${completedDoc.insights.length} insight${completedDoc.insights.length > 1 ? 's' : ''} extracted. Document moved to Documents page.`
+                                                : "Content extracted and added to your knowledge base. Document moved to Documents page.",
+                                            duration: 6000,
+                                        });
+                                    } else if (completedDoc.extractionStatus === "FAILED") {
+                                        toast.error(`"${completedDoc.name}" processing failed`, {
+                                            description: completedDoc.extractionError || "An error occurred during processing. You can view it in the Documents page.",
+                                            duration: 6000,
+                                        });
+                                    }
+                                }}
+                            />
+                        </div>
+                    )}
+
                     {/* Tool Readiness Card */}
                     {profile && completionAnalysis && (
                         <Card>
@@ -808,7 +909,7 @@ export default function OrganizationProfilePage() {
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                 <DocumentTextIcon className="h-4 w-4" />
-                                                <span className="font-medium text-base">SOP Generator</span>
+                                                <span className="font-medium text-base">Process Builder</span>
                                             </div>
                                             {completionAnalysis.toolReadiness.sopGenerator.ready && (
                                                 <CheckCircleIcon className="h-4 w-4 text-[color:var(--accent-strong)]" />

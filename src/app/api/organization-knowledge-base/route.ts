@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
-import { verifyAccessToken } from "@/lib/auth";
+import { prisma } from "@/lib/core/prisma";
+import { verifyAccessToken } from "@/lib/core/auth";
 import {
   analyzeKnowledgeBaseCompletion,
   getCompletionDataForStorage,
-} from "@/lib/completion-analysis";
+} from "@/lib/analysis/completion-analysis";
 import {
   extractFromMultiple,
   extractFromContentLinks,
   FileExtractionInput,
   ExtractedFileContent,
   ExtractedWebsiteContent,
-} from "@/lib/extract-content";
+} from "@/lib/extraction/extract-content";
 
 export async function GET() {
   try {
@@ -138,8 +138,6 @@ export async function GET() {
         })
       : false;
 
-    // Run completion analysis if knowledge base exists
-    // Pass quality analysis if available to enhance tool readiness
     let completionAnalysis = null;
     if (organizationKnowledgeBase) {
       const qualityAnalysis =
@@ -149,7 +147,6 @@ export async function GET() {
         qualityAnalysis
       );
 
-      // Update stored completion data if it's missing or outdated
       if (
         !organizationKnowledgeBase.completeness ||
         !organizationKnowledgeBase.completenessBreakdown
@@ -162,14 +159,12 @@ export async function GET() {
             completenessBreakdown: completionData,
           },
         });
-        // Update local object to reflect changes
         organizationKnowledgeBase.completeness =
           completionAnalysis.overallScore;
         organizationKnowledgeBase.completenessBreakdown = completionData;
       }
     }
 
-    // Fetch user info for lastEditedBy
     let lastEditedByUser = null;
 
     if (organizationKnowledgeBase?.lastEditedBy) {
@@ -192,19 +187,61 @@ export async function GET() {
       }
     }
 
+    let documents = [];
+    if (organizationKnowledgeBase) {
+      try {
+        const docs = await (prisma as any).organizationDocument.findMany({
+          where: {
+            knowledgeBaseId: organizationKnowledgeBase.id,
+          },
+          orderBy: {
+            uploadedAt: "desc",
+          },
+          select: {
+            id: true,
+            name: true,
+            url: true,
+            key: true,
+            type: true,
+            size: true,
+            uploadedAt: true,
+            extractionStatus: true,
+          },
+        });
+        documents = docs.map((doc: any) => ({
+          id: doc.id,
+          name: doc.name,
+          url: doc.url,
+          key: doc.key,
+          type: doc.type,
+          size: doc.size,
+          uploadedAt: doc.uploadedAt.toISOString(),
+          extractionStatus: doc.extractionStatus,
+        }));
+      } catch (error: any) {
+        if (error?.code === 'P2021') {
+          console.warn("OrganizationDocument table does not exist yet. Please run the migration.");
+          documents = [];
+        } else {
+          console.error("Error fetching documents:", error);
+          documents = [];
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       organizationProfile: organizationKnowledgeBase
         ? {
             ...organizationKnowledgeBase,
-            // Add computed fields for backward compatibility
             contributorsCount,
             requiredFieldsComplete,
             lastEditedByUser,
           }
         : null,
-      completionAnalysis: completionAnalysis, // Include completion analysis in response
-      qualityAnalysis: organizationKnowledgeBase?.aiQualityAnalysis || null, // Include quality analysis if available
+      completionAnalysis: completionAnalysis,
+      qualityAnalysis: organizationKnowledgeBase?.aiQualityAnalysis || null,
+      documents: documents,
       organizationId: userOrg.organizationId,
     });
   } catch (error) {
@@ -372,11 +409,9 @@ export async function POST(request: Request) {
     const processedIndustryOther =
       industry?.toLowerCase() === "other" ? industryOther : null;
 
-    // Process toolStack - convert string to array if needed
     let processedToolStack: string[] = [];
     if (toolStack !== undefined) {
       if (typeof toolStack === "string") {
-        // Split by comma or newline, trim, and filter empty strings
         processedToolStack = toolStack
           .split(/[,\n]/)
           .map((tool) => tool.trim())
@@ -386,7 +421,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Process isRegulated - convert string to boolean if needed
     let processedIsRegulated: boolean | null = null;
     if (isRegulated !== undefined) {
       if (typeof isRegulated === "string") {
@@ -401,7 +435,6 @@ export async function POST(request: Request) {
       lastEditedAt: new Date(),
     };
 
-    // Core Identity Tier 1 Required
     if (businessName !== undefined) profileData.businessName = businessName;
     if (website !== undefined) profileData.website = website;
     if (industry !== undefined) profileData.industry = industry;
@@ -409,7 +442,6 @@ export async function POST(request: Request) {
       profileData.industryOther = processedIndustryOther;
     if (whatYouSell !== undefined) profileData.whatYouSell = whatYouSell;
 
-    // Business Context Tier 1
     if (monthlyRevenue !== undefined)
       profileData.monthlyRevenue = monthlyRevenue;
     if (teamSize !== undefined) profileData.teamSize = teamSize;
@@ -417,14 +449,12 @@ export async function POST(request: Request) {
     if (biggestBottleNeck !== undefined)
       profileData.biggestBottleNeck = biggestBottleNeck;
 
-    // Customer and Market Tier 2
     if (idealCustomer !== undefined) profileData.idealCustomer = idealCustomer;
     if (topObjection !== undefined) profileData.topObjection = topObjection;
     if (coreOffer !== undefined) profileData.coreOffer = coreOffer;
     if (customerJourney !== undefined)
       profileData.customerJourney = customerJourney;
 
-    // Operations and Tools Tier 2
     if (toolStack !== undefined) profileData.toolStack = processedToolStack;
     if (primaryCRM !== undefined) profileData.primaryCRM = primaryCRM;
     if (defaultTimeZone !== undefined)
@@ -432,7 +462,6 @@ export async function POST(request: Request) {
     if (bookingLink !== undefined) profileData.bookingLink = bookingLink;
     if (supportEmail !== undefined) profileData.supportEmail = supportEmail;
 
-    // Brand & Voice (Tier 2)
     if (brandVoiceStyle !== undefined)
       profileData.brandVoiceStyle = brandVoiceStyle;
     if (riskBoldness !== undefined) profileData.riskBoldness = riskBoldness;
@@ -441,13 +470,11 @@ export async function POST(request: Request) {
     if (voiceExamplesAvoid !== undefined)
       profileData.voiceExamplesAvoid = voiceExamplesAvoid;
 
-    // Process contentLinks - extract and summarize content from URLs
     let processedContentLinks: string | null = null;
     let contentLinksExtracted: ExtractedWebsiteContent[] | null = null;
     if (contentLinks !== undefined) {
-      processedContentLinks = contentLinks; // Store original URLs
+      processedContentLinks = contentLinks; 
 
-      // Extract content from URLs if provided
       if (contentLinks && contentLinks.trim().length > 0) {
         try {
           contentLinksExtracted = await extractFromContentLinks(contentLinks);
@@ -456,7 +483,6 @@ export async function POST(request: Request) {
           );
         } catch (error) {
           console.error("Error extracting content from content links:", error);
-          // Continue without extracted content - URLs are still stored
         }
       }
     }
@@ -465,7 +491,6 @@ export async function POST(request: Request) {
       profileData.contentLinks = processedContentLinks;
     }
 
-    // Compliance Tier 2
     if (isRegulated !== undefined)
       profileData.isRegulated = processedIsRegulated;
     if (regulatedIndustry !== undefined)
@@ -474,7 +499,6 @@ export async function POST(request: Request) {
       profileData.forbiddenWords = forbiddenWords;
     if (disclaimers !== undefined) profileData.disclaimers = disclaimers;
 
-    // HR Defaults
     if (defaultWeeklyHours !== undefined)
       profileData.defaultWeeklyHours = defaultWeeklyHours;
     if (defaultManagementStyle !== undefined)
@@ -482,44 +506,36 @@ export async function POST(request: Request) {
     if (defaultEnglishLevel !== undefined)
       profileData.defaultEnglishLevel = defaultEnglishLevel;
 
-    // Proof & Credibility
     if (proofAssets !== undefined) profileData.proofAssets = proofAssets;
 
-    // Process proofFiles - extract and summarize content
     let processedProofFiles: any = null;
     if (proofFiles !== undefined) {
-      // Handle proofFiles - can be array of URLs (strings) or JSON object
       let proofFilesArray: string[] = [];
       if (Array.isArray(proofFiles)) {
         proofFilesArray = proofFiles;
       } else if (typeof proofFiles === "string") {
-        // If it's a JSON string, parse it
         try {
           const parsed = JSON.parse(proofFiles);
           proofFilesArray = Array.isArray(parsed) ? parsed : [parsed];
         } catch {
-          // If parsing fails, treat as single URL string
           proofFilesArray = [proofFiles];
         }
       } else {
         proofFilesArray = Array.isArray(proofFiles) ? proofFiles : [];
       }
 
-      // Extract content from files if any are provided
       if (proofFilesArray.length > 0) {
         try {
           const fileInputs: FileExtractionInput[] = proofFilesArray.map(
             (fileUrl: string) => {
-              // Extract filename from URL or use a default
               const urlParts = fileUrl.split("/");
               const fileName = urlParts[urlParts.length - 1] || "unknown-file";
 
-              // Try to extract S3 key if it's an S3 URL
               let s3Key: string | undefined;
               if (fileUrl.includes("amazonaws.com") || fileUrl.includes("s3")) {
                 const s3Match = fileUrl.match(/\/[^\/]+\.(pdf|doc|docx|txt)/i);
                 if (s3Match) {
-                  s3Key = s3Match[0].substring(1); // Remove leading slash
+                  s3Key = s3Match[0].substring(1);
                 }
               }
 
@@ -531,7 +547,6 @@ export async function POST(request: Request) {
             }
           );
 
-          // Extract content from files (with progress callback for logging)
           const extractionResult = await extractFromMultiple(
             fileInputs,
             [],
@@ -542,7 +557,6 @@ export async function POST(request: Request) {
             }
           );
 
-          // Structure the result to store both URLs and extracted content
           processedProofFiles = {
             files: proofFilesArray.map((url: string, index: number) => {
               const fileName = fileInputs[index]?.fileName || "unknown-file";
@@ -568,7 +582,7 @@ export async function POST(request: Request) {
           };
         } catch (error) {
           console.error("Error extracting content from proof files:", error);
-          // Fallback: store URLs without extraction
+          
           processedProofFiles = {
             files: proofFilesArray.map((url: string) => ({
               url,
@@ -580,14 +594,12 @@ export async function POST(request: Request) {
           };
         }
       } else {
-        // No files to process, store as-is
         processedProofFiles = proofFiles;
       }
 
       profileData.proofFiles = processedProofFiles;
     }
 
-    // Additional Context
     if (pipeLineStages !== undefined)
       profileData.pipeLineStages = pipeLineStages;
     if (emailSignOff !== undefined) profileData.emailSignOff = emailSignOff;
@@ -607,17 +619,14 @@ export async function POST(request: Request) {
 
     const requiredFieldsComplete = checkRequiredFieldsComplete(mergedData);
 
-    // Update contributors array - add current user if not already present
     const existingContributors = existingKnowledgeBase?.contributors ?? [];
     const isNewContributor = !existingContributors.includes(decoded.userId);
     const updatedContributors = isNewContributor
       ? [...existingContributors, decoded.userId]
       : existingContributors;
 
-    // Prepare aiInsights with extracted content from URLs
     let aiInsightsData: any = null;
     if (contentLinksExtracted && contentLinksExtracted.length > 0) {
-      // Store extracted website content in aiInsights
       const urls = contentLinks
         ? contentLinks
             .split(/[,\n]/)
@@ -642,7 +651,6 @@ export async function POST(request: Request) {
       };
     }
 
-    // Get existing aiInsights to merge
     const existingAiInsights = existingKnowledgeBase
       ? (
           await prisma.organizationKnowledgeBase.findUnique({
@@ -652,7 +660,7 @@ export async function POST(request: Request) {
         )?.aiInsights || null
       : null;
 
-    // Create a version of profileData without organizationId for create operation
+
     const { organizationId: _, ...profileDataForCreate } = profileData;
 
     const updatedKnowledgeBase = await prisma.organizationKnowledgeBase.upsert({
@@ -662,14 +670,13 @@ export async function POST(request: Request) {
         organization: {
           connect: { id: userOrg.organizationId },
         },
-        enrichmentVersion: 1, // Required field - start at version 1
-        contributors: [decoded.userId], // First contributor
-        aiInsights: aiInsightsData !== null ? aiInsightsData : undefined, // Store extracted content links data
+        enrichmentVersion: 1, 
+        contributors: [decoded.userId],
+        aiInsights: aiInsightsData !== null ? aiInsightsData : undefined,
       },
       update: {
         ...profileData,
         contributors: updatedContributors,
-        // Merge with existing aiInsights if updating
         aiInsights: aiInsightsData
           ? {
               ...(existingAiInsights &&
@@ -684,50 +691,50 @@ export async function POST(request: Request) {
       select: {
         id: true,
         organizationId: true,
-        // Core Identity Tier 1 Required
+       
         businessName: true,
         website: true,
         industry: true,
         industryOther: true,
         whatYouSell: true,
-        // Business Context Tier 1
+        
         monthlyRevenue: true,
         teamSize: true,
         primaryGoal: true,
         biggestBottleNeck: true,
-        // Customer and Market Tier 2
+        
         idealCustomer: true,
         topObjection: true,
         coreOffer: true,
         customerJourney: true,
-        // Operations and Tools Tier 2
+        
         toolStack: true,
         primaryCRM: true,
         defaultTimeZone: true,
         bookingLink: true,
         supportEmail: true,
-        // Brand & Voice (Tier 2)
+        
         brandVoiceStyle: true,
         riskBoldness: true,
         voiceExampleGood: true,
         voiceExamplesAvoid: true,
         contentLinks: true,
-        // Compliance Tier 2
+        
         isRegulated: true,
         regulatedIndustry: true,
         forbiddenWords: true,
         disclaimers: true,
-        // HR Defaults
+        
         defaultWeeklyHours: true,
         defaultManagementStyle: true,
         defaultEnglishLevel: true,
-        // Proof & Credibility
+        
         proofAssets: true,
         proofFiles: true,
-        // Additional Context
+        
         pipeLineStages: true,
         emailSignOff: true,
-        // Versioning
+        
         version: true,
         lastEditedBy: true,
         lastEditedAt: true,
@@ -737,17 +744,14 @@ export async function POST(request: Request) {
       },
     });
 
-    // Calculate computed fields for backward compatibility
     const contributorsCount = updatedKnowledgeBase.contributors?.length ?? 0;
 
-    // Get quality analysis if available (before updating with completion)
     const existingQualityAnalysis =
       await prisma.organizationKnowledgeBase.findUnique({
         where: { id: updatedKnowledgeBase.id },
         select: { aiQualityAnalysis: true },
       });
 
-    // Run completion analysis with quality enhancement if available
     const qualityAnalysis = existingQualityAnalysis?.aiQualityAnalysis || null;
     const completionAnalysis = analyzeKnowledgeBaseCompletion(
       updatedKnowledgeBase,
@@ -755,7 +759,6 @@ export async function POST(request: Request) {
     );
     const completionData = getCompletionDataForStorage(completionAnalysis);
 
-    // Update the knowledge base with completion data
     const updatedWithCompletion = await prisma.organizationKnowledgeBase.update(
       {
         where: { id: updatedKnowledgeBase.id },
@@ -766,55 +769,44 @@ export async function POST(request: Request) {
         select: {
           id: true,
           organizationId: true,
-          // Core Identity Tier 1 Required
           businessName: true,
           website: true,
           industry: true,
           industryOther: true,
           whatYouSell: true,
-          // Business Context Tier 1
           monthlyRevenue: true,
           teamSize: true,
           primaryGoal: true,
           biggestBottleNeck: true,
-          // Customer and Market Tier 2
           idealCustomer: true,
           topObjection: true,
           coreOffer: true,
           customerJourney: true,
-          // Operations and Tools Tier 2
           toolStack: true,
           primaryCRM: true,
           defaultTimeZone: true,
           bookingLink: true,
           supportEmail: true,
-          // Brand & Voice (Tier 2)
           brandVoiceStyle: true,
           riskBoldness: true,
           voiceExampleGood: true,
           voiceExamplesAvoid: true,
           contentLinks: true,
-          // Compliance Tier 2
           isRegulated: true,
           regulatedIndustry: true,
           forbiddenWords: true,
           disclaimers: true,
-          // HR Defaults
           defaultWeeklyHours: true,
           defaultManagementStyle: true,
           defaultEnglishLevel: true,
-          // Proof & Credibility
           proofAssets: true,
           proofFiles: true,
-          // Additional Context
           pipeLineStages: true,
           emailSignOff: true,
-          // Versioning
           version: true,
           lastEditedBy: true,
           lastEditedAt: true,
           contributors: true,
-          // Completion data
           completeness: true,
           completenessBreakdown: true,
           createdAt: true,
@@ -823,7 +815,6 @@ export async function POST(request: Request) {
       }
     );
 
-    // Fetch user info for lastEditedBy
     let lastEditedByUser = null;
 
     if (updatedWithCompletion.lastEditedBy) {
@@ -850,12 +841,11 @@ export async function POST(request: Request) {
       success: true,
       organizationProfile: {
         ...updatedWithCompletion,
-        // Add computed fields for backward compatibility
         contributorsCount,
         requiredFieldsComplete,
         lastEditedByUser,
       },
-      completionAnalysis: completionAnalysis, // Include full analysis in response
+      completionAnalysis: completionAnalysis, 
       message: existingKnowledgeBase
         ? "Knowledge base updated successfully."
         : "Knowledge base created successfully.",

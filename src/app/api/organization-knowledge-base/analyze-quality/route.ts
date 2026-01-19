@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
-import { verifyAccessToken } from "@/lib/auth";
+import { prisma } from "@/lib/core/prisma";
+import { verifyAccessToken } from "@/lib/core/auth";
 import OpenAI from "openai";
 import {
   analyzeKnowledgeBaseQuality,
   getQualityDataForStorage,
-} from "@/lib/ai-quality-analysis";
+} from "@/lib/ai/ai-quality-analysis";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -63,50 +63,40 @@ export async function POST() {
       select: {
         id: true,
         organizationId: true,
-        // Core Identity Tier 1 Required
         businessName: true,
         website: true,
         industry: true,
         industryOther: true,
         whatYouSell: true,
-        // Business Context Tier 1
         monthlyRevenue: true,
         teamSize: true,
         primaryGoal: true,
         biggestBottleNeck: true,
-        // Customer and Market Tier 2
         idealCustomer: true,
         topObjection: true,
         coreOffer: true,
         customerJourney: true,
-        // Operations and Tools Tier 2
         toolStack: true,
         primaryCRM: true,
         defaultTimeZone: true,
         bookingLink: true,
         supportEmail: true,
-        // Brand & Voice (Tier 2)
         brandVoiceStyle: true,
         riskBoldness: true,
         voiceExampleGood: true,
         voiceExamplesAvoid: true,
         contentLinks: true,
-        // Compliance Tier 2
         isRegulated: true,
         regulatedIndustry: true,
         forbiddenWords: true,
         disclaimers: true,
-        // HR Defaults
         defaultWeeklyHours: true,
         defaultManagementStyle: true,
         defaultEnglishLevel: true,
-        // Proof & Credibility
         proofAssets: true,
         proofFiles: true,
-        // Additional Context
         pipeLineStages: true,
         emailSignOff: true,
-        // Quality analysis data
         aiQualityScore: true,
         aiQualityAnalysis: true,
         aiQualityAnalyzedAt: true,

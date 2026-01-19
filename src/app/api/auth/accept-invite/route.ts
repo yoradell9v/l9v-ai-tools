@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/core/prisma";
 import bcrypt from "bcrypt";
-import { generateAccessToken, generateRefreshToken } from "@/lib/auth";
+import { generateAccessToken, generateRefreshToken } from "@/lib/core/auth";
 
 export const runtime = "nodejs";
 

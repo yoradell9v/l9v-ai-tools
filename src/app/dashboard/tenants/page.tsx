@@ -133,19 +133,16 @@ export default function TenantsPage() {
         { value: "MEMBER" as const, label: "Member" },
     ];
 
-    // Fetch tenants on component mount
     useEffect(() => {
         fetchTenants();
     }, []);
 
-    // Fetch current tenant details when we know the current tenant id
     useEffect(() => {
         if (currentTenantId) {
             fetchCurrentTenantDetails(currentTenantId);
         }
     }, [currentTenantId]);
 
-    // Close menu when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (openMenuId) {
@@ -263,7 +260,6 @@ export default function TenantsPage() {
                 return;
             }
 
-            // Close modal and refresh tenants list
             setShowDeactivateModal(false);
             setTenantToDeactivate(null);
             toast.success("Organization deactivated", {
@@ -383,7 +379,6 @@ export default function TenantsPage() {
                 return;
             }
 
-            // Close modal and refresh tenants list
             setShowActivateModal(false);
             setTenantToActivate(null);
             setOpenMenuId(null);
@@ -418,7 +413,6 @@ export default function TenantsPage() {
                 return;
             }
 
-            // Refresh tenant details to update the pending invites list
             toast.success("Invitation cancelled", {
                 description: "The invitation has been cancelled successfully.",
             });
@@ -462,7 +456,6 @@ export default function TenantsPage() {
                 return;
             }
 
-            // Reset form after successful send
             setInviteEmail("");
             setInviteRole("MEMBER");
             setInviteError(null);
@@ -471,7 +464,6 @@ export default function TenantsPage() {
                 description: `An invitation has been sent to ${inviteEmail.trim()}.`,
             });
 
-            // Refresh tenant details to show the new pending invite
             await fetchTenantDetails(selectedTenant.id);
         } catch (error) {
             console.error("Error sending invitation:", error);
@@ -484,7 +476,6 @@ export default function TenantsPage() {
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
 
-        // Auto-generate slug from name
         if (name === "name") {
             const slug = value
                 .toLowerCase()
@@ -496,7 +487,6 @@ export default function TenantsPage() {
             setFormData((prev) => ({ ...prev, [name]: value }));
         }
 
-        // Clear error when user starts typing
         if (errors[name as keyof OrganizationFormData]) {
             setErrors((prev) => ({ ...prev, [name]: undefined }));
         }
@@ -509,9 +499,7 @@ export default function TenantsPage() {
             newErrors.name = "Organization name is required";
         }
 
-        // Validate slug internally (auto-generated, so no user-facing error needed)
         if (!formData.slug.trim() || !/^[a-z0-9-]+$/.test(formData.slug)) {
-            // If slug is invalid, it means the name couldn't generate a valid slug
             if (formData.name.trim()) {
                 newErrors.name = "Organization name must contain at least one letter or number";
             }
@@ -552,7 +540,6 @@ export default function TenantsPage() {
                 return;
             }
 
-            // Success - reset form and close modal
             setFormData({ name: "", slug: "" });
             setErrors({});
             setSubmitError(null);
@@ -562,7 +549,6 @@ export default function TenantsPage() {
                 description: `${formData.name.trim()} has been created successfully.`,
             });
 
-            // Refresh tenants list
             await fetchTenants();
         } catch (error) {
             console.error("Error creating tenant:", error);
@@ -573,7 +559,7 @@ export default function TenantsPage() {
     };
 
     const handleClose = () => {
-        if (isSubmitting) return; // Prevent closing during submission
+        if (isSubmitting) return;
         setFormData({ name: "", slug: "" });
         setErrors({});
         setSubmitError(null);
@@ -870,7 +856,6 @@ export default function TenantsPage() {
                     </TabsContent>
                 </Tabs>
 
-                {/* Add Tenant Dialog */}
                 <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                     <DialogContent>
                         <DialogHeader>
@@ -914,7 +899,6 @@ export default function TenantsPage() {
                 </Dialog>
 
 
-                {/* Deactivate Tenant Alert Dialog */}
                 <AlertDialog open={showDeactivateModal} onOpenChange={(open) => {
                     if (!isDeactivating) {
                         setShowDeactivateModal(open);
@@ -943,7 +927,6 @@ export default function TenantsPage() {
                     </AlertDialogContent>
                 </AlertDialog>
 
-                {/* Activate Tenant Alert Dialog */}
                 <AlertDialog open={showActivateModal} onOpenChange={(open) => {
                     if (!isActivating) {
                         setShowActivateModal(open);
@@ -968,7 +951,6 @@ export default function TenantsPage() {
                     </AlertDialogContent>
                 </AlertDialog>
 
-                {/* Deactivate Collaborator Alert Dialog */}
                 <AlertDialog open={showDeactivateCollaboratorModal} onOpenChange={(open) => {
                     if (!isDeactivatingCollaborator) {
                         setShowDeactivateCollaboratorModal(open);
@@ -997,7 +979,6 @@ export default function TenantsPage() {
                     </AlertDialogContent>
                 </AlertDialog>
 
-                {/* Activate Collaborator Alert Dialog */}
                 <AlertDialog open={showActivateCollaboratorModal} onOpenChange={(open) => {
                     if (!isActivatingCollaborator) {
                         setShowActivateCollaboratorModal(open);
@@ -1022,7 +1003,6 @@ export default function TenantsPage() {
                     </AlertDialogContent>
                 </AlertDialog>
 
-                {/* Side Panel Sheet */}
                 <Sheet open={isPanelOpen} onOpenChange={handleClosePanel}>
                     <SheetContent className="w-full sm:max-w-md flex flex-col p-0 h-full overflow-hidden">
                         <SheetHeader className="px-6 pt-6 pb-4 border-b shrink-0">
@@ -1103,7 +1083,7 @@ export default function TenantsPage() {
                                             </div>
                                             <Separator />
 
-                                            {/* Divider */}
+
                                             <div className="border-t my-4" style={{ borderColor: "var(--border-color)" }} />
 
                                             <div>

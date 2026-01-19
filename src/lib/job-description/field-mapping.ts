@@ -1,8 +1,5 @@
-import { OrganizationKnowledgeBase } from "./organizationKnowledgeBase";
+import { OrganizationKnowledgeBase } from "@/lib/knowledge-base/organization-knowledge-base";
 
-/**
- * JD Form field defaults that can be populated from Organization Knowledge Base
- */
 export interface JDFormDefaults {
   businessName: string;
   businessGoal: string;
@@ -13,9 +10,6 @@ export interface JDFormDefaults {
   managementStyle: string;
 }
 
-/**
- * JD Form data structure (what the user fills in)
- */
 export interface JDFormData {
   businessName?: string;
   businessGoal?: string;
@@ -24,12 +18,9 @@ export interface JDFormData {
   weeklyHours?: string;
   englishLevel?: string;
   managementStyle?: string;
-  [key: string]: any; // Allow other fields
+  [key: string]: any;
 }
 
-/**
- * Resolved JD Form data with org KB defaults applied
- */
 export interface ResolvedJDFormData {
   businessName: string;
   businessGoal: string;
@@ -38,26 +29,21 @@ export interface ResolvedJDFormData {
   weeklyHours: number;
   englishLevel: string;
   managementStyle: string;
-  [key: string]: any; // Allow other fields
+  [key: string]: any;
 }
 
-/**
- * Maps Organization Knowledge Base fields to JD Form default values
- * Used to pre-fill the JD form with organization defaults
- * When KB is null, returns sensible defaults instead of __ORG_DEFAULT__ placeholders
- */
 export function mapOrgKBToJDForm(
   orgKB: OrganizationKnowledgeBase | null
 ): JDFormDefaults {
   if (!orgKB) {
     return {
       businessName: "",
-      businessGoal: "Growth & Scale", // Default when KB is not set up
+      businessGoal: "Growth & Scale",
       tools: "",
       timezone: "",
       weeklyHours: "40",
-      englishLevel: "Excellent", // Default when KB is not set up
-      managementStyle: "Async", // Default when KB is not set up
+      englishLevel: "Excellent",
+      managementStyle: "Async",
     };
   }
 
@@ -72,21 +58,15 @@ export function mapOrgKBToJDForm(
   };
 }
 
-/**
- * Resolves JD Form data by replacing __ORG_DEFAULT__ placeholders with actual org KB values
- * and merging tool stacks
- */
 export function resolveJDFormWithOrgKB(
   formData: JDFormData,
   orgKB: OrganizationKnowledgeBase | null
 ): ResolvedJDFormData {
   const defaults = mapOrgKBToJDForm(orgKB);
 
-  // Resolve businessName: use form value if provided, otherwise org KB default
   const businessName =
     formData.businessName?.trim() || defaults.businessName || "";
 
-  // Resolve businessGoal: replace __ORG_DEFAULT__ with actual org KB value
   const businessGoal =
     formData.businessGoal === "__ORG_DEFAULT__"
       ? defaults.businessGoal === "__ORG_DEFAULT__"
@@ -94,7 +74,6 @@ export function resolveJDFormWithOrgKB(
         : defaults.businessGoal
       : formData.businessGoal || "";
 
-  // Resolve tools: merge org KB tool stack with role-specific tools
   const orgTools = Array.isArray(orgKB?.toolStack) ? orgKB.toolStack : [];
   const roleSpecificTools = formData.tools
     ? formData.tools
@@ -102,11 +81,10 @@ export function resolveJDFormWithOrgKB(
         .map((t) => t.trim())
         .filter(Boolean)
     : [];
-  // Combine and deduplicate
+
   const allTools = [
     ...new Set([...orgTools, ...roleSpecificTools].map((t) => t.toLowerCase())),
   ].map((t) => {
-    // Find original case from either source
     return (
       orgTools.find((ot) => ot.toLowerCase() === t) ||
       roleSpecificTools.find((rt) => rt.toLowerCase() === t) ||
@@ -114,15 +92,12 @@ export function resolveJDFormWithOrgKB(
     );
   });
 
-  // Resolve timezone: use form value if provided, otherwise org KB default
   const timezone = formData.timezone?.trim() || defaults.timezone || "";
 
-  // Resolve weeklyHours: use form value if provided, otherwise org KB default
   const weeklyHours = formData.weeklyHours
     ? parseInt(formData.weeklyHours, 10) || 0
     : parseInt(defaults.weeklyHours, 10) || 40;
 
-  // Resolve englishLevel: replace __ORG_DEFAULT__ with actual org KB value
   const englishLevel =
     formData.englishLevel === "__ORG_DEFAULT__"
       ? defaults.englishLevel === "__ORG_DEFAULT__"
@@ -130,7 +105,6 @@ export function resolveJDFormWithOrgKB(
         : defaults.englishLevel
       : formData.englishLevel || "";
 
-  // Resolve managementStyle: replace __ORG_DEFAULT__ with actual org KB value
   const managementStyle =
     formData.managementStyle === "__ORG_DEFAULT__"
       ? defaults.managementStyle === "__ORG_DEFAULT__"
@@ -150,10 +124,6 @@ export function resolveJDFormWithOrgKB(
   };
 }
 
-/**
- * Converts resolved JD Form data to API intake format
- * This is the format expected by the /api/jd/analyze endpoint
- */
 export function resolvedJDFormToIntakePayload(
   resolvedData: ResolvedJDFormData
 ): any {
@@ -184,4 +154,3 @@ export function resolvedJDFormToIntakePayload(
     existing_sops: resolvedData.existingSOPs === "Yes",
   };
 }
-

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
-import { verifyAccessToken } from "@/lib/auth";
-import { markdownToHtml } from "@/lib/markdown-to-html";
-import { htmlToMarkdown } from "@/lib/html-to-markdown";
+import { prisma } from "@/lib/core/prisma";
+import { verifyAccessToken } from "@/lib/core/auth";
+import { markdownToHtml } from "@/lib/extraction/markdown-to-html";
+import { htmlToMarkdown } from "@/lib/extraction/html-to-markdown";
 
 export async function POST(
   request: NextRequest,
@@ -28,8 +28,7 @@ export async function POST(
       );
     }
 
-    // Await params (Next.js 15+)
-    const { id: versionSOPId } = await params; // The ID of the version to restore
+    const { id: versionSOPId } = await params; 
 
     if (!versionSOPId) {
       return NextResponse.json(
@@ -38,7 +37,6 @@ export async function POST(
       );
     }
 
-    // Get the version to restore
     const versionToRestore = await prisma.sOP.findUnique({
       where: { id: versionSOPId },
       include: {
@@ -58,7 +56,6 @@ export async function POST(
       );
     }
 
-    // Verify user has access
     if (versionToRestore.userOrganization.userId !== decoded.userId) {
       return NextResponse.json(
         { success: false, error: "You don't have permission to restore this version." },
@@ -66,7 +63,6 @@ export async function POST(
       );
     }
 
-    // If this is already the current version, no need to restore
     if (versionToRestore.isCurrentVersion) {
       return NextResponse.json({
         success: true,
@@ -80,7 +76,6 @@ export async function POST(
 
     const rootSOPId = versionToRestore.rootSOPId || versionToRestore.id;
 
-    // Find current version and mark it as not current
     const currentVersion = await prisma.sOP.findFirst({
       where: {
         rootSOPId: rootSOPId,
@@ -95,25 +90,20 @@ export async function POST(
       });
     }
 
-    // Create a new version from the restored content
-    // This preserves history while making the old version current
     const content = versionToRestore.content as any;
     const htmlContent = content?.html || "";
 
-    // Convert HTML to markdown for editing compatibility
     let markdownContent = "";
     if (htmlContent) {
       try {
         markdownContent = htmlToMarkdown(htmlContent);
       } catch (error) {
         console.error("[SOP Restore] Error converting HTML to markdown:", error);
-        // Continue without markdown - HTML is primary
       }
     }
 
     const newVersionNumber = (versionToRestore.versionNumber || 1) + 1;
 
-    // Create new version from restored content
     const restoredSOP = await prisma.sOP.create({
       data: {
         userOrganizationId: versionToRestore.userOrganizationId,
@@ -129,7 +119,6 @@ export async function POST(
         usedKnowledgeBaseVersion: versionToRestore.usedKnowledgeBaseVersion ?? undefined,
         knowledgeBaseSnapshot: versionToRestore.knowledgeBaseSnapshot ?? undefined,
         contributedInsights: versionToRestore.contributedInsights ?? undefined,
-        // VERSIONING: Create new version from restored content
         versionNumber: newVersionNumber,
         rootSOPId: rootSOPId,
         isCurrentVersion: true,

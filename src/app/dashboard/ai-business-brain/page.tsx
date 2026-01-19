@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from "@/lib/rate-limit-client";
+import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from "@/lib/rate-limiting/rate-limit-client";
 import { toast } from "sonner";
 import {
     Dialog,
@@ -244,7 +244,6 @@ export default function AIBusinessBrainPage() {
     const handleCreateConversation = async () => {
         if (isCreatingConversation) return;
         setIsCreatingConversation(true);
-        // Do not create on server until first message; just reset UI state
         handleStartNewConversation();
         setIsCreatingConversation(false);
     };
@@ -308,8 +307,7 @@ export default function AIBusinessBrainPage() {
                     }),
                 }
             );
-
-            // Check for rate limit error
+            
             if (isRateLimitError(messageResponse)) {
                 const rateLimitError = await parseRateLimitError(messageResponse);
                 const errorMessage = getRateLimitErrorMessage(rateLimitError);

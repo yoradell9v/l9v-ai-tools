@@ -6,8 +6,8 @@ import BaseIntakeForm, { BaseIntakeFormRef } from "@/components/forms/BaseIntake
 import { jdFormConfig, getJDFormConfigWithKB } from "@/components/forms/configs/jdFormConfig";
 import RefinementForm from "@/components/forms/RefinementForm";
 import { useUser } from "@/context/UserContext";
-import { OrganizationKnowledgeBase } from "@/lib/organizationKnowledgeBase";
-import { mapOrgKBToJDForm, resolveJDFormWithOrgKB, resolvedJDFormToIntakePayload } from "@/lib/field-mapping";
+import { OrganizationKnowledgeBase } from "@/lib/knowledge-base/organization-knowledge-base";
+import { mapOrgKBToJDForm, resolveJDFormWithOrgKB, resolvedJDFormToIntakePayload } from "@/lib/job-description/field-mapping";
 import { Briefcase, Sparkles, CheckCircle2, ShieldAlert, AlertTriangle, TrendingUp, Target, AlertCircle, Network, FileText, Plus, MoreVertical, Edit, Download, Save, History, Loader2, Clock, Calendar, Zap, ArrowRight, X, Check, AlertCircle as AlertCircleIcon } from "lucide-react";
 import { getConfidenceValue, getConfidenceColor } from '@/utils/confidence';
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -31,7 +31,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
-import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from "@/lib/rate-limit-client";
+import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from "@/lib/rate-limiting/rate-limit-client";
 import { toast } from "sonner";
 
 interface AnalysisResult {
@@ -916,7 +916,7 @@ export default function JdBuilderPage() {
                                     )}
                                     <Button
                                         variant="outline"
-                                        onClick={() => router.push("/dashboard/jd-builder/history")}
+                                        onClick={() => router.push("/dashboard/role-builder/history")}
                                     >
                                         <History className="h-4 w-4" />
                                         History

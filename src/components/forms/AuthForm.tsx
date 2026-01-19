@@ -16,6 +16,7 @@ import {
     CardTitle,
 } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 type AuthMode = 'signin' | 'signup'
 
@@ -133,8 +134,8 @@ export default function AuthForm({
                     priority
                 />
             </div>
-            <Card className="w-full max-w-md">
-                <CardHeader className="pt-4 pb-2">
+            <Card className="w-full max-w-md max-h-[90vh] flex flex-col">
+                <CardHeader className="pt-4 pb-2 flex-shrink-0">
                     <CardTitle className="text-4xl font-semibold text-center">{heading}</CardTitle>
                     <CardDescription className="text-center text-md">Please enter details</CardDescription>
                     {errorMessage && (
@@ -143,92 +144,93 @@ export default function AuthForm({
                         </Alert>
                     )}
                 </CardHeader>
-                <form onSubmit={handleSubmit}>
-                    <CardContent>
-
-                        <div className="flex flex-col gap-6">
-                            {isSignup && (
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="firstname" className="text-base">First name</Label>
-                                        <Input id="firstname" name="firstname" type="text" placeholder="John" value={values.firstname || ''} onChange={handleChange} autoComplete="firstname" />
+                <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+                    <CardContent className="flex-1 min-h-0">
+                        <ScrollArea className="h-full w-full">
+                            <div className="flex flex-col gap-6 pr-4">
+                                {isSignup && (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="firstname" className="text-base">First name</Label>
+                                            <Input id="firstname" name="firstname" type="text" placeholder="John" value={values.firstname || ''} onChange={handleChange} autoComplete="firstname" />
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="lastname" className="text-base">Last name</Label>
+                                            <Input id="lastname" name="lastname" type="text" placeholder="Doe" value={values.lastname || ''} onChange={handleChange} autoComplete="lastname" />
+                                        </div>
                                     </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="lastname" className="text-base">Last name</Label>
-                                        <Input id="lastname" name="lastname" type="text" placeholder="Doe" value={values.lastname || ''} onChange={handleChange} autoComplete="lastname" />
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="email" className="text-base">Email</Label>
-                                <Input id="email" name="email" type="email" placeholder="you@example.com" value={values.email} onChange={handleChange} autoComplete="email" required />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <div className="flex items-center">
-                                    <Label htmlFor="password" className="text-base">Password</Label>
-                                    {!isSignup && (
-                                        <Link href="/forgot-password" className="ml-auto inline-block text-sm underline-offset-4 hover:underline transition-colors duration-150 text-[var(--text-muted)] hover:text-[var(--primary)] dark:hover:text-[var(--accent)]">
-                                            Forgot password?
-                                        </Link>
-                                    )}
-                                </div>
-                                <div className="relative">
-                                    <Input
-                                        id="password"
-                                        name="password"
-                                        type={showPassword ? 'text' : 'password'}
-                                        placeholder="••••••••"
-                                        value={values.password}
-                                        onChange={handleChange}
-                                        autoComplete={isSignup ? 'new-password' : 'current-password'}
-                                        required
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPassword((prev) => !prev)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-150 text-[var(--text-muted)] hover:text-[var(--accent)]"
-                                    >
-                                        {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
-                                    </button>
-                                </div>
-                                {isSignup && values.password.length > 0 && (
-                                    <p className={`text-sm transition-colors duration-150 ${passwordStrength.valid ? 'text-green-600' : 'text-red-600'}`}>
-                                        {passwordStrength.message}
-                                    </p>
                                 )}
-                            </div>
 
-                            {isSignup && (
                                 <div className="grid gap-2">
-                                    <Label htmlFor="confirmPassword" className="text-base">Confirm password</Label>
+                                    <Label htmlFor="email" className="text-base">Email</Label>
+                                    <Input id="email" name="email" type="email" placeholder="you@example.com" value={values.email} onChange={handleChange} autoComplete="email" required />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <div className="flex items-center">
+                                        <Label htmlFor="password" className="text-base">Password</Label>
+                                        {!isSignup && (
+                                            <Link href="/forgot-password" className="ml-auto inline-block text-sm underline-offset-4 hover:underline transition-colors duration-150 text-[var(--text-muted)] hover:text-[var(--primary)] dark:hover:text-[var(--accent)]">
+                                                Forgot password?
+                                            </Link>
+                                        )}
+                                    </div>
                                     <div className="relative">
                                         <Input
-                                            id="confirmPassword"
-                                            name="confirmPassword"
-                                            type={showConfirmPassword ? 'text' : 'password'}
+                                            id="password"
+                                            name="password"
+                                            type={showPassword ? 'text' : 'password'}
                                             placeholder="••••••••"
-                                            value={values.confirmPassword || ''}
+                                            value={values.password}
                                             onChange={handleChange}
-                                            autoComplete="new-password"
+                                            autoComplete={isSignup ? 'new-password' : 'current-password'}
                                             required
-                                            className={passwordMismatchError ? 'border-red-500 focus-visible:ring-red-500/20 focus-visible:ring-2' : undefined}
                                         />
                                         <button
                                             type="button"
-                                            onClick={() => setShowConfirmPassword((prev) => !prev)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-150 text-[var(--text-muted)] hover:text-[var(--primary)] dark:hover:text-[var(--accent)]"
+                                            onClick={() => setShowPassword((prev) => !prev)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-150 text-[var(--text-muted)] hover:text-[var(--accent)]"
                                         >
-                                            {showConfirmPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                                            {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
                                         </button>
                                     </div>
-                                    {passwordMismatchError && <p className="text-sm text-red-600 transition-colors duration-150">Passwords do not match</p>}
+                                    {isSignup && values.password.length > 0 && (
+                                        <p className={`text-sm transition-colors duration-150 ${passwordStrength.valid ? 'text-green-600' : 'text-red-600'}`}>
+                                            {passwordStrength.message}
+                                        </p>
+                                    )}
                                 </div>
-                            )}
-                        </div>
+
+                                {isSignup && (
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="confirmPassword" className="text-base">Confirm password</Label>
+                                        <div className="relative">
+                                            <Input
+                                                id="confirmPassword"
+                                                name="confirmPassword"
+                                                type={showConfirmPassword ? 'text' : 'password'}
+                                                placeholder="••••••••"
+                                                value={values.confirmPassword || ''}
+                                                onChange={handleChange}
+                                                autoComplete="new-password"
+                                                required
+                                                className={passwordMismatchError ? 'border-red-500 focus-visible:ring-red-500/20 focus-visible:ring-2' : undefined}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowConfirmPassword((prev) => !prev)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-150 text-[var(--text-muted)] hover:text-[var(--primary)] dark:hover:text-[var(--accent)]"
+                                            >
+                                                {showConfirmPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                                            </button>
+                                        </div>
+                                        {passwordMismatchError && <p className="text-sm text-red-600 transition-colors duration-150">Passwords do not match</p>}
+                                    </div>
+                                )}
+                            </div>
+                        </ScrollArea>
                     </CardContent>
-                    <CardFooter className="pt-6 pb-4">
+                    <CardFooter className="pt-6 pb-4 flex-shrink-0">
                         <Button
                             type="submit"
                             disabled={isSubmitting || (isSignup && !passwordStrength.valid)}

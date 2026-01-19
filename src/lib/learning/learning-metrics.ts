@@ -1,9 +1,4 @@
-/**
- * Learning Events Metrics Tracking
- * Tracks extraction and application metrics for observability
- */
-
-import { prisma } from "./prisma";
+import { prisma } from "@/lib/core/prisma";
 
 export interface ExtractionMetrics {
   sourceType: string;
@@ -20,7 +15,7 @@ export interface ApplicationMetrics {
   eventsProcessed: number;
   eventsApplied: number;
   eventsSkipped: number;
-  eventsDecayed: number; // Events filtered out due to confidence decay
+  eventsDecayed: number; 
   fieldsUpdated: string[];
   averageConfidence: number;
   processingTimeMs: number;
@@ -29,7 +24,7 @@ export interface ApplicationMetrics {
 
 export interface QualityMetrics {
   knowledgeBaseId: string;
-  duplicateDetectionRate: number; // Percentage of duplicates detected
+  duplicateDetectionRate: number; 
   conflictResolutionOutcomes: {
     replaced: number;
     merged: number;
@@ -37,9 +32,9 @@ export interface QualityMetrics {
     appended: number;
   };
   confidenceDistribution: {
-    high: number; // >= 90
-    medium: number; // 80-89
-    low: number; // < 80
+    high: number; 
+    medium: number; 
+    low: number;
   };
   sourceTypeEffectiveness: Record<string, {
     extracted: number;
@@ -49,9 +44,7 @@ export interface QualityMetrics {
   timestamp: Date;
 }
 
-/**
- * Store extraction metrics in KB's extractedKnowledge
- */
+
 export async function recordExtractionMetrics(
   knowledgeBaseId: string,
   metrics: ExtractionMetrics
@@ -74,13 +67,11 @@ export async function recordExtractionMetrics(
       };
     }
 
-    // Add extraction metric
     if (!extractedKnowledge.metrics.extraction) {
       extractedKnowledge.metrics.extraction = [];
     }
     extractedKnowledge.metrics.extraction.push(metrics);
 
-    // Keep only last 100 extraction metrics
     if (extractedKnowledge.metrics.extraction.length > 100) {
       extractedKnowledge.metrics.extraction = extractedKnowledge.metrics.extraction.slice(-100);
     }
@@ -91,13 +82,9 @@ export async function recordExtractionMetrics(
     });
   } catch (error) {
     console.error("Error recording extraction metrics:", error);
-    // Don't throw - metrics are non-critical
   }
 }
 
-/**
- * Store application metrics in KB's extractedKnowledge
- */
 export async function recordApplicationMetrics(
   knowledgeBaseId: string,
   metrics: ApplicationMetrics
@@ -120,13 +107,11 @@ export async function recordApplicationMetrics(
       };
     }
 
-    // Add application metric
     if (!extractedKnowledge.metrics.application) {
       extractedKnowledge.metrics.application = [];
     }
     extractedKnowledge.metrics.application.push(metrics);
 
-    // Keep only last 100 application metrics
     if (extractedKnowledge.metrics.application.length > 100) {
       extractedKnowledge.metrics.application = extractedKnowledge.metrics.application.slice(-100);
     }
@@ -137,13 +122,9 @@ export async function recordApplicationMetrics(
     });
   } catch (error) {
     console.error("Error recording application metrics:", error);
-    // Don't throw - metrics are non-critical
   }
 }
 
-/**
- * Update quality metrics (aggregated)
- */
 export async function updateQualityMetrics(
   knowledgeBaseId: string,
   qualityMetrics: QualityMetrics
@@ -166,7 +147,6 @@ export async function updateQualityMetrics(
       };
     }
 
-    // Update quality metrics (overwrite previous)
     extractedKnowledge.metrics.quality = qualityMetrics;
 
     await prisma.organizationKnowledgeBase.update({
@@ -175,13 +155,9 @@ export async function updateQualityMetrics(
     });
   } catch (error) {
     console.error("Error updating quality metrics:", error);
-    // Don't throw - metrics are non-critical
   }
 }
 
-/**
- * Get metrics for a knowledge base
- */
 export async function getMetrics(knowledgeBaseId: string): Promise<{
   extraction: ExtractionMetrics[];
   application: ApplicationMetrics[];
@@ -212,4 +188,3 @@ export async function getMetrics(knowledgeBaseId: string): Promise<{
     return null;
   }
 }
-

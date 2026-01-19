@@ -1,12 +1,21 @@
 import { NextResponse, NextRequest } from "next/server";
 import OpenAI from "openai";
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
-import { verifyAccessToken } from "@/lib/auth";
+import { prisma } from "@/lib/core/prisma";
+import { verifyAccessToken } from "@/lib/core/auth";
 import { extractInsights } from "@/lib/analysis/extractInsights";
-import { extractFromFile, extractFromUrl } from "@/lib/extract-content";
-import { withRateLimit } from "@/lib/rate-limit-utils";
-import { getRateLimitHeaders } from "@/lib/rate-limit";
+import {
+  extractFromFile,
+  extractFromUrl,
+} from "@/lib/extraction/extract-content";
+import { withRateLimit } from "@/lib/rate-limiting/rate-limit-utils";
+import { getRateLimitHeaders } from "@/lib/rate-limiting/rate-limit";
+import {
+  updateHiringHistory,
+  updateServicePreferences,
+  updateSkillRequirements,
+  updateBottleneckHistory,
+} from "@/lib/job-description/jd-field-updaters";
 
 export const runtime = "nodejs";
 
@@ -27,15 +36,25 @@ function transformWebsiteContent(extracted: any): any {
   }
 
   const sectionTexts: string[] = [];
-  if (extracted.sections?.hero?.summary) sectionTexts.push(`Hero: ${extracted.sections.hero.summary}`);
-  if (extracted.sections?.about?.summary) sectionTexts.push(`About: ${extracted.sections.about.summary}`);
-  if (extracted.sections?.services?.summary) sectionTexts.push(`Services: ${extracted.sections.services.summary}`);
-  if (extracted.sections?.companyInfo?.summary) sectionTexts.push(`Company Info: ${extracted.sections.companyInfo.summary}`);
-  if (extracted.sections?.team?.summary) sectionTexts.push(`Team: ${extracted.sections.team.summary}`);
-  if (extracted.sections?.values?.summary) sectionTexts.push(`Values: ${extracted.sections.values.summary}`);
-  if (extracted.sections?.contact?.summary) sectionTexts.push(`Contact: ${extracted.sections.contact.summary}`);
-  if (extracted.overallSummary) sectionTexts.push(`Overall: ${extracted.overallSummary}`);
-  
+  if (extracted.sections?.hero?.summary)
+    sectionTexts.push(`Hero: ${extracted.sections.hero.summary}`);
+  if (extracted.sections?.about?.summary)
+    sectionTexts.push(`About: ${extracted.sections.about.summary}`);
+  if (extracted.sections?.services?.summary)
+    sectionTexts.push(`Services: ${extracted.sections.services.summary}`);
+  if (extracted.sections?.companyInfo?.summary)
+    sectionTexts.push(
+      `Company Info: ${extracted.sections.companyInfo.summary}`
+    );
+  if (extracted.sections?.team?.summary)
+    sectionTexts.push(`Team: ${extracted.sections.team.summary}`);
+  if (extracted.sections?.values?.summary)
+    sectionTexts.push(`Values: ${extracted.sections.values.summary}`);
+  if (extracted.sections?.contact?.summary)
+    sectionTexts.push(`Contact: ${extracted.sections.contact.summary}`);
+  if (extracted.overallSummary)
+    sectionTexts.push(`Overall: ${extracted.overallSummary}`);
+
   const fullText = sectionTexts.join("\n\n").substring(0, 50000);
 
   return {
@@ -209,13 +228,19 @@ function formatKnowledgeBaseContext(kb: any): string {
   const contextParts: string[] = [];
 
   contextParts.push("ORGANIZATION KNOWLEDGE BASE CONTEXT:");
-  contextParts.push("Use this existing knowledge about the organization to personalize the analysis:");
+  contextParts.push(
+    "Use this existing knowledge about the organization to personalize the analysis:"
+  );
 
   if (kb.businessName) {
     contextParts.push(`- Business Name: ${kb.businessName}`);
   }
   if (kb.industry) {
-    contextParts.push(`- Industry: ${kb.industry}${kb.industryOther ? ` (${kb.industryOther})` : ""}`);
+    contextParts.push(
+      `- Industry: ${kb.industry}${
+        kb.industryOther ? ` (${kb.industryOther})` : ""
+      }`
+    );
   }
   if (kb.whatYouSell) {
     contextParts.push(`- What They Sell: ${kb.whatYouSell}`);
@@ -233,7 +258,9 @@ function formatKnowledgeBaseContext(kb: any): string {
     contextParts.push(`- Default Weekly Hours: ${kb.defaultWeeklyHours}`);
   }
   if (kb.defaultManagementStyle) {
-    contextParts.push(`- Default Management Style: ${kb.defaultManagementStyle}`);
+    contextParts.push(
+      `- Default Management Style: ${kb.defaultManagementStyle}`
+    );
   }
   if (kb.brandVoiceStyle) {
     contextParts.push(`- Brand Voice Style: ${kb.brandVoiceStyle}`);
@@ -242,8 +269,12 @@ function formatKnowledgeBaseContext(kb: any): string {
     contextParts.push(`- Known Bottleneck: ${kb.biggestBottleNeck}`);
   }
 
-  contextParts.push("\nWhen analyzing, consider how this role fits with their existing tools, processes, and business context.");
-  contextParts.push("If intake data conflicts with knowledge base, note the discrepancy but prioritize intake data for this specific role.");
+  contextParts.push(
+    "\nWhen analyzing, consider how this role fits with their existing tools, processes, and business context."
+  );
+  contextParts.push(
+    "If intake data conflicts with knowledge base, note the discrepancy but prioritize intake data for this specific role."
+  );
 
   return contextParts.join("\n");
 }
@@ -1515,7 +1546,6 @@ function generateMonitoringPlan(validation: any) {
 
 //Main Function
 
-
 export async function POST(request: NextRequest) {
   try {
     // Check rate limit (before expensive operations)
@@ -1570,6 +1600,7 @@ export async function POST(request: NextRequest) {
     let knowledgeBaseVersion: number | null = null;
     let knowledgeBaseSnapshot: any = null;
     let organizationId: string | null = null;
+    let userOrgId: string | null = null; // For learning events triggeredBy
 
     try {
       const cookieStore = await cookies();
@@ -1587,6 +1618,7 @@ export async function POST(request: NextRequest) {
               deactivatedAt: null,
             },
             select: {
+              id: true,
               organizationId: true,
             },
             orderBy: {
@@ -1596,6 +1628,7 @@ export async function POST(request: NextRequest) {
 
           if (userOrg) {
             organizationId = userOrg.organizationId;
+            userOrgId = userOrg.id;
             knowledgeBase = await prisma.organizationKnowledgeBase.findUnique({
               where: { organizationId: userOrg.organizationId },
               select: {
@@ -1659,8 +1692,10 @@ export async function POST(request: NextRequest) {
               // Store the KB version number (OrganizationKnowledgeBase.version)
               // This will be saved as SavedAnalysis.usedKnowledgeBaseVersion
               knowledgeBaseVersion = knowledgeBase.version;
-              console.log(`[KB] Found KB for org ${organizationId}, version: ${knowledgeBaseVersion}`);
-              
+              console.log(
+                `[KB] Found KB for org ${organizationId}, version: ${knowledgeBaseVersion}`
+              );
+
               // Create snapshot of KB state (hybrid: all non-Json fields)
               // Excludes large Json fields (aiInsights, extractedKnowledge, proofFiles, etc.)
               // to balance storage cost with audit trail completeness
@@ -1720,7 +1755,11 @@ export async function POST(request: NextRequest) {
                 // Note: Large Json fields excluded (aiInsights, extractedKnowledge, proofFiles, etc.)
                 // to optimize storage while maintaining audit trail
               };
-              console.log(`[KB] Created snapshot with ${Object.keys(knowledgeBaseSnapshot).length} fields`);
+              console.log(
+                `[KB] Created snapshot with ${
+                  Object.keys(knowledgeBaseSnapshot).length
+                } fields`
+              );
             } else {
               console.log(`[KB] No KB found for org ${organizationId}`);
             }
@@ -1735,7 +1774,10 @@ export async function POST(request: NextRequest) {
       }
     } catch (kbError) {
       // If KB fetch fails, continue without KB context (non-blocking)
-      console.warn("Failed to fetch knowledge base, continuing without KB context:", kbError);
+      console.warn(
+        "Failed to fetch knowledge base, continuing without KB context:",
+        kbError
+      );
     }
 
     //Stage 1: Deep Discovery
@@ -1788,10 +1830,10 @@ export async function POST(request: NextRequest) {
                 sopFileKey || undefined,
                 true // useCache
               );
-              
+
               // Use cleanedText if available (raw extracted text), otherwise use summary
               sopText = extracted.cleanedText || extracted.summary || "";
-              
+
               if (!sopText || sopText.trim().length === 0) {
                 throw new Error("SOP file extraction returned no content");
               }
@@ -1971,7 +2013,82 @@ export async function POST(request: NextRequest) {
 
           const cleanedResponse = cleanTeamSupportAreas(response);
 
-          const extractedInsights = extractInsights("JOB_DESCRIPTION", cleanedResponse);
+          const extractedInsights = await extractInsights(
+            "JOB_DESCRIPTION",
+            cleanedResponse
+          );
+
+          const sourceId = knowledgeBase
+            ? `jd-analysis-${Date.now()}-${knowledgeBase.id.substring(0, 8)}`
+            : `jd-analysis-${Date.now()}`;
+
+          if (knowledgeBase && architecture) {
+            try {
+              const roleTitle =
+                architecture.dedicated_va_role?.title ||
+                architecture.core_va_role?.title;
+              const serviceType = recommendedService;
+              const hoursPerWeek =
+                architecture.dedicated_va_role?.hours_per_week ||
+                architecture.core_va_role?.hours_per_week;
+
+              if (roleTitle && serviceType) {
+                await updateHiringHistory(knowledgeBase.id, {
+                  roleTitle,
+                  serviceType,
+                  hoursPerWeek,
+                  sourceId,
+                });
+                console.log(
+                  `[JD Analysis] Updated hiring history: ${roleTitle} (${serviceType})`
+                );
+              }
+
+              if (serviceClassification?.service_type_analysis) {
+                const sta = serviceClassification.service_type_analysis;
+                await updateServicePreferences(knowledgeBase.id, {
+                  recommendedService: sta.recommended_service,
+                  serviceFitScores: {
+                    dedicatedVA:
+                      sta.service_fit_scores?.dedicated_va?.score || 0,
+                    projectsOnDemand:
+                      sta.service_fit_scores?.projects_on_demand?.score || 0,
+                    unicornVA: sta.service_fit_scores?.unicorn_va?.score || 0,
+                  },
+                  reasoning: sta.decision_logic,
+                  sourceId,
+                });
+                console.log(
+                  `[JD Analysis] Updated service preferences: ${sta.recommended_service}`
+                );
+              }
+
+              if (discovery?.task_analysis?.skill_requirements) {
+                const skills = discovery.task_analysis.skill_requirements;
+                await updateSkillRequirements(knowledgeBase.id, {
+                  technical: skills.technical,
+                  soft: skills.soft,
+                  domain: skills.domain,
+                  sourceId,
+                });
+                console.log(`[JD Analysis] Updated skill requirements`);
+              }
+
+              if (discovery?.business_context?.primary_bottleneck) {
+                await updateBottleneckHistory(
+                  knowledgeBase.id,
+                  discovery.business_context.primary_bottleneck,
+                  sourceId
+                );
+                console.log(`[JD Analysis] Updated bottleneck history`);
+              }
+            } catch (fieldUpdateError) {
+              console.error(
+                "[JD Analysis] Error updating JD-specific fields (non-blocking):",
+                fieldUpdateError
+              );
+            }
+          }
 
           const finalResponse = {
             ...cleanedResponse,
@@ -1981,10 +2098,10 @@ export async function POST(request: NextRequest) {
               snapshot: knowledgeBaseSnapshot,
               organizationId: organizationId,
             },
-            extractedInsights: extractedInsights.length > 0 ? extractedInsights : undefined,
+            extractedInsights:
+              extractedInsights.length > 0 ? extractedInsights : undefined,
           };
 
-          // Debug logging for KB metadata
           console.log(`[KB Response] Sending KB metadata:`, {
             hasKB: !!knowledgeBase,
             version: knowledgeBaseVersion,
@@ -2014,7 +2131,6 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Create streaming response with rate limit headers
     const response = new Response(stream, {
       headers: {
         "Content-Type": "text/event-stream",
@@ -2023,9 +2139,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Add rate limit headers to streaming response
     if (rateLimit.rateLimitResult) {
-      const rateLimitHeaders = require("@/lib/rate-limit").getRateLimitHeaders(rateLimit.rateLimitResult);
+      const rateLimitHeaders =
+        require("@/lib/rate-limiting/rate-limit").getRateLimitHeaders(
+          rateLimit.rateLimitResult
+        );
       Object.entries(rateLimitHeaders).forEach(([key, value]) => {
         response.headers.set(key, String(value));
       });

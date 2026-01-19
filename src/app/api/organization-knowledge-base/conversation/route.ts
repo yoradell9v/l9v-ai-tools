@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
-import { verifyAccessToken } from "@/lib/auth";
+import { prisma } from "@/lib/core/prisma";
+import { verifyAccessToken } from "@/lib/core/auth";
 
 export const runtime = "nodejs";
 
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
         organization: { deactivatedAt: null },
         deactivatedAt: null,
       },
-      select: { 
+      select: {
         id: true,
         organizationId: true,
       },
@@ -80,18 +80,20 @@ export async function GET(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          error: "Knowledge base not found. Please complete your organization profile first.",
+          error:
+            "Knowledge base not found. Please complete your organization profile first.",
         },
         { status: 404 }
       );
     }
 
-    // If list=true, return all conversations for this knowledge base
     if (listAll) {
       const conversations = await prisma.businessConversation.findMany({
         where: {
           knowledgeBaseId: knowledgeBase.id,
-          ...(isSuperadmin ? {} : { userOrganizationId: { in: userOrganizationIds } }),
+          ...(isSuperadmin
+            ? {}
+            : { userOrganizationId: { in: userOrganizationIds } }),
         },
         include: {
           _count: {
@@ -103,7 +105,7 @@ export async function GET(request: Request) {
         orderBy: {
           lastMessageAt: "desc",
         },
-        take: 50, // Limit to 50 most recent conversations
+        take: 50,
       });
 
       return NextResponse.json({
@@ -118,13 +120,14 @@ export async function GET(request: Request) {
       });
     }
 
-    // If conversationId is provided, load that specific conversation
     if (conversationId) {
       const conversation = await prisma.businessConversation.findFirst({
         where: {
           id: conversationId,
           knowledgeBaseId: knowledgeBase.id,
-          ...(isSuperadmin ? {} : { userOrganizationId: { in: userOrganizationIds } }),
+          ...(isSuperadmin
+            ? {}
+            : { userOrganizationId: { in: userOrganizationIds } }),
         },
         include: {
           messages: {
@@ -148,8 +151,6 @@ export async function GET(request: Request) {
         conversation,
       });
     }
-
-    // No conversationId and not listing - return new conversation indicator
     return NextResponse.json({
       success: true,
       conversation: null,
@@ -208,7 +209,7 @@ export async function POST(request: Request) {
         organization: { deactivatedAt: null },
         deactivatedAt: null,
       },
-      select: { 
+      select: {
         id: true,
         organizationId: true,
       },
@@ -228,7 +229,6 @@ export async function POST(request: Request) {
     const organizationIds = userOrganizations.map((uo) => uo.organizationId);
     const isSuperadmin = user.globalRole === "SUPERADMIN";
 
-    // Get the user's organization knowledge base
     const knowledgeBase = await prisma.organizationKnowledgeBase.findFirst({
       where: {
         organizationId: { in: organizationIds },
@@ -239,7 +239,8 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          error: "Knowledge base not found. Please complete your organization profile first.",
+          error:
+            "Knowledge base not found. Please complete your organization profile first.",
         },
         { status: 404 }
       );
@@ -248,13 +249,11 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const title = body.title || "New Conversation";
 
-    // Use the first user organization (or the one associated with the KB's organization)
-    const userOrganizationId = userOrganizationIds.find(
-      (uoId) => {
+    const userOrganizationId =
+      userOrganizationIds.find((uoId) => {
         const uo = userOrganizations.find((uo) => uo.id === uoId);
         return uo?.organizationId === knowledgeBase.organizationId;
-      }
-    ) || userOrganizationIds[0];
+      }) || userOrganizationIds[0];
 
     const conversation = await prisma.businessConversation.create({
       data: {
@@ -277,7 +276,6 @@ export async function POST(request: Request) {
       conversation,
       message: "Conversation created successfully.",
     });
-
   } catch (err: any) {
     console.error("[Conversation POST] Error:", err);
     return NextResponse.json(
@@ -289,4 +287,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

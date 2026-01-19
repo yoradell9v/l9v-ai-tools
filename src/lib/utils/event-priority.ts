@@ -1,15 +1,10 @@
-/**
- * Event Priority Calculation
- * Determines processing priority for learning events based on multiple factors
- */
-
 import { LearningEventType } from "@prisma/client";
 
 export enum EventPriority {
-  CRITICAL = 1, // Process immediately (bottlenecks, red flags, high confidence critical insights)
-  HIGH = 2, // Process in first batch (high confidence, important categories)
-  MEDIUM = 3, // Process in normal batches
-  LOW = 4, // Process last (low confidence, less critical)
+  CRITICAL = 1,
+  HIGH = 2,
+  MEDIUM = 3,
+  LOW = 4,
 }
 
 export interface PriorityFactors {
@@ -20,15 +15,12 @@ export interface PriorityFactors {
   metadata?: any;
 }
 
-/**
- * Calculate event priority based on multiple factors
- */
-export function calculateEventPriority(factors: PriorityFactors): EventPriority {
+export function calculateEventPriority(
+  factors: PriorityFactors
+): EventPriority {
   const { confidence, category, eventType, sourceType, metadata } = factors;
 
-  // CRITICAL: High-confidence bottlenecks, red flags, or critical business insights
   if (confidence >= 90) {
-    // Critical categories
     if (
       category === "risk_management" ||
       (category === "business_context" && metadata?.bottleneck) ||
@@ -37,15 +29,15 @@ export function calculateEventPriority(factors: PriorityFactors): EventPriority 
       return EventPriority.CRITICAL;
     }
 
-    // High-value source types
-    if (sourceType === "JOB_DESCRIPTION" || sourceType === "CHAT_CONVERSATION") {
+    if (
+      sourceType === "JOB_DESCRIPTION" ||
+      sourceType === "CHAT_CONVERSATION"
+    ) {
       return EventPriority.HIGH;
     }
   }
 
-  // HIGH: Important insights with good confidence
   if (confidence >= 85) {
-    // Important categories
     if (
       category === "business_context" ||
       category === "process_optimization" ||
@@ -54,7 +46,6 @@ export function calculateEventPriority(factors: PriorityFactors): EventPriority 
       return EventPriority.HIGH;
     }
 
-    // Important event types
     if (
       eventType === "INSIGHT_GENERATED" ||
       eventType === "OPTIMIZATION_FOUND"
@@ -63,22 +54,21 @@ export function calculateEventPriority(factors: PriorityFactors): EventPriority 
     }
   }
 
-  // MEDIUM: Standard insights
   if (confidence >= 80) {
     return EventPriority.MEDIUM;
   }
 
-  // LOW: Lower confidence or less critical
   return EventPriority.LOW;
 }
 
-/**
- * Sort events by priority (critical first, then by confidence)
- */
-export function sortEventsByPriority<T extends { confidence: number; category: string; eventType: LearningEventType; metadata?: any }>(
-  events: T[],
-  sourceType?: string
-): T[] {
+export function sortEventsByPriority<
+  T extends {
+    confidence: number;
+    category: string;
+    eventType: LearningEventType;
+    metadata?: any;
+  }
+>(events: T[], sourceType?: string): T[] {
   return [...events].sort((a, b) => {
     const priorityA = calculateEventPriority({
       confidence: a.confidence,
@@ -96,23 +86,21 @@ export function sortEventsByPriority<T extends { confidence: number; category: s
       metadata: b.metadata,
     });
 
-    // First sort by priority
     if (priorityA !== priorityB) {
       return priorityA - priorityB;
     }
 
-    // Then by confidence (higher first)
     return b.confidence - a.confidence;
   });
 }
-
-/**
- * Group events by priority for batch processing
- */
-export function groupEventsByPriority<T extends { confidence: number; category: string; eventType: LearningEventType; metadata?: any }>(
-  events: T[],
-  sourceType?: string
-): Map<EventPriority, T[]> {
+export function groupEventsByPriority<
+  T extends {
+    confidence: number;
+    category: string;
+    eventType: LearningEventType;
+    metadata?: any;
+  }
+>(events: T[], sourceType?: string): Map<EventPriority, T[]> {
   const grouped = new Map<EventPriority, T[]>();
 
   for (const event of events) {
@@ -133,10 +121,6 @@ export function groupEventsByPriority<T extends { confidence: number; category: 
   return grouped;
 }
 
-/**
- * Check if event should be processed immediately (critical priority)
- */
 export function isCriticalEvent(factors: PriorityFactors): boolean {
   return calculateEventPriority(factors) === EventPriority.CRITICAL;
 }
-

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/core/prisma";
 import { cookies } from "next/headers";
-import { verifyAccessToken } from "@/lib/auth";
-import { withRateLimit, addRateLimitHeaders } from "@/lib/rate-limit-utils";
+import { verifyAccessToken } from "@/lib/core/auth";
+import { withRateLimit, addRateLimitHeaders } from "@/lib/rate-limiting/rate-limit-utils";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -17,7 +17,6 @@ interface RefineRequestBody {
 
 export async function POST(req: NextRequest) {
   try {
-    // Get user from session
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("accessToken")?.value;
 
@@ -36,7 +35,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check rate limit (before expensive operations)
     const rateLimit = await withRateLimit(req, "/api/jd/refine", {
       requireAuth: true,
     });
@@ -57,7 +55,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get user's organizations to verify access
     const userOrganizations = await prisma.userOrganization.findMany({
       where: {
         userId: decoded.userId,
@@ -110,14 +107,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // if (savedAnalysis.isFinalized) {
-    //   return NextResponse.json(
-    //     { success: false, error: "Cannot refine a finalized analysis" },
-    //     { status: 400 }
-    //   );
-    // }
-
-    // 2. Build conversation context for AI
     const conversationHistory = [
       {
         role: "system" as const,
@@ -126,19 +115,18 @@ export async function POST(req: NextRequest) {
           savedAnalysis.intakeData
         ),
       },
-      // Add all previous refinement messages for full context
+     
       ...savedAnalysis.refinements.map((msg) => ({
         role: msg.role as "user" | "assistant",
         content: msg.content,
       })),
-      // Add new user message
+   
       {
         role: "user" as const,
         content: message,
       },
     ];
 
-    // 3. Call OpenAI
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: conversationHistory,
@@ -154,49 +142,41 @@ export async function POST(req: NextRequest) {
 
     const updatedAnalysis = JSON.parse(responseText);
 
-    // Clean team_support_areas for Dedicated VA before processing
     const serviceType = 
       updatedAnalysis.preview?.service_type ||
       updatedAnalysis.full_package?.service_structure?.service_type ||
       updatedAnalysis.full_package?.executive_summary?.service_recommendation?.type;
 
     if (serviceType === "Dedicated VA") {
-      // Remove team_support_areas from preview
+    
       if (updatedAnalysis.preview?.team_support_areas !== undefined) {
         delete updatedAnalysis.preview.team_support_areas;
       }
 
-      // Remove from full_package.service_structure
+
       if (updatedAnalysis.full_package?.service_structure?.team_support_areas !== undefined) {
         delete updatedAnalysis.full_package.service_structure.team_support_areas;
       }
 
-      // Also check if it's directly in full_package
       if (updatedAnalysis.full_package?.team_support_areas !== undefined) {
         delete updatedAnalysis.full_package.team_support_areas;
       }
     }
 
-    // 4. Detect what changed
     const changedSections = identifyChanges(
       savedAnalysis.analysis,
       updatedAnalysis
     );
 
-    // 5. Generate change summary
     const changeSummary = generateChangeSummary(changedSections);
 
-    // 6. Get next sequence number
     const nextSequence = savedAnalysis.refinements.length + 1;
 
-    // 7. Save both messages (user + assistant) + update analysis in transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Verify user has access
       if (!userOrganizationIds.includes(savedAnalysis.userOrganizationId)) {
         throw new Error("You do not have access to this analysis.");
       }
 
-      // Save user message
       await tx.refinementMessage.create({
         data: {
           analysisId: savedAnalysis.id,
@@ -209,7 +189,6 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Save assistant message
       await tx.refinementMessage.create({
         data: {
           analysisId: savedAnalysis.id,
@@ -222,7 +201,6 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Update SavedAnalysis with latest state (for POST handler - keeping original behavior)
       const updated = await tx.savedAnalysis.update({
         where: { id: savedAnalysis.id },
         data: {
@@ -239,8 +217,7 @@ export async function POST(req: NextRequest) {
       return updated;
     });
 
-    // Clean team_support_areas for Dedicated VA in the response
-    const cleanedAnalysis = JSON.parse(JSON.stringify(result.analysis)); // Deep clone
+    const cleanedAnalysis = JSON.parse(JSON.stringify(result.analysis)); 
     const postServiceType = 
       cleanedAnalysis.preview?.service_type ||
       cleanedAnalysis.full_package?.service_structure?.service_type ||
@@ -271,7 +248,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Add rate limit headers to response
     return addRateLimitHeaders(response, rateLimit.rateLimitResult);
   } catch (error) {
     console.error("Refinement error:", error);
@@ -289,10 +265,6 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
-// ============================================================================
-// VALIDATION LAYER: Assess feedback quality before processing
-// ============================================================================
 
 async function validateFeedback(
   openai: OpenAI,
@@ -353,7 +325,6 @@ VALIDATION RULES:
   return JSON.parse(completion.choices[0].message.content || "{}");
 }
 
-// PATCH handler for RefinementForm structured feedback
 interface RefinementFormRequest {
   analysisId: string;
   userId: string;
@@ -363,7 +334,6 @@ interface RefinementFormRequest {
 
 export async function PATCH(req: NextRequest) {
   try {
-    // Get user from session
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("accessToken")?.value;
 
@@ -382,7 +352,6 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    // Check rate limit (before expensive operations)
     const rateLimit = await withRateLimit(req, "/api/jd/refine", {
       requireAuth: true,
     });
@@ -418,7 +387,6 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    // Get user's organizations to verify access
     const userOrganizations = await prisma.userOrganization.findMany({
       where: {
         userId: decoded.userId,
@@ -443,7 +411,6 @@ export async function PATCH(req: NextRequest) {
 
     const userOrganizationIds = userOrganizations.map((uo) => uo.id);
 
-    // Get the original/parent analysis
     const parentAnalysis = await prisma.savedAnalysis.findUnique({
       where: { id: analysisId },
       include: {
@@ -459,7 +426,6 @@ export async function PATCH(req: NextRequest) {
       },
     });
 
-    // If analysis doesn't exist
     if (!parentAnalysis) {
       return NextResponse.json(
         {
@@ -470,7 +436,6 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    // Verify user has access to this analysis
     if (!userOrganizationIds.includes(parentAnalysis.userOrganizationId)) {
       return NextResponse.json(
         {
@@ -481,8 +446,6 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    // Get the latest refined version separately
-    // Note: Using 'as any' because Prisma client may need regeneration after schema changes
     const latestRefinedVersion = await prisma.savedAnalysis.findFirst({
       where: {
         parentAnalysisId: analysisId,
@@ -491,7 +454,6 @@ export async function PATCH(req: NextRequest) {
       take: 1,
     });
 
-    // Use parentAnalysis as savedAnalysis for the rest of the logic
     const savedAnalysis = parentAnalysis;
 
     const originalPackage = (savedAnalysis.analysis as any)?.full_package;
@@ -505,9 +467,6 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    // ========================================================================
-    // STEP 1: Validate feedback quality
-    // ========================================================================
     console.log("Validating feedback quality...");
     const validation = await validateFeedback(
       openai,
@@ -516,7 +475,6 @@ export async function PATCH(req: NextRequest) {
       originalPackage
     );
 
-    // Handle invalid feedback
     if (validation.recommendation === "reject") {
       return NextResponse.json(
         {
@@ -532,8 +490,6 @@ export async function PATCH(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    // Request clarification if feedback is vague
     if (validation.recommendation === "request_clarification") {
       return NextResponse.json(
         {
@@ -546,12 +502,8 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    // Validation passed - proceed with refinement
     console.log(`Feedback validation passed. Quality score: ${validation.quality_score}, Type: ${validation.feedback_type}`);
 
-    // ========================================================================
-    // STEP 2: Build structured message from RefinementForm data
-    // ========================================================================
     const areasText = refinement_areas
       .map((area) => {
         const labels: Record<string, string> = {
@@ -569,17 +521,12 @@ export async function PATCH(req: NextRequest) {
       })
       .join(", ");
 
-    // Use actionable points from validation if available, otherwise use original feedback
     const feedbackToUse = validation.actionable_points && validation.actionable_points.length > 0
       ? validation.actionable_points.join("\n")
       : feedback;
     
     const message = `Please refine the following areas: ${areasText}.\n\nFeedback: ${feedbackToUse}`;
 
-    // ========================================================================
-    // STEP 3: Build conversation context and perform refinement
-    // ========================================================================
-    // Build conversation context
     const conversationHistory = [
       {
         role: "system" as const,
@@ -598,13 +545,12 @@ export async function PATCH(req: NextRequest) {
       },
     ];
 
-    // Call OpenAI
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: conversationHistory,
       response_format: { type: "json_object" },
       temperature: 0.7,
-      max_tokens: 16000, // Increased significantly to handle full analysis package
+      max_tokens: 16000, 
     });
 
     const responseText = completion.choices[0].message.content;
@@ -612,20 +558,16 @@ export async function PATCH(req: NextRequest) {
       throw new Error("No response from OpenAI");
     }
 
-    // Check if response was truncated
     const finishReason = completion.choices[0].finish_reason;
     if (finishReason === "length") {
       console.error("OpenAI response was truncated due to token limit");
       throw new Error("The analysis is too large to refine in one pass. Please try refining smaller sections at a time.");
     }
 
-    // Parse JSON with better error handling
     let updatedAnalysis;
     try {
-      // Validate JSON structure before parsing
       const trimmedResponse = responseText.trim();
       
-      // Check if response looks complete (starts with { and ends with })
       if (!trimmedResponse.startsWith('{') || !trimmedResponse.endsWith('}')) {
         console.error("Response doesn't appear to be valid JSON object");
         console.error("Response length:", trimmedResponse.length);
@@ -637,7 +579,6 @@ export async function PATCH(req: NextRequest) {
 
       updatedAnalysis = JSON.parse(trimmedResponse);
       
-      // Validate that we got the expected structure
       if (!updatedAnalysis.preview && !updatedAnalysis.full_package) {
         console.error("Response doesn't contain expected analysis structure");
         console.error("Response keys:", Object.keys(updatedAnalysis));
@@ -652,46 +593,33 @@ export async function PATCH(req: NextRequest) {
       throw new Error(`Failed to parse OpenAI response: ${parseError instanceof Error ? parseError.message : "Invalid JSON"}`);
     }
 
-    // Clean team_support_areas for Dedicated VA before processing
     const serviceType = 
       updatedAnalysis.preview?.service_type ||
       updatedAnalysis.full_package?.service_structure?.service_type ||
       updatedAnalysis.full_package?.executive_summary?.service_recommendation?.type;
 
     if (serviceType === "Dedicated VA") {
-      // Remove team_support_areas from preview
       if (updatedAnalysis.preview?.team_support_areas !== undefined) {
         delete updatedAnalysis.preview.team_support_areas;
       }
-
-      // Remove from full_package.service_structure
       if (updatedAnalysis.full_package?.service_structure?.team_support_areas !== undefined) {
         delete updatedAnalysis.full_package.service_structure.team_support_areas;
       }
-
-      // Also check if it's directly in full_package
       if (updatedAnalysis.full_package?.team_support_areas !== undefined) {
         delete updatedAnalysis.full_package.team_support_areas;
       }
     }
-
-    // Detect changes
     const changedSections = identifyChanges(
       savedAnalysis.analysis,
       updatedAnalysis
     );
 
-    // Determine version number
     const nextVersion = latestRefinedVersion 
       ? (latestRefinedVersion as any).versionNumber + 1
       : 2;
 
-    // Get next sequence number for refinement messages (on parent)
     const nextSequence = savedAnalysis.refinements.length + 1;
-
-    // Save messages and create new version
     const result = await prisma.$transaction(async (tx) => {
-      // Save user message on parent analysis
       await tx.refinementMessage.create({
         data: {
           analysisId: parentAnalysis.id,
@@ -703,8 +631,6 @@ export async function PATCH(req: NextRequest) {
           analysisSnapshot: savedAnalysis.analysis as any,
         },
       });
-
-      // Save assistant message on parent analysis
       await tx.refinementMessage.create({
         data: {
           analysisId: parentAnalysis.id,
@@ -716,12 +642,10 @@ export async function PATCH(req: NextRequest) {
           analysisSnapshot: updatedAnalysis as any,
         },
       });
-
-      // Create refined version (new SavedAnalysis)
       const refinedAnalysis = await tx.savedAnalysis.create({
         data: {
           userOrganizationId: parentAnalysis.userOrganizationId,
-          title: parentAnalysis.title,  // Keep same title
+          title: parentAnalysis.title, 
           intakeData: parentAnalysis.intakeData as any,
           analysis: updatedAnalysis as any,
           parentAnalysisId: parentAnalysis.id,
@@ -736,16 +660,12 @@ export async function PATCH(req: NextRequest) {
 
       return refinedAnalysis;
     });
-
-    // Build changes summary for RefinementForm
     const changes_made = changedSections.map((section) => ({
       section: section.split(".")[0].replace(/_/g, " "),
       change_description: `Updated ${section}`,
     }));
 
-    // Ensure team_support_areas is removed for Dedicated VA in the response
-    // (already cleaned above, but double-check before returning)
-    const finalResponse = JSON.parse(JSON.stringify(updatedAnalysis)); // Deep clone
+    const finalResponse = JSON.parse(JSON.stringify(updatedAnalysis)); 
     const finalServiceType = 
       finalResponse.preview?.service_type ||
       finalResponse.full_package?.service_structure?.service_type ||
@@ -771,8 +691,6 @@ export async function PATCH(req: NextRequest) {
       message: `Analysis refined successfully! (Version ${nextVersion})`,
       newAnalysisId: result.id,
     });
-
-    // Add rate limit headers to response
     return addRateLimitHeaders(response, rateLimit.rateLimitResult);
   } catch (error) {
     console.error("Refinement PATCH error:", error);
@@ -878,12 +796,10 @@ Maintain the exact same structure, only modifying the fields that need to be cha
 CRITICAL: Return the COMPLETE analysis JSON. Do not truncate any sections.`;
 }
 
-// Identify what changed between old and new analysis
 function identifyChanges(oldAnalysis: any, newAnalysis: any): string[] {
   const changes: string[] = [];
 
   const compareObjects = (obj1: any, obj2: any, path = "") => {
-    // Handle null/undefined
     if (obj1 === obj2) return;
     if (
       obj1 === null ||
@@ -897,7 +813,6 @@ function identifyChanges(oldAnalysis: any, newAnalysis: any): string[] {
       return;
     }
 
-    // Handle arrays
     if (Array.isArray(obj2)) {
       if (
         !Array.isArray(obj1) ||
@@ -908,7 +823,6 @@ function identifyChanges(oldAnalysis: any, newAnalysis: any): string[] {
       return;
     }
 
-    // Handle objects
     if (typeof obj2 === "object") {
       for (const key in obj2) {
         const currentPath = path ? `${path}.${key}` : key;
@@ -917,19 +831,14 @@ function identifyChanges(oldAnalysis: any, newAnalysis: any): string[] {
       return;
     }
 
-    // Handle primitives
     if (obj1 !== obj2 && path) {
       changes.push(path);
     }
   };
 
   compareObjects(oldAnalysis, newAnalysis);
-
-  // Deduplicate parent paths (if "roles.0.skills" changed, don't also list "roles.0.skills.0")
   return deduplicatePaths(changes);
 }
-
-// Remove child paths if parent path is already included
 function deduplicatePaths(paths: string[]): string[] {
   const sorted = [...paths].sort((a, b) => a.length - b.length);
   const deduplicated: string[] = [];
@@ -945,8 +854,6 @@ function deduplicatePaths(paths: string[]): string[] {
 
   return deduplicated;
 }
-
-// Generate a human-readable summary of changes
 function generateChangeSummary(changedSections: string[]): {
   sections: string[];
   summary: string;
@@ -957,8 +864,6 @@ function generateChangeSummary(changedSections: string[]): {
       summary: "No changes were made to the analysis.",
     };
   }
-
-  // Group changes by major section
   const sectionGroups: Record<string, string[]> = {};
 
   changedSections.forEach((path) => {
@@ -969,7 +874,6 @@ function generateChangeSummary(changedSections: string[]): {
     sectionGroups[topLevel].push(path);
   });
 
-  // Convert section names to human-readable format
   const sections = Object.keys(sectionGroups).map((section) => {
     return section.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   });

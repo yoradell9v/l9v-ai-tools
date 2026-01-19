@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { verifyAccessToken } from "./auth";
-import { prisma } from "./prisma";
+import { verifyAccessToken } from "@/lib/core/auth";
+import { prisma } from "@/lib/core/prisma";
 import { getRateLimitConfig } from "./rate-limit-config";
 import { checkRateLimit, getRateLimitHeaders, type RateLimitCheckResult } from "./rate-limit";
 

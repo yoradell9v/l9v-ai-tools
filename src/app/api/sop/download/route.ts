@@ -7,7 +7,7 @@ import {
   rgb,
   RGB,
 } from "pdf-lib";
-import { markdownToHtml } from "@/lib/markdown-to-html";
+import { markdownToHtml } from "@/lib/extraction/markdown-to-html";
 import * as cheerio from "cheerio";
 import OpenAI from "openai";
 

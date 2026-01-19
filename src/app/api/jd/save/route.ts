@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
-import { verifyAccessToken } from "@/lib/auth";
-import { createLearningEvents } from "@/lib/learning-events";
-import { applyLearningEventsToKB } from "@/lib/apply-learning-events";
+import { prisma } from "@/lib/core/prisma";
+import { verifyAccessToken } from "@/lib/core/auth";
+import { createLearningEvents } from "@/lib/learning/learning-events";
+import { applyLearningEventsToKB } from "@/lib/learning/apply-learning-events";
+import { CONFIDENCE_THRESHOLDS } from "@/lib/knowledge-base/insight-confidence-thresholds";
 
 export async function POST(request: Request) {
   try {
@@ -38,16 +39,19 @@ export async function POST(request: Request) {
       contributedInsights,
     } = body;
 
-    // Debug logging
-    console.log('[Save Route] Received KB metadata:', {
-      hasVersion: usedKnowledgeBaseVersion !== null && usedKnowledgeBaseVersion !== undefined,
+    console.log("[Save Route] Received KB metadata:", {
+      hasVersion:
+        usedKnowledgeBaseVersion !== null &&
+        usedKnowledgeBaseVersion !== undefined,
       version: usedKnowledgeBaseVersion,
-      hasSnapshot: knowledgeBaseSnapshot !== null && knowledgeBaseSnapshot !== undefined,
-      hasInsights: Array.isArray(contributedInsights) && contributedInsights.length > 0,
+      hasSnapshot:
+        knowledgeBaseSnapshot !== null && knowledgeBaseSnapshot !== undefined,
+      hasInsights:
+        Array.isArray(contributedInsights) && contributedInsights.length > 0,
       organizationId: organizationId,
     });
 
-    if (!title || !intakeData || !analysis) { 
+    if (!title || !intakeData || !analysis) {
       return NextResponse.json(
         {
           success: false,
@@ -108,10 +112,6 @@ export async function POST(request: Request) {
       finalOrganizationId = userOrganizations[0].organizationId;
     }
 
-    // Save the analysis with KB metadata
-    // usedKnowledgeBaseVersion: The version number from OrganizationKnowledgeBase.version
-    // knowledgeBaseSnapshot: Full snapshot of KB state at analysis time (all non-Json fields)
-    // contributedInsights: Extracted insights from the analysis (used to create LearningEvents)
     const savedAnalysis = await prisma.savedAnalysis.create({
       data: {
         userOrganizationId,
@@ -119,19 +119,24 @@ export async function POST(request: Request) {
         title,
         intakeData,
         analysis,
-        usedKnowledgeBaseVersion: usedKnowledgeBaseVersion ?? undefined, // OrganizationKnowledgeBase.version
-        knowledgeBaseSnapshot: knowledgeBaseSnapshot ?? undefined, // Snapshot of KB state
-        contributedInsights: contributedInsights ?? undefined, // Extracted insights array
-        versionNumber: 1, // SavedAnalysis version (not KB version)
+        usedKnowledgeBaseVersion: usedKnowledgeBaseVersion ?? undefined,
+        knowledgeBaseSnapshot: knowledgeBaseSnapshot ?? undefined,
+        contributedInsights: contributedInsights ?? undefined,
+        versionNumber: 1,
       } as any,
     });
 
-    // Log KB metadata that was saved
-    if (usedKnowledgeBaseVersion || knowledgeBaseSnapshot || contributedInsights) {
+    if (
+      usedKnowledgeBaseVersion ||
+      knowledgeBaseSnapshot ||
+      contributedInsights
+    ) {
       console.log(`Saved analysis ${savedAnalysis.id} with KB metadata:`, {
         usedKnowledgeBaseVersion,
         hasSnapshot: !!knowledgeBaseSnapshot,
-        insightsCount: Array.isArray(contributedInsights) ? contributedInsights.length : 0,
+        insightsCount: Array.isArray(contributedInsights)
+          ? contributedInsights.length
+          : 0,
       });
     }
 
@@ -162,18 +167,19 @@ export async function POST(request: Request) {
               `Created ${learningEventsResult.eventsCreated} LearningEvents for analysis ${savedAnalysis.id}`
             );
 
-            // Apply learning events to KB immediately (light enrichment for MVP)
             try {
               const enrichmentResult = await applyLearningEventsToKB({
                 knowledgeBaseId: knowledgeBase.id,
-                minConfidence: 80, // MVP: only high confidence insights
+                minConfidence: CONFIDENCE_THRESHOLDS.HIGH,
               });
 
               if (enrichmentResult.success) {
                 console.log(
                   `Applied ${enrichmentResult.eventsApplied} learning events to KB ${knowledgeBase.id}. ` +
-                  `Updated fields: ${enrichmentResult.fieldsUpdated.join(", ") || "none"}. ` +
-                  `Enrichment version: ${enrichmentResult.enrichmentVersion}`
+                    `Updated fields: ${
+                      enrichmentResult.fieldsUpdated.join(", ") || "none"
+                    }. ` +
+                    `Enrichment version: ${enrichmentResult.enrichmentVersion}`
                 );
               } else {
                 console.warn(
@@ -182,7 +188,6 @@ export async function POST(request: Request) {
                 );
               }
             } catch (enrichmentError) {
-              // Don't fail the save if enrichment fails (non-critical)
               console.error(
                 "Error applying learning events to KB (non-critical):",
                 enrichmentError

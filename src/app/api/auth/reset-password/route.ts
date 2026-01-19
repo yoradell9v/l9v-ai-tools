@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/core/prisma";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
@@ -45,7 +45,6 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Prepare update data
     const updateData: {
       password: string;
       resetToken: null;
@@ -57,7 +56,6 @@ export async function POST(request: NextRequest) {
       resetTokenExpiry: null,
     };
 
-    // If user is SUPERADMIN and has never logged in, set lastLoginAt
     if (user.globalRole === "SUPERADMIN" && user.lastLoginAt === null) {
       updateData.lastLoginAt = new Date();
     }

@@ -1,13 +1,14 @@
 import { NextResponse, NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import OpenAI from "openai";
-import { prisma } from "@/lib/prisma";
-import { verifyAccessToken } from "@/lib/auth";
+import { prisma } from "@/lib/core/prisma";
+import { verifyAccessToken } from "@/lib/core/auth";
 import { extractInsights } from "@/lib/analysis/extractInsights";
-import { createLearningEvents } from "@/lib/learning-events";
-import { applyLearningEventsToKB } from "@/lib/apply-learning-events";
-import { addRateLimitHeaders } from "@/lib/rate-limit-middleware";
-import { withRateLimit } from "@/lib/rate-limit-utils";
+import { createLearningEvents } from "@/lib/learning/learning-events";
+import { applyLearningEventsToKB } from "@/lib/learning/apply-learning-events";
+import { CONFIDENCE_THRESHOLDS } from "@/lib/knowledge-base/insight-confidence-thresholds";
+import { addRateLimitHeaders } from "@/lib/rate-limiting/rate-limit-middleware";
+import { withRateLimit } from "@/lib/rate-limiting/rate-limit-utils";
 
 export const runtime = "nodejs";
 
@@ -557,7 +558,6 @@ export async function POST(
       );
     }
 
-    // Check rate limit (before expensive operations)
     const rateLimit = await withRateLimit(request, "/api/organization-knowledge-base/conversation", {
       requireAuth: true,
     });
@@ -859,7 +859,7 @@ export async function POST(
           structuredInsights: structuredInsights,
         };
 
-        const insights = extractInsights("CHAT_CONVERSATION", conversationData);
+        const insights = await extractInsights("CHAT_CONVERSATION", conversationData);
 
         if (insights.length > 0) {
           const learningEventsResult = await createLearningEvents({
@@ -878,7 +878,7 @@ export async function POST(
             try {
               const enrichmentResult = await applyLearningEventsToKB({
                 knowledgeBaseId: knowledgeBase.id,
-                minConfidence: 80, // MVP: only high confidence insights
+                minConfidence: CONFIDENCE_THRESHOLDS.HIGH, 
               });
 
               if (enrichmentResult.success) {
@@ -905,7 +905,6 @@ export async function POST(
       }
     } catch (insightError) {
       console.error("Error extracting insights from conversation:", insightError);
-      // Don't fail the request if insight extraction fails
     }
 
     const response = NextResponse.json({
@@ -914,7 +913,7 @@ export async function POST(
       assistantMessage: {
         id: result.assistantMessage.id,
         content: aiResponse,
-        confidence: 85, // Default confidence
+        confidence: 85,
       },
       conversationHistory: historyChronological,
       conversation: {
@@ -924,7 +923,6 @@ export async function POST(
       },
     });
 
-    // Add rate limit headers to response
     return addRateLimitHeaders(response, rateLimit.rateLimitResult);
   } catch (err: any) {
     console.error("[Message POST] Error:", err);
@@ -937,4 +935,3 @@ export async function POST(
     );
   }
 }
-

@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifyAccessToken } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { verifyAccessToken } from "@/lib/core/auth";
+import { prisma } from "@/lib/core/prisma";
 import { UserProvider, User } from "@/context/UserContext";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
-import { verifyAccessToken } from "@/lib/auth";
+import { prisma } from "@/lib/core/prisma";
+import { verifyAccessToken } from "@/lib/core/auth";
 
 export async function GET() {
   try {
@@ -45,16 +45,19 @@ export async function GET() {
           deactivatedAt: null,
         },
       },
-      select: 
-      {
+      select: {
         id: true,
         organizationId: true,
         role: true,
       },
     });
 
-    const userOrganizationIds = userOrganizations.map((uo) => uo.id);
-    const organizationIds = userOrganizations.map((uo) => uo.organizationId);
+    const userOrganizationIds = userOrganizations.map(
+      (uo: (typeof userOrganizations)[0]) => uo.id
+    );
+    const organizationIds = userOrganizations.map(
+      (uo: (typeof userOrganizations)[0]) => uo.organizationId
+    );
 
     let stats: any = {};
 
@@ -66,6 +69,7 @@ export async function GET() {
         totalSOPs,
         totalKnowledgeBases,
         pendingInvitations,
+        totalConversations,
       ] = await Promise.all([
         prisma.organization.count({
           where: { deactivatedAt: null },
@@ -81,6 +85,11 @@ export async function GET() {
             expiresAt: { gt: new Date() },
           },
         }),
+        prisma.businessConversation.count({
+          where: {
+            messageCount: { gt: 0 },
+          },
+        }),
       ]);
 
       stats = {
@@ -90,8 +99,13 @@ export async function GET() {
         totalSOPs,
         totalKnowledgeBases,
         pendingInvitations,
+        totalConversations,
       };
-    } else if (userOrganizations.some((uo) => uo.role === "ADMIN")) {
+    } else if (
+      userOrganizations.some(
+        (uo: (typeof userOrganizations)[0]) => uo.role === "ADMIN"
+      )
+    ) {
       const [
         organizationMembers,
         organizationAnalyses,
@@ -129,15 +143,42 @@ export async function GET() {
         }),
       ]);
 
+      // Get knowledge base for conversation count
+      const knowledgeBase = await prisma.organizationKnowledgeBase.findFirst({
+        where: {
+          organizationId: { in: organizationIds },
+        },
+        select: { id: true },
+      });
+
+      const organizationConversations = knowledgeBase
+        ? await prisma.businessConversation.count({
+            where: {
+              knowledgeBaseId: knowledgeBase.id,
+              userOrganizationId: { in: userOrganizationIds },
+              messageCount: { gt: 0 },
+            },
+          })
+        : 0;
+
       stats = {
         organizationMembers,
         organizationAnalyses,
         organizationSOPs,
         organizationKnowledgeBases,
         pendingInvitations,
+        organizationConversations,
       };
     } else {
-      const [myAnalyses, mySOPs] = await Promise.all([
+      // Get knowledge base for conversation count
+      const knowledgeBase = await prisma.organizationKnowledgeBase.findFirst({
+        where: {
+          organizationId: { in: organizationIds },
+        },
+        select: { id: true },
+      });
+
+      const [myAnalyses, mySOPs, myConversations] = await Promise.all([
         prisma.savedAnalysis.count({
           where: {
             userOrganizationId: { in: userOrganizationIds },
@@ -148,11 +189,21 @@ export async function GET() {
             userOrganizationId: { in: userOrganizationIds },
           },
         }),
+        knowledgeBase
+          ? prisma.businessConversation.count({
+              where: {
+                knowledgeBaseId: knowledgeBase.id,
+                userOrganizationId: { in: userOrganizationIds },
+                messageCount: { gt: 0 },
+              },
+            })
+          : Promise.resolve(0),
       ]);
 
       stats = {
         myAnalyses,
         mySOPs,
+        myConversations,
       };
     }
 

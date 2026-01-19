@@ -39,7 +39,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { checkOnboardingStatus, type OnboardingStatus } from "@/lib/organizationKnowledgeBase";
+import { checkOnboardingStatus, type OnboardingStatus } from "@/lib/knowledge-base/organization-knowledge-base";
 
 interface DashboardStats {
     // SUPERADMIN stats
@@ -49,14 +49,17 @@ interface DashboardStats {
     totalSOPs?: number;
     totalKnowledgeBases?: number;
     pendingInvitations?: number;
+    totalConversations?: number;
     // ADMIN stats
     organizationMembers?: number;
     organizationAnalyses?: number;
     organizationSOPs?: number;
     organizationKnowledgeBases?: number;
+    organizationConversations?: number;
     // MEMBER stats
     myAnalyses?: number;
     mySOPs?: number;
+    myConversations?: number;
 }
 
 interface StatCardProps {
@@ -215,15 +218,15 @@ export default function DashboardPage() {
                         icon={BriefcaseIcon}
                         label="Total Roles"
                         value={stats.totalAnalyses || 0}
-                        relatedTool="JD Builder"
-                        href="/dashboard/jd-builder"
+                        relatedTool="Role Builder"
+                        href="/dashboard/role-builder"
                     />
                     <StatCard
                         icon={ClipboardDocumentCheckIcon}
                         label="Total SOPs"
                         value={stats.totalSOPs || 0}
-                        relatedTool="SOP Generator"
-                        href="/dashboard/sop-generator"
+                        relatedTool="Process Builder"
+                        href="/dashboard/process-builder"
                     />
                     <StatCard
                         icon={LightBulbIcon}
@@ -257,15 +260,15 @@ export default function DashboardPage() {
                         icon={BriefcaseIcon}
                         label="Roles"
                         value={stats.organizationAnalyses || 0}
-                        relatedTool="JD Builder"
-                        href="/dashboard/jd-builder"
+                        relatedTool="Role Builder"
+                        href="/dashboard/role-builder"
                     />
                     <StatCard
                         icon={ClipboardDocumentCheckIcon}
                         label="SOPs"
                         value={stats.organizationSOPs || 0}
-                        relatedTool="SOP Generator"
-                        href="/dashboard/sop-generator"
+                        relatedTool="Process Builder"
+                        href="/dashboard/process-builder"
                     />
                     <StatCard
                         icon={LightBulbIcon}
@@ -291,15 +294,15 @@ export default function DashboardPage() {
                     icon={BriefcaseIcon}
                     label="My Roles"
                     value={stats.myAnalyses || 0}
-                    relatedTool="JD Builder"
-                    href="/dashboard/jd-builder"
+                    relatedTool="Role Builder"
+                    href="/dashboard/role-builder"
                 />
                 <StatCard
                     icon={ClipboardDocumentCheckIcon}
                     label="My SOPs"
                     value={stats.mySOPs || 0}
-                    relatedTool="SOP Generator"
-                    href="/dashboard/sop-generator"
+                    relatedTool="Process Builder"
+                    href="/dashboard/process-builder"
                 />
             </>
         );
@@ -471,7 +474,7 @@ export default function DashboardPage() {
                     <div className="lg:col-span-2 space-y-4">
                         <h3 className="text-xl font-semibold">Your Tools</h3>
                         <div className="grid gap-4 md:grid-cols-2">
-                            {/* JD Builder Card */}
+                            {/* Role Builder Card */}
                             <Card className="group cursor-pointer transition-all duration-200 hover:shadow-md">
                                 <CardContent className="p-6">
                                     <div className="flex items-start justify-between mb-4">
@@ -479,18 +482,23 @@ export default function DashboardPage() {
                                             <BriefcaseIcon className="h-6 w-6 text-white" />
                                         </div>
                                     </div>
-                                    <h4 className="text-lg font-semibold mb-2">JD Builder</h4>
+                                    <h4 className="text-lg font-semibold mb-2">Role Builder</h4>
                                     <p className="text-base text-muted-foreground mb-4">
                                         Create comprehensive job descriptions tailored to your organization's needs.
                                     </p>
-                                    <Button variant="outline" size="sm" className="w-full border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white font-bold">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white font-bold"
+                                        onClick={() => router.push("/dashboard/role-builder")}
+                                    >
                                         <Plus className="h-4 w-4 mr-2" />
-                                        Add New
+                                        Define New Role
                                     </Button>
                                 </CardContent>
                             </Card>
 
-                            {/* SOP Generator Card */}
+                            {/* Process Builder Card */}
                             <Card className="group cursor-pointer transition-all duration-200 hover:shadow-md">
                                 <CardContent className="p-6">
                                     <div className="flex items-start justify-between mb-4">
@@ -498,13 +506,18 @@ export default function DashboardPage() {
                                             <ListBulletIcon className="h-6 w-6 text-white" />
                                         </div>
                                     </div>
-                                    <h4 className="text-lg font-semibold mb-2">SOP Generator</h4>
+                                    <h4 className="text-lg font-semibold mb-2">Process Builder</h4>
                                     <p className="text-base text-muted-foreground mb-4">
                                         Generate detailed standard operating procedures for your team.
                                     </p>
-                                    <Button variant="outline" size="sm" className="w-full border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white font-bold">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white font-bold"
+                                        onClick={() => router.push("/dashboard/process-builder")}
+                                    >
                                         <Plus className="h-4 w-4 mr-2" />
-                                        Add New
+                                        Generate New Process
                                     </Button>
                                 </CardContent>
                             </Card>
@@ -521,9 +534,14 @@ export default function DashboardPage() {
                                     <p className="text-base text-muted-foreground mb-4">
                                         Get AI-powered insights and answers about your business operations.
                                     </p>
-                                    <Button variant="outline" size="sm" className="w-full border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white font-bold">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white font-bold"
+                                        onClick={() => router.push("/dashboard/ai-business-brain")}
+                                    >
                                         <Plus className="h-4 w-4 mr-2" />
-                                        Add New
+                                        Start New Chat
                                     </Button>
                                 </CardContent>
                             </Card>
@@ -540,9 +558,14 @@ export default function DashboardPage() {
                                     <p className="text-base text-muted-foreground mb-4">
                                         Build and manage your organization's knowledge repository.
                                     </p>
-                                    <Button variant="outline" size="sm" className="w-full border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white font-bold">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white font-bold"
+                                        onClick={() => router.push("/dashboard/organization-profile")}
+                                    >
                                         <Plus className="h-4 w-4 mr-2" />
-                                        Add New
+                                        Improve Knowledge Base
                                     </Button>
                                 </CardContent>
                             </Card>
@@ -555,29 +578,112 @@ export default function DashboardPage() {
                         <Card>
                             <CardContent className="p-6">
                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between pb-3 border-b">
-                                        <span className="text-base font-medium text-muted-foreground">Progress</span>
-                                        <span className="text-base font-semibold">0 of 4 complete</span>
-                                    </div>
+                                    {(() => {
+                                        const isKBComplete = onboardingStatus && !onboardingStatus.needsOnboarding;
 
-                                    <div className="space-y-3">
-                                        <div className="flex items-center gap-3">
-                                            <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                                            <span className="text-base">Setup org knowledge base</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                                            <span className="text-base">Create your first SOP</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                                            <span className="text-base">Define a role</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                                            <span className="text-base">Submit a Task</span>
-                                        </div>
-                                    </div>
+                                        // Check SOP completion based on user role
+                                        const hasSOP = stats
+                                            ? (user?.globalRole === "SUPERADMIN" && (stats.totalSOPs ?? 0) > 0) ||
+                                            (user?.globalRole === "ADMIN" && (stats.organizationSOPs ?? 0) > 0) ||
+                                            (user?.globalRole === "MEMBER" && (stats.mySOPs ?? 0) > 0) ||
+                                            (stats.mySOPs ?? 0) > 0 ||
+                                            (stats.organizationSOPs ?? 0) > 0 ||
+                                            (stats.totalSOPs ?? 0) > 0
+                                            : false;
+
+                                        // Check role/analysis completion based on user role
+                                        const hasRole = stats
+                                            ? (user?.globalRole === "SUPERADMIN" && (stats.totalAnalyses ?? 0) > 0) ||
+                                            (user?.globalRole === "ADMIN" && (stats.organizationAnalyses ?? 0) > 0) ||
+                                            (user?.globalRole === "MEMBER" && (stats.myAnalyses ?? 0) > 0) ||
+                                            (stats.myAnalyses ?? 0) > 0 ||
+                                            (stats.organizationAnalyses ?? 0) > 0 ||
+                                            (stats.totalAnalyses ?? 0) > 0
+                                            : false;
+
+                                        // Check conversation completion based on user role
+                                        const hasConversation = stats
+                                            ? (user?.globalRole === "SUPERADMIN" && (stats.totalConversations ?? 0) > 0) ||
+                                            (user?.globalRole === "ADMIN" && (stats.organizationConversations ?? 0) > 0) ||
+                                            (user?.globalRole === "MEMBER" && (stats.myConversations ?? 0) > 0) ||
+                                            (stats.myConversations ?? 0) > 0 ||
+                                            (stats.organizationConversations ?? 0) > 0 ||
+                                            (stats.totalConversations ?? 0) > 0
+                                            : false;
+
+                                        const completedCount = [
+                                            isKBComplete,
+                                            hasSOP,
+                                            hasRole,
+                                            hasConversation,
+                                        ].filter(Boolean).length;
+
+                                        return (
+                                            <>
+                                                <div className="flex items-center justify-between pb-3 border-b">
+                                                    <span className="text-base font-medium text-muted-foreground">Progress</span>
+                                                    <span className="text-base font-semibold">
+                                                        {completedCount} of 4 complete
+                                                    </span>
+                                                </div>
+
+                                                <div className="space-y-3">
+                                                    <div
+                                                        className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                                                        onClick={() => router.push("/dashboard/organization-profile")}
+                                                    >
+                                                        {isKBComplete ? (
+                                                            <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
+                                                        ) : (
+                                                            <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                                                        )}
+                                                        <span className={`text-base ${isKBComplete ? "text-muted-foreground line-through" : ""}`}>
+                                                            Setup org knowledge base
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                                                        onClick={() => router.push("/dashboard/process-builder")}
+                                                    >
+                                                        {hasSOP ? (
+                                                            <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
+                                                        ) : (
+                                                            <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                                                        )}
+                                                        <span className={`text-base ${hasSOP ? "text-muted-foreground line-through" : ""}`}>
+                                                            Create your first SOP
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                                                        onClick={() => router.push("/dashboard/role-builder")}
+                                                    >
+                                                        {hasRole ? (
+                                                            <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
+                                                        ) : (
+                                                            <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                                                        )}
+                                                        <span className={`text-base ${hasRole ? "text-muted-foreground line-through" : ""}`}>
+                                                            Define a role
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                                                        onClick={() => router.push("/dashboard/ai-business-brain")}
+                                                    >
+                                                        {hasConversation ? (
+                                                            <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
+                                                        ) : (
+                                                            <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                                                        )}
+                                                        <span className={`text-base ${hasConversation ? "text-muted-foreground line-through" : ""}`}>
+                                                            Talk with your AI Business Brain
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </CardContent>
                         </Card>

@@ -1,12 +1,7 @@
 import path from "path";
 import * as cheerio from "cheerio";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { getDownloadPresignedUrl } from "@/lib/core/s3";
 import OpenAI from "openai";
-
-// ============================================
-// TYPE DEFINITIONS
-// ============================================
 
 export interface ExtractionMetrics {
   inputTokens: number;
@@ -16,10 +11,10 @@ export interface ExtractionMetrics {
 }
 
 export interface ExtractedFileContent {
-  summary: string; // AI-generated summary
-  keyPoints: string[]; // Extracted key points
-  importantSections?: string[]; // Key sections identified
-  cleanedText?: string; // Fallback: cleaned text if AI fails
+  summary: string; 
+  keyPoints: string[]; 
+  importantSections?: string[]; 
+  cleanedText?: string; 
   metadata: {
     fileName: string;
     fileType: string;
@@ -27,7 +22,7 @@ export interface ExtractedFileContent {
     extractedAt: string;
     summarizedAt: string;
   };
-  metrics?: ExtractionMetrics; // Token usage and cost tracking
+  metrics?: ExtractionMetrics;
   error?: string;
 }
 
@@ -87,32 +82,20 @@ export type ProgressCallback = (
   current: string
 ) => void;
 
-// ============================================
-// OPENAI INITIALIZATION
-// ============================================
-
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const AI_SUMMARIZATION_MODEL = "gpt-4o-mini"; // Cost-effective model
-const MAX_INPUT_LENGTH = 15000; // Truncate to ~15K chars for summarization
-
-// ============================================
-// RATE LIMITING & RETRY CONFIGURATION
-// ============================================
+const AI_SUMMARIZATION_MODEL = "gpt-4o-mini";
+const MAX_INPUT_LENGTH = 15000; 
 
 const AI_RATE_LIMIT = {
-  maxRequestsPerMinute: 60, // OpenAI limit
-  delayBetweenRequests: 1000, // 1 second
+  maxRequestsPerMinute: 60, 
+  delayBetweenRequests: 1000,
 };
 
 let lastAIRequestTime = 0;
 let requestCount = 0;
-
-// ============================================
-// CACHING CONFIGURATION
-// ============================================
 
 interface CacheEntry<T> {
   data: T;
@@ -124,7 +107,7 @@ const extractionCache = new Map<
   CacheEntry<ExtractedWebsiteContent | ExtractedFileContent>
 >();
 
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 function getCacheKey(type: "file" | "url", identifier: string): string {
   return `${type}:${identifier}`;
@@ -147,32 +130,21 @@ function normalizeWhitespace(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-// ============================================
-// TEXT CLEANING FUNCTIONS
-// ============================================
 
 function cleanExtractedText(text: string): string {
   if (!text || text.trim().length === 0) return "";
-
-  // Remove excessive whitespace
   let cleaned = normalizeWhitespace(text);
+  cleaned = cleaned.replace(/^\d+\s*$/gm, ""); 
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
 
-  // Remove common PDF artifacts (page numbers, headers, footers)
-  // Pattern: standalone numbers at start/end of lines, or repeated headers
-  cleaned = cleaned.replace(/^\d+\s*$/gm, ""); // Standalone page numbers
-  cleaned = cleaned.replace(/\n{3,}/g, "\n\n"); // Multiple newlines to double
-
-  // Remove very short lines that are likely artifacts
   const lines = cleaned.split("\n");
   const meaningfulLines = lines.filter(
     (line) => line.trim().length > 10 || line.trim().length === 0
   );
   cleaned = meaningfulLines.join("\n");
 
-  // Normalize again after cleaning
   cleaned = normalizeWhitespace(cleaned);
 
-  // Truncate if too long (before summarization)
   if (cleaned.length > MAX_INPUT_LENGTH) {
     cleaned = cleaned.substring(0, MAX_INPUT_LENGTH) + "...";
   }
@@ -186,25 +158,11 @@ function cleanWebsiteText(text: string, maxLength: number = 2000): string {
   return cleaned.substring(0, maxLength).trim();
 }
 
-// ============================================
-// TOKEN COUNTING & COST ESTIMATION
-// ============================================
-
-/**
- * Estimates token count (rough approximation: 1 token ≈ 4 characters)
- * For production, consider using gpt-tokenizer or tiktoken
- */
 function estimateTokens(text: string): number {
   if (!text || text.length === 0) return 0;
-  // Rough estimate: 1 token ≈ 4 characters
   return Math.ceil(text.length / 4);
 }
 
-/**
- * Calculates estimated cost based on GPT-4o-mini pricing
- * Input: $0.15 per 1M tokens
- * Output: $0.60 per 1M tokens
- */
 function calculateCost(
   inputTokens: number,
   outputTokens: number
@@ -214,49 +172,29 @@ function calculateCost(
   return inputCost + outputCost;
 }
 
-// ============================================
-// CONTENT QUALITY CHECKS
-// ============================================
 
-/**
- * Determines if content is worth summarizing with AI
- * Prevents wasting API calls on low-quality content
- */
 function shouldSummarize(text: string): boolean {
   if (!text || text.trim().length === 0) return false;
 
-  // Don't waste API calls on very short content
   if (text.length < 100) return false;
 
-  // Check if mostly gibberish/special characters
   const alphanumericRatio =
     (text.match(/[a-zA-Z0-9]/g) || []).length / text.length;
   if (alphanumericRatio < 0.5) return false;
 
-  // Check if mostly repeated characters
   const uniqueChars = new Set(text).size;
   if (uniqueChars < 20) return false;
 
   return true;
 }
 
-// ============================================
-// RATE LIMITING & RETRY LOGIC
-// ============================================
-
-/**
- * Rate-limited AI call wrapper
- * Ensures we don't exceed OpenAI's rate limits
- */
 async function rateLimitedAICall<T>(fn: () => Promise<T>): Promise<T> {
   const now = Date.now();
 
-  // Reset counter every minute
   if (now - lastAIRequestTime > 60000) {
     requestCount = 0;
   }
 
-  // Wait if we've hit the limit
   if (requestCount >= AI_RATE_LIMIT.maxRequestsPerMinute) {
     const waitTime = 60000 - (now - lastAIRequestTime);
     if (waitTime > 0) {
@@ -268,7 +206,7 @@ async function rateLimitedAICall<T>(fn: () => Promise<T>): Promise<T> {
     }
   }
 
-  // Add small delay between requests
+
   if (now - lastAIRequestTime < AI_RATE_LIMIT.delayBetweenRequests) {
     const delay =
       AI_RATE_LIMIT.delayBetweenRequests - (now - lastAIRequestTime);
@@ -281,10 +219,6 @@ async function rateLimitedAICall<T>(fn: () => Promise<T>): Promise<T> {
   return fn();
 }
 
-/**
- * Retry logic for AI calls with exponential backoff
- * Handles transient failures gracefully
- */
 async function retryAICall<T>(
   fn: () => Promise<T>,
   maxRetries = 3,
@@ -294,7 +228,6 @@ async function retryAICall<T>(
     try {
       return await fn();
     } catch (error: any) {
-      // Don't retry on certain errors (bad request, auth, etc.)
       if (
         error?.status === 400 ||
         error?.status === 401 ||
@@ -304,8 +237,6 @@ async function retryAICall<T>(
       }
 
       if (i === maxRetries - 1) throw error;
-
-      // Exponential backoff
       const backoffDelay = delay * Math.pow(2, i);
       console.warn(
         `AI call failed (attempt ${i + 1}/${maxRetries}). Retrying in ${backoffDelay}ms...`
@@ -325,25 +256,9 @@ function validateFileType(fileName: string, mimeType?: string): boolean {
   return extensionAllowed || mimeAllowed;
 }
 
+// Use centralized S3 utility instead of generating presigned URL manually
 async function generateGetPresignedUrl(s3Key: string): Promise<string> {
-  const s3Client = new S3Client({
-    region: process.env.AWS_REGION!,
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    },
-  });
-
-  const command = new GetObjectCommand({
-    Bucket: process.env.AWS_BUCKET_NAME!,
-    Key: s3Key,
-  });
-
-  const presignedUrl = await getSignedUrl(s3Client, command, {
-    expiresIn: 300, // 5 minutes
-  });
-
-  return presignedUrl;
+  return await getDownloadPresignedUrl(s3Key, 300);
 }
 
 async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
@@ -747,10 +662,6 @@ function extractContactInfo($: cheerio.CheerioAPI): string {
   return normalizeWhitespace(contactText).substring(0, 1000);
 }
 
-// ============================================
-// AI SUMMARIZATION FUNCTIONS
-// ============================================
-
 interface FileSummaryResult {
   summary: string;
   keyPoints: string[];
@@ -768,10 +679,6 @@ interface WebsiteSummaryResult {
   keyInsights: string[];
 }
 
-/**
- * Summarizes extracted file text using AI
- * Returns summary result with metrics
- */
 async function summarizeFileContent(
   cleanedText: string,
   fileName: string
@@ -877,10 +784,6 @@ Be specific and concise. Each key point should be a complete, standalone insight
   }
 }
 
-/**
- * Summarizes website content using AI
- * Returns summary result with metrics
- */
 async function summarizeWebsiteContent(
   rawContent: {
     hero: string;
@@ -1067,19 +970,6 @@ Be specific and concise.`;
   }
 }
 
-// ============================================
-// MAIN EXPORTED FUNCTIONS
-// ============================================
-
-/**
- * Extracts and summarizes text content from a file (PDF, DOC, DOCX, TXT) stored in S3
- * @param fileUrl - The URL of the file (can be S3 URL or presigned URL)
- * @param fileName - The name of the file
- * @param fileType - Optional MIME type of the file
- * @param s3Key - Optional S3 key to generate presigned URL if needed
- * @param useCache - Whether to use cached results (default: true)
- * @returns Extracted file content with AI summary, key points, and metadata
- */
 export async function extractFromFile(
   fileUrl: string,
   fileName: string,
@@ -1089,7 +979,6 @@ export async function extractFromFile(
 ): Promise<ExtractedFileContent> {
   const cacheKey = getCacheKey("file", `${fileName}:${fileUrl}`);
 
-  // Check cache
   if (useCache) {
     const cached = extractionCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -1101,7 +990,6 @@ export async function extractFromFile(
   let cleanedText = "";
   let extractionError: string | undefined;
 
-  // Step 1: Extract raw text
   try {
     const rawText = await extractTextFromFileUrl(
       fileUrl,
@@ -1120,7 +1008,6 @@ export async function extractFromFile(
     extractionError = errorMessage;
   }
 
-  // Step 2: AI Summarization (mandatory)
   let summary = "";
   let keyPoints: string[] = [];
   let importantSections: string[] = [];
@@ -1151,7 +1038,6 @@ export async function extractFromFile(
     }
   }
 
-  // If both extraction and summarization failed, return error
   if (extractionError && !cleanedText) {
     const errorResult = {
       summary: "",
@@ -1165,7 +1051,6 @@ export async function extractFromFile(
       },
       error: extractionError,
     };
-    // Cache error result (short TTL would be better, but keeping simple for now)
     return errorResult;
   }
 
@@ -1173,7 +1058,7 @@ export async function extractFromFile(
     summary,
     keyPoints,
     importantSections,
-    cleanedText: summarizationError ? cleanedText : undefined, // Only include if AI failed
+    cleanedText: summarizationError ? cleanedText : undefined,
     metadata: {
       fileName,
       fileType: fileType || getFileExtension(fileName),
@@ -1184,7 +1069,6 @@ export async function extractFromFile(
     error: summarizationError || extractionError,
   };
 
-  // Cache successful results
   if (!result.error && useCache) {
     extractionCache.set(cacheKey, {
       data: result,
@@ -1195,22 +1079,12 @@ export async function extractFromFile(
   return result;
 }
 
-/**
- * Extracts and summarizes structured content from a website URL
- * NOTE: This function extracts static HTML content only.
- * For JavaScript-rendered (SPA) websites, content may be incomplete.
- * Consider using a headless browser (Puppeteer/Playwright) for those cases.
- * @param url - The website URL to extract content from
- * @param useCache - Whether to use cached results (default: true)
- * @returns Extracted website content with AI-summarized sections
- */
 export async function extractFromUrl(
   url: string,
   useCache = true
 ): Promise<ExtractedWebsiteContent> {
   const cacheKey = getCacheKey("url", url);
 
-  // Check cache
   if (useCache) {
     const cached = extractionCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -1232,7 +1106,6 @@ export async function extractFromUrl(
   let testimonials: string[] = [];
   let extractionError: string | undefined;
 
-  // Step 1: Extract raw content
   try {
     const response = await fetch(url, {
       headers: {
@@ -1248,7 +1121,6 @@ export async function extractFromUrl(
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // Detect Single Page Applications (SPAs)
     const hasReactRoot =
       html.includes('id="root"') || html.includes('id="__next"');
     const hasVueApp = html.includes('id="app"') && html.includes("v-");
@@ -1286,7 +1158,6 @@ export async function extractFromUrl(
     extractionError = errorMessage;
   }
 
-  // Step 2: AI Summarization (mandatory)
   let sections: ExtractedWebsiteContent["sections"] = {};
   let overallSummary = "";
   let keyInsights: string[] = [];
@@ -1307,7 +1178,6 @@ export async function extractFromUrl(
       console.error(`Error summarizing website ${url}:`, errorMessage);
       summarizationError = errorMessage;
 
-      // Fallback: create basic summaries from raw content
       if (rawContent.hero) {
         sections.hero = {
           summary: rawContent.hero.substring(0, 200),
@@ -1330,7 +1200,6 @@ export async function extractFromUrl(
     }
   }
 
-  // If extraction failed completely, return error
   if (extractionError && !rawContent) {
     return {
       sections: {},
@@ -1363,7 +1232,6 @@ export async function extractFromUrl(
     error: summarizationError || extractionError,
   };
 
-  // Cache successful results
   if (!result.error && useCache) {
     extractionCache.set(cacheKey, {
       data: result,
@@ -1374,11 +1242,7 @@ export async function extractFromUrl(
   return result;
 }
 
-/**
- * Extracts content from multiple URLs (parses contentLinks textarea)
- * @param contentLinksText - Text containing URLs (newline or comma separated)
- * @returns Array of extracted website content
- */
+
 export async function extractFromContentLinks(
   contentLinksText: string
 ): Promise<ExtractedWebsiteContent[]> {
@@ -1402,13 +1266,7 @@ export async function extractFromContentLinks(
   return Promise.all(extractionPromises);
 }
 
-/**
- * Batch extraction from multiple files and URLs
- * @param files - Array of file inputs
- * @param urls - Array of URLs to extract
- * @param onProgress - Optional progress callback (completed, total, current)
- * @returns Combined extraction results with aggregated metrics
- */
+
 export async function extractFromMultiple(
   files: FileExtractionInput[] = [],
   urls: string[] = [],
@@ -1509,12 +1367,10 @@ export async function extractFromMultiple(
 
   await Promise.all([...filePromises, ...urlPromises]);
 
-  // Calculate aggregated metrics
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let totalEstimatedCost = 0;
 
-  // Sum metrics from all files
   Object.values(result.files).forEach((file) => {
     if (file.metrics) {
       totalInputTokens += file.metrics.inputTokens;
@@ -1523,7 +1379,6 @@ export async function extractFromMultiple(
     }
   });
 
-  // Sum metrics from all URLs
   Object.values(result.urls).forEach((url) => {
     if (url.metrics) {
       totalInputTokens += url.metrics.inputTokens;

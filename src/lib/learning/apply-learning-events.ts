@@ -1,31 +1,31 @@
-import { prisma } from "./prisma";
+import { prisma } from "@/lib/core/prisma";
 import {
   adjustConfidenceByAge,
   meetsConfidenceThreshold,
+  getDecayInfo,
   ConfidenceDecayConfig,
-} from "./utils/confidence-decay";
+} from "@/lib/utils/confidence-decay";
 import {
   recordApplicationMetrics,
   ApplicationMetrics,
   updateQualityMetrics,
   QualityMetrics,
-} from "./learning-metrics";
+} from "@/lib/learning/learning-metrics";
 import {
   sortEventsByPriority,
-  groupEventsByPriority,
-  EventPriority,
-} from "./utils/event-priority";
+} from "@/lib/utils/event-priority";
 import {
   recordEventAudit,
   createKBStateSnapshot,
   EventAuditLog,
-} from "./event-sourcing";
+} from "@/lib/learning/event-sourcing";
+import { CONFIDENCE_THRESHOLDS } from "@/lib/knowledge-base/insight-confidence-thresholds";
 
 export interface ApplyLearningEventsParams {
   knowledgeBaseId: string;
   minConfidence?: number;
-  batchSize?: number; // Number of events to process per batch (default: 100)
-  confidenceDecayConfig?: ConfidenceDecayConfig; // Confidence decay configuration
+  batchSize?: number; 
+  confidenceDecayConfig?: ConfidenceDecayConfig; 
 }
 
 export interface ApplyLearningEventsResult {
@@ -45,8 +45,8 @@ interface FieldUpdate {
   resolutionStrategy?: ConflictResolutionStrategy;
 }
 
-const DEFAULT_MIN_CONFIDENCE = 80;
-const DEFAULT_BATCH_SIZE = 100; // Process 100 events at a time
+const DEFAULT_MIN_CONFIDENCE = CONFIDENCE_THRESHOLDS.HIGH; 
+const DEFAULT_BATCH_SIZE = 100;
 
 const HIGH_CONFIDENCE_OVERRIDE = 90;
 
@@ -78,7 +78,7 @@ export async function applyLearningEventsToKB(
   const skippedEventIds: string[] = [];
 
   try {
-    // Load knowledge base once (will be used for all batches)
+  
     const knowledgeBase = await prisma.organizationKnowledgeBase.findUnique({
       where: { id: knowledgeBaseId },
     });
@@ -94,19 +94,18 @@ export async function applyLearningEventsToKB(
       };
     }
 
-    // Process events in batches using cursor-based pagination
+  
     let cursor: string | undefined;
     let hasMoreEvents = true;
     let totalProcessed = 0;
 
     while (hasMoreEvents) {
-      // Fetch next batch of events
       const batchEvents = await prisma.learningEvent.findMany({
         where: {
           knowledgeBaseId,
           applied: false,
           confidence: {
-            gte: minConfidence, // Initial filter (will apply decay check later)
+            gte: minConfidence,
           },
           ...(cursor ? { id: { gt: cursor } } : {}),
         },
@@ -120,23 +119,17 @@ export async function applyLearningEventsToKB(
         hasMoreEvents = false;
         break;
       }
+      
+      // Filter events using meetsConfidenceThreshold (simplifies logic)
+      const validEvents = batchEvents.filter((event) =>
+        meetsConfidenceThreshold(
+          event.confidence,
+          event.createdAt,
+          minConfidence,
+          confidenceDecayConfig
+        )
+      );
 
-      // Apply confidence decay and filter events that still meet threshold
-      const validEvents = batchEvents
-        .map((event) => {
-          const adjustedConfidence = adjustConfidenceByAge(
-            event.confidence,
-            event.createdAt,
-            confidenceDecayConfig
-          );
-          return {
-            ...event,
-            adjustedConfidence, // Store adjusted confidence for priority calculation
-          };
-        })
-        .filter((event) => event.adjustedConfidence >= minConfidence);
-
-      // Sort events by priority (critical first, then by confidence)
       const sortedEvents = sortEventsByPriority(validEvents);
 
       // Track skipped events due to confidence decay
@@ -144,12 +137,17 @@ export async function applyLearningEventsToKB(
       const decayedEvents = batchEvents.filter((event) => !validEventIds.has(event.id));
       skippedEventIds.push(...decayedEvents.map((e) => e.id));
 
-      // Record audit logs for skipped events (non-blocking)
+      // Record audit logs for skipped events with detailed decay information (non-blocking)
       for (const event of decayedEvents) {
+        const decayInfo = getDecayInfo(
+          event.confidence,
+          event.createdAt,
+          confidenceDecayConfig
+        );
         const auditLog = {
           eventId: event.id,
           action: "skipped" as const,
-          reason: "Confidence below threshold after decay",
+          reason: `Confidence decayed from ${decayInfo.originalConfidence}% to ${decayInfo.adjustedConfidence}% after ${decayInfo.ageInDays} days (${decayInfo.decayPercentage}% decay). Below threshold of ${minConfidence}%`,
           timestamp: new Date(),
         };
         recordEventAudit(knowledgeBaseId, auditLog).catch((err: any) => {
@@ -159,8 +157,7 @@ export async function applyLearningEventsToKB(
 
       // Process valid events in this batch (sorted by priority)
       if (sortedEvents.length > 0) {
-        // Extract original events (without adjustedConfidence) for processing
-        const eventsToProcess = sortedEvents.map(({ adjustedConfidence, ...event }) => event);
+        const eventsToProcess = sortedEvents;
         
         const batchResult = await processEventBatch(
           eventsToProcess,
@@ -260,13 +257,31 @@ export async function applyLearningEventsToKB(
           : 0;
     }
 
+    // Calculate decay statistics for skipped events (for debugging/analytics)
+    if (skippedEventIds.length > 0) {
+      const decayedEvents = await prisma.learningEvent.findMany({
+        where: { id: { in: skippedEventIds } },
+        select: { confidence: true, createdAt: true },
+      });
+      
+      const decayStats = decayedEvents
+        .map((event) => getDecayInfo(event.confidence, event.createdAt, confidenceDecayConfig))
+        .filter((info) => info.adjustedConfidence < minConfidence); // Only count actual decayed events
+      
+      if (decayStats.length > 0) {
+        const avgDecayPercentage = decayStats.reduce((sum, info) => sum + info.decayPercentage, 0) / decayStats.length;
+        const avgDecayedAge = decayStats.reduce((sum, info) => sum + info.ageInDays, 0) / decayStats.length;
+        console.log(`[Decay Stats] ${decayStats.length} events decayed: avg ${avgDecayPercentage.toFixed(1)}% decay, avg age ${avgDecayedAge.toFixed(1)} days`);
+      }
+    }
+
     // Record application metrics (non-blocking)
     const applicationMetrics: ApplicationMetrics = {
       knowledgeBaseId,
       eventsProcessed: totalProcessed,
       eventsApplied: appliedEventIds.length,
       eventsSkipped: skippedEventIds.length,
-      eventsDecayed: skippedEventIds.length, // Simplified - all skipped are counted
+      eventsDecayed: skippedEventIds.length,
       fieldsUpdated: fieldsUpdatedList,
       averageConfidence: avgConfidence,
       processingTimeMs,
@@ -573,11 +588,24 @@ function mapInsightToKBField(
         };
       }
 
-      break;
+      return {
+        field: "extractedKnowledge",
+        value: {
+          key: "businessContextInsights",
+          items: [
+            {
+              insight: insight,
+              evidence: parsedMetadata.evidence,
+              sourceSection: parsedMetadata.sourceSection,
+              confidence: confidence,
+            },
+          ],
+        },
+        shouldApply: true,
+      };
     }
 
     case "workflow_patterns": {
-      // Pass existing toolStack for normalization reference
       const existingToolStack = Array.isArray(kb.toolStack) ? kb.toolStack : [];
       const tools = extractToolsFromInsight(insight, parsedMetadata, existingToolStack);
       if (tools.length > 0) {
@@ -616,7 +644,21 @@ function mapInsightToKBField(
         };
       }
 
-      break;
+      return {
+        field: "extractedKnowledge",
+        value: {
+          key: "workflowPatterns",
+          items: [
+            {
+              insight: insight,
+              evidence: parsedMetadata.evidence,
+              sourceSection: parsedMetadata.sourceSection,
+              confidence: confidence,
+            },
+          ],
+        },
+        shouldApply: true,
+      };
     }
 
     case "process_optimization": {
@@ -653,7 +695,21 @@ function mapInsightToKBField(
         };
       }
 
-      break;
+      return {
+        field: "extractedKnowledge",
+        value: {
+          key: "processOptimizations",
+          items: [
+            {
+              insight: insight,
+              evidence: parsedMetadata.evidence,
+              sourceSection: parsedMetadata.sourceSection,
+              confidence: confidence,
+            },
+          ],
+        },
+        shouldApply: true,
+      };
     }
 
     case "service_patterns": {
@@ -674,7 +730,21 @@ function mapInsightToKBField(
         };
       }
 
-      break;
+      return {
+        field: "extractedKnowledge",
+        value: {
+          key: "servicePatterns",
+          items: [
+            {
+              insight: insight,
+              evidence: parsedMetadata.evidence,
+              sourceSection: parsedMetadata.sourceSection,
+              confidence: confidence,
+            },
+          ],
+        },
+        shouldApply: true,
+      };
     }
 
     case "risk_management": {
@@ -695,34 +765,144 @@ function mapInsightToKBField(
         };
       }
 
-      break;
+      return {
+        field: "extractedKnowledge",
+        value: {
+          key: "identifiedRisks",
+          items: [
+            {
+              insight: insight,
+              evidence: parsedMetadata.evidence,
+              sourceSection: parsedMetadata.sourceSection,
+              confidence: confidence,
+            },
+          ],
+        },
+        shouldApply: true,
+      };
+    }
+
+    case "service_preferences": {
+      if (parsedMetadata.recommendedService || parsedMetadata.serviceType) {
+        return {
+          field: "extractedKnowledge",
+          value: {
+            key: "servicePatterns",
+            items: [
+              {
+                serviceType: parsedMetadata.recommendedService || parsedMetadata.serviceType,
+                confidence: parsedMetadata.confidence,
+                decisionLogic: parsedMetadata.decisionLogic,
+              },
+            ],
+          },
+          shouldApply: true,
+        };
+      }
+
+      return {
+        field: "extractedKnowledge",
+        value: {
+          key: "servicePatterns",
+          items: [
+            {
+              insight: insight,
+              evidence: parsedMetadata.evidence,
+              sourceSection: parsedMetadata.sourceSection,
+              confidence: confidence,
+            },
+          ],
+        },
+        shouldApply: true,
+      };
+    }
+
+    case "skill_requirements": {
+      return {
+        field: "extractedKnowledge",
+        value: {
+          key: "skillRequirements",
+          items: [
+            {
+              insight: insight,
+              evidence: parsedMetadata.evidence,
+              sourceSection: parsedMetadata.sourceSection,
+              confidence: confidence,
+            },
+          ],
+        },
+        shouldApply: true,
+      };
+    }
+
+    case "hiring_patterns": {
+      return {
+        field: "extractedKnowledge",
+        value: {
+          key: "hiringPatterns",
+          items: [
+            {
+              insight: insight,
+              evidence: parsedMetadata.evidence,
+              sourceSection: parsedMetadata.sourceSection,
+              confidence: confidence,
+            },
+          ],
+        },
+        shouldApply: true,
+      };
+    }
+
+    case "workflow_needs": {
+      return {
+        field: "extractedKnowledge",
+        value: {
+          key: "workflowNeeds",
+          items: [
+            {
+              insight: insight,
+              evidence: parsedMetadata.evidence,
+              sourceSection: parsedMetadata.sourceSection,
+              confidence: confidence,
+            },
+          ],
+        },
+        shouldApply: true,
+      };
     }
 
     default:
-      return null;
+      return {
+        field: "extractedKnowledge",
+        value: {
+          key: `${category}Insights`,
+          items: [
+            {
+              insight: insight,
+              evidence: parsedMetadata.evidence,
+              sourceSection: parsedMetadata.sourceSection,
+              confidence: confidence,
+            },
+          ],
+        },
+        shouldApply: true,
+      };
   }
-
-  return null;
 }
 
 export interface ConflictResolutionStrategy {
   shouldApply: boolean;
   strategy: "replace" | "merge" | "keep" | "append";
   reason: string;
-  trackHistory?: boolean; // Whether to track previous value in history
+  trackHistory?: boolean;
 }
 
-/**
- * Enhanced conflict resolution with strategy-based approach
- * Returns strategy object instead of simple boolean
- */
 function resolveConflict(
   currentValue: any,
   newValue: any,
   confidence: number,
   fieldName?: string
 ): ConflictResolutionStrategy {
-  // Empty current value: always replace
   if (
     currentValue === null ||
     currentValue === undefined ||
@@ -737,7 +917,6 @@ function resolveConflict(
     };
   }
 
-  // Arrays: always merge (deduplicate)
   if (Array.isArray(currentValue) && Array.isArray(newValue)) {
     return {
       shouldApply: true,
