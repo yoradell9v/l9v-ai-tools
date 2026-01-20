@@ -9,7 +9,10 @@ console.log("Total memory:", Math.round(os.totalmem() / 1024 / 1024), "MB");
 console.log("Free memory:", Math.round(os.freemem() / 1024 / 1024), "MB");
 console.log("UV_THREADPOOL_SIZE:", process.env.UV_THREADPOOL_SIZE);
 console.log("NEXT_PRIVATE_MAX_WORKERS:", process.env.NEXT_PRIVATE_MAX_WORKERS);
-console.log("NEXT_PRIVATE_STATIC_WORKER_COUNT:", process.env.NEXT_PRIVATE_STATIC_WORKER_COUNT);
+console.log(
+  "NEXT_PRIVATE_STATIC_WORKER_COUNT:",
+  process.env.NEXT_PRIVATE_STATIC_WORKER_COUNT,
+);
 console.log("==============================\n");
 
 try {
@@ -22,11 +25,12 @@ try {
   process.env.NEXT_PRIVATE_MAX_WORKERS = "1";
   process.env.NEXT_PHASE = "phase-production-build"; // Prevent Redis initialization during build
   // Limit CPU cores that Node.js detects to force Next.js to use fewer workers
-  process.env.NODE_OPTIONS = (process.env.NODE_OPTIONS || "") + " --max-old-space-size=1536";
+  process.env.NODE_OPTIONS =
+    (process.env.NODE_OPTIONS || "") + " --max-old-space-size=1536";
   // Override CPU count detection
   process.env.UV_THREADPOOL_SIZE = "2";
   process.env.NEXT_TELEMETRY_DISABLED = "1";
-  
+
   execSync("npx next build", {
     stdio: "inherit",
     env: {
@@ -37,6 +41,7 @@ try {
       NEXT_PHASE: "phase-production-build",
       NODE_OPTIONS: process.env.NODE_OPTIONS,
       NEXT_TELEMETRY_DISABLED: "1",
+      NEXT_PRIVATE_STATIC_WORKER_COUNT: "1",
     },
   });
 
