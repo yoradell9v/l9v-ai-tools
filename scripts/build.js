@@ -20,7 +20,11 @@ try {
   // Set environment variables before exec to ensure they're available
   process.env.UV_THREADPOOL_SIZE = "2";
   process.env.NEXT_PRIVATE_MAX_WORKERS = "1";
+  process.env.NEXT_PHASE = "phase-production-build"; // Prevent Redis initialization during build
+  // Limit CPU cores that Node.js detects to force Next.js to use fewer workers
   process.env.NODE_OPTIONS = (process.env.NODE_OPTIONS || "") + " --max-old-space-size=1536";
+  // Override CPU count detection
+  process.env.UV_THREADPOOL_SIZE = "2";
   process.env.NEXT_TELEMETRY_DISABLED = "1";
   
   execSync("npx next build", {
@@ -30,6 +34,7 @@ try {
       // Ensure these are set for the child process
       UV_THREADPOOL_SIZE: "2",
       NEXT_PRIVATE_MAX_WORKERS: "1",
+      NEXT_PHASE: "phase-production-build",
       NODE_OPTIONS: process.env.NODE_OPTIONS,
       NEXT_TELEMETRY_DISABLED: "1",
     },

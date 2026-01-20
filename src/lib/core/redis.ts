@@ -62,7 +62,34 @@ function getRedisClient(): Redis | null {
   }
 }
 
-export const redis = getRedisClient();
+// Lazy initialization - only create Redis client when actually needed, not during build
+let _redis: Redis | null | undefined = undefined;
+
+function getRedisLazy(): Redis | null {
+  // Don't initialize Redis during build (check for build-time indicators)
+  const isBuildTime = 
+    process.env.NEXT_PHASE === 'phase-production-build' ||
+    process.env.NODE_ENV === 'production' && !process.env.NEXT_RUNTIME;
+  
+  if (isBuildTime) {
+    return null;
+  }
+  
+  if (_redis === undefined) {
+    _redis = getRedisClient();
+  }
+  return _redis;
+}
+
+// Export redis as a lazy-loaded value
+// This will be null during build, but will initialize when actually used at runtime
+export const redis = (() => {
+  try {
+    return getRedisLazy();
+  } catch {
+    return null;
+  }
+})();
 export async function isRedisAvailable(): Promise<boolean> {
   if (!redis) {
     console.log("[Redis] Health check: Redis client not initialized");
