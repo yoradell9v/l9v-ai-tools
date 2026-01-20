@@ -1,11 +1,17 @@
 [phases.setup]
-nixPkgs = ["nodejs_20", "npm-9_x", "openssl"]
+nixPkgs = ["nodejs_20", "openssl"]
 
 [phases.install]
-cmds = ["npm ci"]
+cmds = ["npm ci --production=false"]
 
 [phases.build]
-cmds = ["npm run build"]
+cmds = ["node scripts/build.js"]
 
 [start]
 cmd = "npm run migrate:deploy && npm run start"
+
+[variables]
+UV_THREADPOOL_SIZE = "2"
+NEXT_PRIVATE_WORKER_THREADS = "1"
+NODE_OPTIONS = "--max-old-space-size=1536"
+NEXT_TELEMETRY_DISABLED = "1"
