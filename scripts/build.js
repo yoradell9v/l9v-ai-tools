@@ -17,14 +17,20 @@ try {
   execSync("npx prisma generate", { stdio: "inherit" });
 
   console.log("\nRunning Next.js build...");
+  // Set environment variables before exec to ensure they're available
+  process.env.UV_THREADPOOL_SIZE = "2";
+  process.env.NEXT_PRIVATE_MAX_WORKERS = "1";
+  process.env.NODE_OPTIONS = (process.env.NODE_OPTIONS || "") + " --max-old-space-size=1536";
+  process.env.NEXT_TELEMETRY_DISABLED = "1";
+  
   execSync("npx next build", {
     stdio: "inherit",
     env: {
       ...process.env,
+      // Ensure these are set for the child process
       UV_THREADPOOL_SIZE: "2",
       NEXT_PRIVATE_MAX_WORKERS: "1",
-      NEXT_PRIVATE_STATIC_WORKER_COUNT: "1",
-      NODE_OPTIONS: "--max-old-space-size=1536",
+      NODE_OPTIONS: process.env.NODE_OPTIONS,
       NEXT_TELEMETRY_DISABLED: "1",
     },
   });
