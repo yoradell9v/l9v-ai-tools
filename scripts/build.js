@@ -8,6 +8,9 @@ try {
   execSync("npx prisma generate", { stdio: "inherit" });
 
   console.log("Running Next.js build with limited workers...");
+  process.env.EXPERIMENTAL_WORKER_COUNT = "1";
+  process.env.NEXT_PRIVATE_MAX_WORKERS = "1";
+  
   execSync("npx next build", {
     stdio: "inherit",
     env: {
@@ -16,6 +19,8 @@ try {
       NEXT_PRIVATE_WORKER_THREADS: "1",
       UV_THREADPOOL_SIZE: "2",
       NEXT_TELEMETRY_DISABLED: "1",
+      EXPERIMENTAL_WORKER_COUNT: "1",
+      NEXT_PRIVATE_MAX_WORKERS: "1",
     },
     maxBuffer: 1024 * 1024 * 10,
   });
