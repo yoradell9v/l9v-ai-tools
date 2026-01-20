@@ -15,12 +15,3 @@ UV_THREADPOOL_SIZE = "2"
 NEXT_BUILD_WORKERS = "1"
 NODE_OPTIONS = "--max-old-space-size=1536"
 NEXT_TELEMETRY_DISABLED = "1"
-```
-
-## Why This Will Work
-
-The logs show Next.js is detecting 48 CPU cores and creating 47 workers (typically `cores - 1`). The environment variable `NEXT_BUILD_WORKERS` tells Next.js exactly how many workers to use, overriding its auto-detection.
-
-After you make these changes, redeploy and check the logs. You should see:
-```
-Collecting page data using 1 workers ...

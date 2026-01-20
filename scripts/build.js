@@ -21,7 +21,7 @@ try {
     env: {
       ...process.env,
       UV_THREADPOOL_SIZE: "2",
-      NEXT_BUILD_WORKERS: "1", // This is the correct variable!
+      NEXT_BUILD_WORKERS: "1",
       NODE_OPTIONS: "--max-old-space-size=1536",
       NEXT_TELEMETRY_DISABLED: "1",
     },
