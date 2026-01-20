@@ -45,7 +45,7 @@ function getRedisClient(): Redis | null {
     });
 
     redis.on("close", () => {
-      console.log("[Redis] ⚠️  Connection closed");
+      console.log("[Redis] Connection closed");
     });
 
     redis.on("reconnecting", (delay: any) => {
@@ -62,14 +62,10 @@ function getRedisClient(): Redis | null {
   }
 }
 
-// Lazy initialization - only create Redis client when actually needed, not during build
 let _redis: Redis | null | undefined = undefined;
 
 function getRedisLazy(): Redis | null {
-  // Don't initialize Redis during build (check for build-time indicators)
-  const isBuildTime = 
-    process.env.NEXT_PHASE === 'phase-production-build' ||
-    process.env.NODE_ENV === 'production' && !process.env.NEXT_RUNTIME;
+  const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build';
   
   if (isBuildTime) {
     return null;
@@ -81,8 +77,6 @@ function getRedisLazy(): Redis | null {
   return _redis;
 }
 
-// Export redis as a lazy-loaded value
-// This will be null during build, but will initialize when actually used at runtime
 export const redis = (() => {
   try {
     return getRedisLazy();
@@ -117,4 +111,3 @@ export async function disconnectRedis(): Promise<void> {
     globalForRedis.redis = undefined;
   }
 }
-
