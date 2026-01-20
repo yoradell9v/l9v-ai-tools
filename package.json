@@ -71,7 +71,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/bcrypt": "^6.0.0the config update reactively when KB loads",
+    "@types/bcrypt": "^6.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.19.25",
     "@types/nodemailer": "^7.0.4",
