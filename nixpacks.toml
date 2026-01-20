@@ -12,6 +12,6 @@ cmd = "npm run migrate:deploy && npm run start"
 
 [variables]
 UV_THREADPOOL_SIZE = "2"
-NEXT_BUILD_WORKERS = "1"
+NEXT_PRIVATE_MAX_WORKERS = "1"
 NODE_OPTIONS = "--max-old-space-size=1536"
 NEXT_TELEMETRY_DISABLED = "1"

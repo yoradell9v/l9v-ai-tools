@@ -8,7 +8,8 @@ console.log("CPU cores:", os.cpus().length);
 console.log("Total memory:", Math.round(os.totalmem() / 1024 / 1024), "MB");
 console.log("Free memory:", Math.round(os.freemem() / 1024 / 1024), "MB");
 console.log("UV_THREADPOOL_SIZE:", process.env.UV_THREADPOOL_SIZE);
-console.log("NEXT_BUILD_WORKERS:", process.env.NEXT_BUILD_WORKERS);
+console.log("NEXT_PRIVATE_MAX_WORKERS:", process.env.NEXT_PRIVATE_MAX_WORKERS);
+console.log("NEXT_PRIVATE_STATIC_WORKER_COUNT:", process.env.NEXT_PRIVATE_STATIC_WORKER_COUNT);
 console.log("==============================\n");
 
 try {
@@ -21,7 +22,8 @@ try {
     env: {
       ...process.env,
       UV_THREADPOOL_SIZE: "2",
-      NEXT_BUILD_WORKERS: "1",
+      NEXT_PRIVATE_MAX_WORKERS: "1",
+      NEXT_PRIVATE_STATIC_WORKER_COUNT: "1",
       NODE_OPTIONS: "--max-old-space-size=1536",
       NEXT_TELEMETRY_DISABLED: "1",
     },
