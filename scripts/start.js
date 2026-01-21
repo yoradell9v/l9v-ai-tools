@@ -1,23 +1,28 @@
-#!/usr/bin/env node
 const { spawn } = require("child_process");
 
 const port = process.env.PORT || "3000";
-const hostname = process.env.HOSTNAME || "0.0.0.0";
+const hostname = "0.0.0.0";
 
 console.log(`Starting Next.js application...`);
 console.log(`Port: ${port}`);
 console.log(`Hostname: ${hostname}`);
 console.log(`Environment: ${process.env.NODE_ENV || "production"}`);
+console.log(`Node version: ${process.version}`);
 
-const child = spawn("next", ["start", "-H", hostname, "-p", port], {
-  stdio: "inherit",
-  env: {
-    ...process.env,
-    PORT: port,
-    HOSTNAME: hostname,
-    NODE_ENV: "production",
+const child = spawn(
+  "node_modules/.bin/next",
+  ["start", "-p", port, "-H", hostname],
+  {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      PORT: port,
+      HOSTNAME: hostname,
+      NODE_ENV: "production",
+    },
+    shell: true,
   },
-});
+);
 
 child.on("error", (error) => {
   console.error("Failed to start server:", error);
