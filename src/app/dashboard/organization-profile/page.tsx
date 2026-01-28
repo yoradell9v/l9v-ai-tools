@@ -4,8 +4,8 @@ import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Building2, Loader2, Users, Calendar, AlertCircle, Globe, Briefcase, Database, DollarSign, User, Target, Brain, BarChart3, Info, ChevronRight, Clock, CheckCircle2, Plus, Rocket, FileText, Zap, ChevronDown, MessageSquareText } from "lucide-react";
-import { LightBulbIcon, PencilIcon, DocumentTextIcon, BoltIcon, SparklesIcon, CheckCircleIcon, CheckBadgeIcon, ArrowTrendingUpIcon, InformationCircleIcon, ArrowUpOnSquareStackIcon } from "@heroicons/react/24/outline";
+import { Building2, Loader2, Users, Calendar, AlertCircle, Globe, Database, DollarSign, User, Target, Brain, BarChart3, Info, ChevronRight, Clock, CheckCircle2, Plus, Zap, ChevronDown, MessageSquareText } from "lucide-react";
+import { LightBulbIcon, PencilIcon, DocumentTextIcon, BoltIcon, SparklesIcon, CheckCircleIcon, CheckBadgeIcon, ArrowTrendingUpIcon, InformationCircleIcon, ArrowUpOnSquareStackIcon, BriefcaseIcon, RocketLaunchIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { ToolChatDialog } from "@/components/chat/ToolChatDialog";
 import {
@@ -687,7 +687,7 @@ export default function OrganizationProfilePage() {
                     {!profile && (
                         <div className="py-16 space-y-8">
                             <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
-                                <Rocket className="h-12 w-12 text-[color:var(--accent-strong)] animate-pulse" />
+                                <RocketLaunchIcon className="h-12 w-12 text-[color:var(--accent-strong)] animate-pulse" />
                             </div>
                             <div className="space-y-4 text-center max-w-2xl mx-auto">
                                 <h1 className="text-3xl font-bold">Build Your AI Knowledge Base</h1>
@@ -696,12 +696,12 @@ export default function OrganizationProfilePage() {
                                 </p>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
                                     <div className="p-4 rounded-lg border bg-card">
-                                        <Briefcase className="h-6 w-6 mb-2 text-primary" />
+                                        <BriefcaseIcon className="h-6 w-6 mb-2 text-primary" />
                                         <p className="font-semibold text-sm">Job Descriptions</p>
                                         <p className="text-xs text-muted-foreground mt-1">Generate role-specific job descriptions</p>
                                     </div>
                                     <div className="p-4 rounded-lg border bg-card">
-                                        <FileText className="h-6 w-6 mb-2 text-primary" />
+                                        <DocumentTextIcon className="h-6 w-6 mb-2 text-primary" />
                                         <p className="font-semibold text-sm">SOPs</p>
                                         <p className="text-xs text-muted-foreground mt-1">Create standard operating procedures</p>
                                     </div>
@@ -714,7 +714,7 @@ export default function OrganizationProfilePage() {
                             </div>
                             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                                 <Button onClick={() => setIsEditing(true)} size="lg" className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
-                                    <Rocket className="h-5 w-5 mr-2" />
+                                    <RocketLaunchIcon className="h-5 w-5 mr-2" />
                                     Quick Start (5 min)
                                 </Button>
                                 <Button onClick={() => setIsEditing(true)} size="lg" variant="outline">
@@ -735,7 +735,7 @@ export default function OrganizationProfilePage() {
                     {/* Alert Banner - Document Processing */}
                     {profile && documents.some(doc => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING") && (
                         <Alert className="border-blue-500/20 bg-blue-500/5">
-                            <FileText className="h-4 w-4" />
+                            <DocumentTextIcon className="h-4 w-4" />
                             <AlertTitle>Documents Processing</AlertTitle>
                             <AlertDescription>
                                 {documents.filter(doc => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING").length} document{documents.filter(doc => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING").length > 1 ? 's' : ''} being processed. Fields will auto-fill when complete.
@@ -953,7 +953,7 @@ export default function OrganizationProfilePage() {
                             <div className="flex flex-wrap gap-3">
                                 {[
                                     { name: "Basic Info", fields: completionAnalysis.tierStatus.tier1Essential, icon: User, tooltip: "Essential business information" },
-                                    { name: "Business Details", fields: completionAnalysis.tierStatus.tier2Context, icon: Briefcase, tooltip: "Context and operational details" },
+                                    { name: "Business Details", fields: completionAnalysis.tierStatus.tier2Context, icon: BriefcaseIcon, tooltip: "Context and operational details" },
                                     { name: "Brand Voice", fields: completionAnalysis.tierStatus.tier3Intelligence, icon: SparklesIcon, tooltip: "Brand personality and voice" },
                                     { name: "Quality Check", complete: !!qualityAnalysis, icon: CheckCircle2, tooltip: "Quality analysis and optimization" },
                                 ].map((step) => {

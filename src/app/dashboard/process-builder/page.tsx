@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { FileText, Plus, Loader2, CheckCircle2, Save, X, Download, History, AlertCircle, RotateCcw, Info, MoreVertical, ChevronDown, Copy } from "lucide-react";
+import { FileText, Plus, Loader2, CheckCircle2, Save, X, Download, History, AlertCircle, RotateCcw, Info, MoreVertical, ChevronDown, Copy, Network } from "lucide-react";
 import { SparklesIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,7 @@ interface GeneratedSOP {
   sopId: string | null;
   versionNumber?: number;
   isCurrentVersion?: boolean;
-  isDraft?: boolean; // true if generated from chat and not yet saved
+  isDraft?: boolean;
   metadata: {
     title: string;
     generatedAt: string;
@@ -101,9 +101,8 @@ export default function SopPage() {
   const hasAttemptedLoadRef = useRef(false);
   const lastLoadedUserIdRef = useRef<string | null>(null);
   const sopFormRef = useRef<BaseIntakeFormRef>(null);
-  const draftFormDataRef = useRef<Record<string, any> | null>(null); // Store form data for draft saves
+  const draftFormDataRef = useRef<Record<string, any> | null>(null);
 
-  // Save draft SOP (not published, isCurrentVersion: false)
   const saveSOPAsDraft = async () => {
     if (!generatedSOP) {
       toast.error("No SOP to save");
@@ -112,11 +111,9 @@ export default function SopPage() {
 
     setIsSubmitting(true);
     try {
-      // Use stored form data from when "View on Page" was clicked, or fallback to minimal
       const formData = draftFormDataRef.current || {};
       const sopTitle = formData.sopTitle || generatedSOP.metadata.title || "SOP";
 
-      // Ensure all required fields are present
       const saveFormData = {
         sopTitle: sopTitle,
         processOverview: formData.processOverview || "Generated from chat",
@@ -126,11 +123,9 @@ export default function SopPage() {
         frequency: formData.frequency || "As-needed",
         trigger: formData.trigger || "Manual initiation",
         successCriteria: formData.successCriteria || "Process completed successfully",
-        ...formData, // Include any other fields
+        ...formData,
       };
 
-      // For drafts, we already have the HTML - just save it
-      // We'll use the generate endpoint but pass the existing HTML to skip regeneration
       const response = await fetch("/api/sop/generate", {
         method: "POST",
         headers: {
@@ -139,9 +134,9 @@ export default function SopPage() {
         credentials: "include",
         body: JSON.stringify({
           ...saveFormData,
-          existingSOPHtml: generatedSOP.sopHtml, // Pass existing HTML to skip regeneration
-          saveAsDraft: true, // Flag to save as draft (isDraft: true)
-          sopId: generatedSOP.sopId || undefined, // If updating existing draft, pass the ID
+          existingSOPHtml: generatedSOP.sopHtml,
+          saveAsDraft: true,
+          sopId: generatedSOP.sopId || undefined,
         }),
       });
 
@@ -165,17 +160,15 @@ export default function SopPage() {
         throw new Error("No HTML content received from server");
       }
 
-      // Update state - mark as saved draft
       setGeneratedSOP({
         ...generatedSOP,
         sopHtml: result.sopHtml,
         sopId: result.sopId || null,
         versionNumber: result.metadata?.versionNumber,
-        isCurrentVersion: false, // Drafts are not current versions
-        isDraft: true, // Still a draft, just saved to DB
+        isCurrentVersion: false,
+        isDraft: true,
       });
 
-      // Update localStorage draft with saved version
       try {
         localStorage.setItem('sop-draft', JSON.stringify({
           sop: {
@@ -211,7 +204,6 @@ export default function SopPage() {
     }
   };
 
-  // Save and publish SOP (isCurrentVersion: true)
   const saveSOPAndPublish = async () => {
     if (!generatedSOP) {
       toast.error("No SOP to save");
@@ -220,11 +212,9 @@ export default function SopPage() {
 
     setIsSubmitting(true);
     try {
-      // Use stored form data from when "View on Page" was clicked, or fallback to minimal
       const formData = draftFormDataRef.current || {};
       const sopTitle = formData.sopTitle || generatedSOP.metadata.title || "SOP";
 
-      // Ensure all required fields are present
       const saveFormData = {
         sopTitle: sopTitle,
         processOverview: formData.processOverview || "Generated from chat",
@@ -234,10 +224,9 @@ export default function SopPage() {
         frequency: formData.frequency || "As-needed",
         trigger: formData.trigger || "Manual initiation",
         successCriteria: formData.successCriteria || "Process completed successfully",
-        ...formData, // Include any other fields
+        ...formData,
       };
 
-      // For publishing, we already have the HTML - just save it
       const response = await fetch("/api/sop/generate", {
         method: "POST",
         headers: {
@@ -246,8 +235,8 @@ export default function SopPage() {
         credentials: "include",
         body: JSON.stringify({
           ...saveFormData,
-          existingSOPHtml: generatedSOP.sopHtml, // Pass existing HTML to skip regeneration
-          saveAndPublish: true, // Publish (isDraft: false, isCurrentVersion: true)
+          existingSOPHtml: generatedSOP.sopHtml,
+          saveAndPublish: true,
         }),
       });
 
@@ -271,24 +260,21 @@ export default function SopPage() {
         throw new Error("No HTML content received from server");
       }
 
-      // Update state - mark as published
       setGeneratedSOP({
         ...generatedSOP,
         sopHtml: result.sopHtml,
         sopId: result.sopId || null,
         versionNumber: result.metadata?.versionNumber || 1,
-        isCurrentVersion: true, // Published and current
-        isDraft: false, // Published, not a draft
+        isCurrentVersion: true,
+        isDraft: false,
       });
 
-      // Clear localStorage draft (no longer needed as it's published)
       try {
         localStorage.removeItem('sop-draft');
       } catch (e) {
         console.warn("Failed to clear localStorage draft:", e);
       }
 
-      // Load versions for the published SOP
       if (result.sopId) {
         await loadVersions(result.sopId);
       }
@@ -312,8 +298,6 @@ export default function SopPage() {
     }
   };
 
-
-  // Auto-save draft to localStorage
   useEffect(() => {
     if (!generatedSOP?.isDraft) return;
 
@@ -326,12 +310,11 @@ export default function SopPage() {
       } catch (e) {
         console.warn("Failed to auto-save draft to localStorage:", e);
       }
-    }, 30000); // Auto-save every 30 seconds
+    }, 30000);
 
     return () => clearInterval(autoSaveInterval);
   }, [generatedSOP]);
 
-  // Beforeunload warning for unsaved drafts
   useEffect(() => {
     if (!generatedSOP?.isDraft) return;
 
@@ -345,19 +328,14 @@ export default function SopPage() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [generatedSOP?.isDraft]);
 
-  // Check for pending SOP from role-builder (created from job analysis)
-  // This must run BEFORE loadLatestSOP to prevent overwriting
-  // Run this effect FIRST, before any other SOP loading logic
   useEffect(() => {
     if (!user) return;
 
-    // Check for pending SOP immediately on mount or user change
     try {
       const pendingSOP = sessionStorage.getItem('pending-sop');
       if (pendingSOP) {
         const parsed = JSON.parse(pendingSOP);
         if (parsed.sop) {
-          // Set the flag FIRST to prevent loadLatestSOP from running
           hasAttemptedLoadRef.current = true;
 
           const pendingSOPData = {
@@ -378,7 +356,6 @@ export default function SopPage() {
             draftFormDataRef.current = parsed.formData;
           }
 
-          // Save to localStorage for consistency
           try {
             localStorage.setItem('sop-draft', JSON.stringify({
               sop: pendingSOPData,
@@ -398,22 +375,17 @@ export default function SopPage() {
     } catch (e) {
       console.warn("Failed to load pending SOP from sessionStorage:", e);
     }
-  }, [user]); // Only depend on user, not generatedSOP, to run first
+  }, [user]);
 
-  // Restore draft from localStorage on mount
-  // This runs AFTER pending SOP check, so pending SOPs take priority
   useEffect(() => {
-    if (!user || generatedSOP) return; // Don't restore if we already have a SOP
+    if (!user || generatedSOP) return;
 
-    // Don't restore if there's a pending SOP in sessionStorage (it will be handled by the pending SOP effect)
     try {
       const pendingSOP = sessionStorage.getItem('pending-sop');
       if (pendingSOP) {
-        // Pending SOP exists, don't restore draft
         return;
       }
     } catch (e) {
-      // Ignore errors
     }
 
     try {
@@ -421,7 +393,6 @@ export default function SopPage() {
       if (savedDraft) {
         const parsed = JSON.parse(savedDraft);
         if (parsed.sop && parsed.sop.isDraft) {
-          // Store draft data and show dialog
           setPendingDraftData({
             sop: parsed.sop,
             formData: parsed.formData,
@@ -436,39 +407,29 @@ export default function SopPage() {
 
   useEffect(() => {
     const loadLatestSOP = async () => {
-      // Don't load if we already have a SOP (including drafts)
       if (!user || generatedSOP || isLoadingLatest) return;
 
-      // Check if there's a pending SOP first - if so, don't load latest
-      // This check is critical to prevent overwriting pending SOPs
       try {
         const pendingSOP = sessionStorage.getItem('pending-sop');
         if (pendingSOP) {
-          // Pending SOP exists, let the other effect handle it
-          // Set flag to prevent this from running again
           hasAttemptedLoadRef.current = true;
           return;
         }
       } catch (e) {
-        // Ignore errors checking sessionStorage
       }
 
-      // Check if there's a draft in localStorage - if so, don't load latest
       try {
         const savedDraft = localStorage.getItem('sop-draft');
         if (savedDraft) {
           const parsed = JSON.parse(savedDraft);
           if (parsed.sop && parsed.sop.isDraft) {
-            // Draft exists, don't overwrite it with latest saved SOP
             hasAttemptedLoadRef.current = true;
             return;
           }
         }
       } catch (e) {
-        // Ignore errors checking localStorage
       }
 
-      // Check if flag is set (meaning pending SOP was loaded)
       if (hasAttemptedLoadRef.current) return;
 
       const currentUserId = user.id;
@@ -520,7 +481,7 @@ export default function SopPage() {
             sopId: latestSOP.id,
             versionNumber: latestSOP.versionNumber || 1,
             isCurrentVersion: true,
-            isDraft: false, // Explicitly set to false for saved SOPs
+            isDraft: false,
             metadata: {
               title: latestSOP.title,
               generatedAt: latestSOP.createdAt || new Date().toISOString(),
@@ -661,7 +622,7 @@ export default function SopPage() {
             sopId: versionSOP.id,
             versionNumber: versionSOP.versionNumber || 1,
             isCurrentVersion: versionSOP.isCurrentVersion ?? true,
-            isDraft: false, // Versions are always saved, not drafts
+            isDraft: false,
             metadata: {
               title: versionSOP.title,
               generatedAt: versionSOP.createdAt || new Date().toISOString(),
@@ -822,7 +783,7 @@ export default function SopPage() {
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
                 <div className="space-y-1">
                   <h1 className="text-2xl font-semibold mb-1">
-                    SOP Builder AI
+                    Process Builder AI
                   </h1>
                   <p className="text-base text-muted-foreground">
                     Automatically generate standard operating procedures for your business
@@ -980,7 +941,6 @@ export default function SopPage() {
                           </div>
                         </div>
 
-                        {/* Save Buttons for Drafts */}
                         {generatedSOP.isDraft && (
                           <div className="flex flex-wrap gap-3 pt-2">
                             <Button
@@ -1027,7 +987,6 @@ export default function SopPage() {
 
                         <Separator />
 
-                        {/* Version selector - only show for saved SOPs, not drafts */}
                         {!generatedSOP.isDraft && (
                           <div className="space-y-3">
                             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -1313,29 +1272,27 @@ export default function SopPage() {
               )}
 
               {!generatedSOP && !isProcessing && !error && !isLoadingLatest && hasNoSavedSOPs && (
-                <Card>
-                  <CardContent className="py-16 sm:py-20">
-                    <div className="flex flex-col items-center justify-center space-y-6 text-center max-w-md mx-auto">
-                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                        <FileText className="h-8 w-8 text-primary" />
-                      </div>
-                      <div className="space-y-2">
-                        <CardTitle className="text-xl sm:text-2xl">No SOPs Generated Yet</CardTitle>
-                        <CardDescription className="text-base sm:text-base">
-                          Create your first Standard Operating Procedure to get started with automated documentation for your business processes.
-                        </CardDescription>
-                      </div>
-                      <Button
-                        onClick={() => setIsModalOpen(true)}
-                        size="lg"
-                        className="inline-flex items-center gap-2"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Generate Your First SOP
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                <div className="py-16 space-y-6 text-center">
+                  <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                    <Network className="h-12 w-12 text-[color:var(--accent-strong)]" />
+                  </div>
+                  <div className="space-y-3 max-w-2xl mx-auto">
+                    <h3 className="text-2xl font-semibold">No Processes Generated Yet</h3>
+                    <p className="text-base text-muted-foreground">
+                      Create your first Standard Operating Procedure to get started with automated documentation for your business processes.
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <Button
+                      onClick={() => setIsModalOpen(true)}
+                      size="lg"
+                      className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Generate Your First SOP
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -1403,20 +1360,17 @@ export default function SopPage() {
                       throw new Error("No HTML content received from server");
                     }
 
-                    // Form-generated SOPs are now drafts until user saves
                     setGeneratedSOP({
                       sopHtml: result.sopHtml,
-                      sopId: result.sopId || null, // Will be null if not saved
+                      sopId: result.sopId || null,
                       versionNumber: result.metadata?.versionNumber,
                       isCurrentVersion: false,
-                      isDraft: result.isDraft !== undefined ? result.isDraft : true, // Default to draft if not saved
+                      isDraft: result.isDraft !== undefined ? result.isDraft : true,
                       metadata: result.metadata,
                     });
 
-                    // Store form data for saving later
                     draftFormDataRef.current = formData;
 
-                    // Save to localStorage for auto-recovery
                     try {
                       localStorage.setItem('sop-draft', JSON.stringify({
                         sop: {
@@ -1530,7 +1484,6 @@ export default function SopPage() {
         </Dialog>
       )}
 
-      {/* Controlled Tool Chat Dialog */}
       <Dialog open={isToolChatOpen} onOpenChange={setIsToolChatOpen}>
         <DialogContent className="w-[min(900px,95vw)] sm:max-w-3xl max-h-[90vh] overflow-hidden p-0 sm:p-2">
           <DialogHeader className="px-4 pt-4 pb-2">
@@ -1550,22 +1503,19 @@ export default function SopPage() {
                   const formData = action?.formData || {};
                   const sop = action?.sop;
 
-                  // Populate the form with extracted data
                   if (sopFormRef.current) {
                     sopFormRef.current.setFormData(formData);
                   }
 
-                  // Store form data for later use when saving
                   draftFormDataRef.current = formData;
 
-                  // If SOP was generated, set it as a draft (not saved yet)
                   if (sop?.sopHtml) {
                     const draftSOP: GeneratedSOP = {
                       sopHtml: sop.sopHtml,
-                      sopId: null, // Will be set when saved
+                      sopId: null,
                       versionNumber: 1,
                       isCurrentVersion: false,
-                      isDraft: true, // Mark as draft from chat
+                      isDraft: true,
                       metadata: {
                         title: formData.sopTitle || sop.metadata?.title || "SOP",
                         generatedAt: new Date().toISOString(),
@@ -1580,10 +1530,8 @@ export default function SopPage() {
 
                     setGeneratedSOP(draftSOP);
 
-                    // Set flag to prevent loadLatestSOP from overwriting this draft
                     hasAttemptedLoadRef.current = true;
 
-                    // Save to localStorage for auto-recovery
                     try {
                       localStorage.setItem('sop-draft', JSON.stringify({
                         sop: draftSOP,
@@ -1617,7 +1565,6 @@ export default function SopPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Refinement Dialog */}
       {generatedSOP && (
         <ToolChatDialog
           toolId="process-builder"
@@ -1653,29 +1600,23 @@ export default function SopPage() {
           }}
           onApplyAction={async (action: any) => {
             try {
-              // Support both refinedSOP and sop properties
               const refinedSOP = action?.refinedSOP || action?.sop;
               const formData = action?.formData || draftFormDataRef.current || {};
 
               if (refinedSOP) {
-                // Create a new draft from the refined SOP (don't auto-save or increment version)
-                // Preserve the original draft status - if base was draft, refined is draft
-                // If base was published, refined becomes a new draft
                 const refinedDraft: GeneratedSOP = {
                   sopHtml: refinedSOP.sopHtml || generatedSOP.sopHtml,
-                  sopId: null, // Will be set when saved (don't auto-save)
-                  versionNumber: undefined, // Drafts don't have version numbers
-                  isCurrentVersion: false, // Drafts are not current versions
-                  isDraft: true, // Always create as draft, regardless of base SOP status
+                  sopId: null,
+                  versionNumber: undefined,
+                  isCurrentVersion: false,
+                  isDraft: true,
                   metadata: refinedSOP.metadata || generatedSOP.metadata,
                 };
 
                 setGeneratedSOP(refinedDraft);
 
-                // Store form data for saving later
                 draftFormDataRef.current = formData;
 
-                // Save to localStorage for auto-recovery
                 try {
                   localStorage.setItem('sop-draft', JSON.stringify({
                     sop: refinedDraft,
@@ -1697,15 +1638,13 @@ export default function SopPage() {
             }
           }}
           parseAction={(raw: unknown) => {
-            // Parse the action to extract refined SOP
-            // Map refinedSOP to sop so ToolChat can display it using SOPDisplay
             if (typeof raw === 'object' && raw !== null) {
               const action = raw as any;
               if (action.refinedSOP) {
                 return {
                   ...action,
-                  sop: action.refinedSOP, // Map to sop for display
-                  refinedSOP: action.refinedSOP, // Keep original for onApplyAction
+                  sop: action.refinedSOP,
+                  refinedSOP: action.refinedSOP,
                 };
               }
             }
@@ -1714,7 +1653,6 @@ export default function SopPage() {
         />
       )}
 
-      {/* Restore Draft Dialog */}
       <Dialog open={isRestoreDraftDialogOpen} onOpenChange={setIsRestoreDraftDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1727,7 +1665,6 @@ export default function SopPage() {
             <Button
               variant="outline"
               onClick={() => {
-                // User chose not to restore, clear it
                 if (pendingDraftData) {
                   try {
                     localStorage.removeItem('sop-draft');
@@ -1751,7 +1688,7 @@ export default function SopPage() {
                       sopFormRef.current.setFormData(pendingDraftData.formData);
                     }
                   }
-                  hasAttemptedLoadRef.current = true; // Prevent loadLatestSOP from running
+                  hasAttemptedLoadRef.current = true;
                   toast.info("Draft restored", {
                     description: "Your previous draft has been restored. You can continue editing or save it.",
                   });

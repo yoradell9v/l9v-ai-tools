@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AlertCircle, Bot, Mic, Send, User, Square, ArrowUpRight } from "lucide-react";
+import { AlertCircle, Bot, Mic, Send, User, Square, ArrowUpRight, Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -71,6 +71,7 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
   const [isApplyingAction, setIsApplyingAction] = React.useState(false);
 
   const bottomRef = React.useRef<HTMLDivElement | null>(null);
+  const analysisBlockRef = React.useRef<HTMLDivElement | null>(null);
 
   // Speech recognition
   const {
@@ -108,6 +109,14 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
     }, 0);
     return () => clearTimeout(t);
   }, [messages.length]);
+
+  React.useEffect(() => {
+    if (!currentAnalysis || lastActionError) return;
+    const t = setTimeout(() => {
+      analysisBlockRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }, 0);
+    return () => clearTimeout(t);
+  }, [currentAnalysis, lastActionError]);
 
   const handleSamplePrompt = React.useCallback((prompt: string) => {
     setInput(prompt);
@@ -283,9 +292,9 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
     <div className={cn("flex h-full w-full flex-col", className)}>
       {hasMessages ? (
         <>
-          <div className="flex-1 min-h-0 mb-3 overflow-hidden">
-            <ScrollArea className="rounded-md border h-full">
-              <div className="p-3 space-y-3">
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <ScrollArea className="h-full rounded-md border">
+              <div className="p-3 pb-6 space-y-3">
                 {messages.map((m) => {
                   const isUser = m.role === "user";
                   const isAssistant = m.role === "assistant";
@@ -303,7 +312,7 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
                         className={cn(
                           "max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap",
                           isUser
-                            ? "bg-[color:var(--accent-strong)] text-white"
+                            ? "bg-[var(--primary-dark)] text-white"
                             : "bg-muted text-foreground"
                         )}
                       >
@@ -324,14 +333,14 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
                       <Bot className="h-4 w-4" />
                     </div>
                     <div className="flex items-center gap-2 max-w-[85%] rounded-lg px-3 py-2 bg-muted min-h-[44px]">
-                      <Loader className="py-0" />
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       <span className="text-sm text-muted-foreground">Analyzing your requirements...</span>
                     </div>
                   </div>
                 )}
 
                 {currentAnalysis && !lastActionError && (
-                  <div className="flex gap-2 justify-start">
+                  <div ref={analysisBlockRef} className="flex gap-2 justify-start">
                     <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full border bg-background">
                       <Bot className="h-4 w-4" />
                     </div>
@@ -395,7 +404,7 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
             </ScrollArea>
           </div>
 
-          <div className="flex items-end gap-2">
+          <div className="flex items-end gap-2 flex-shrink-0 pt-3 bg-background border-t">
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -497,7 +506,7 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
             )}
           </div>
 
-          <div className="flex items-end gap-2 pt-3 border-t">
+          <div className="flex items-end gap-2 pt-3 border-t flex-shrink-0 bg-background">
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}

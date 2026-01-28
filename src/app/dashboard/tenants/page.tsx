@@ -13,6 +13,7 @@ import {
     CheckCircleIcon,
     ArrowPathIcon
 } from "@heroicons/react/24/outline";
+import { Users } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -665,10 +666,16 @@ export default function TenantsPage() {
                                                 <div>
                                                     <h3 className="text-base font-medium mb-3">Members</h3>
                                                     {currentTenantDetails.collaborators.length === 0 ? (
-                                                        <div className="py-6 text-center rounded-lg border border-dashed">
-                                                            <p className="text-base text-muted-foreground">
-                                                                No members found in this organization.
-                                                            </p>
+                                                        <div className="py-12 space-y-4 text-center">
+                                                            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                                                                <Users className="h-12 w-12 text-[color:var(--accent-strong)]" />
+                                                            </div>
+                                                            <div className="space-y-2 max-w-md mx-auto">
+                                                                <p className="text-lg font-semibold">No members yet</p>
+                                                                <p className="text-base text-muted-foreground">
+                                                                    Invite your team to collaborate on roles, SOPs, and your organization profile.
+                                                                </p>
+                                                            </div>
                                                         </div>
                                                     ) : (
                                                         <div className="space-y-4">

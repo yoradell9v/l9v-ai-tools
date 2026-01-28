@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { FileText, Loader2, CheckCircle2, AlertCircle, Trash2, Sparkles } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, Trash2, Sparkles } from "lucide-react";
+import { FolderOpenIcon, EyeIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,13 +35,15 @@ interface DocumentListProps {
     onDocumentsChange: (documents: Document[]) => void;
     onDeleteDocument?: (documentId: string, documentName: string) => void;
     showUploadInterface?: boolean;
+    scrollAreaClassName?: string;
 }
 
 export default function DocumentList({
     documents,
     onDocumentsChange,
     onDeleteDocument,
-    showUploadInterface = false
+    showUploadInterface = false,
+    scrollAreaClassName,
 }: DocumentListProps) {
     const [completionModal, setCompletionModal] = useState<{
         open: boolean;
@@ -244,7 +247,7 @@ export default function DocumentList({
     const getStatusIcon = (status?: string) => {
         switch (status) {
             case "PENDING":
-                return <FileText className="w-4 h-4 flex-shrink-0 text-amber-500" />;
+                return <FolderOpenIcon className="w-4 h-4 flex-shrink-0 text-amber-500" />;
             case "PROCESSING":
                 return <Loader2 className="w-4 h-4 flex-shrink-0 text-blue-500 animate-spin" />;
             case "COMPLETED":
@@ -258,17 +261,17 @@ export default function DocumentList({
 
     return (
         <>
-            <Card>
+            <Card className="border-none shadow-none bg-transparent m-0 p-0">
                 <CardHeader>
                     <div className="flex items-start justify-between">
                         <div>
                             <CardTitle className="text-lg flex items-center gap-2">
-                                <FileText className="h-5 w-5" />
+                                <FolderOpenIcon className="h-5 w-5" />
                                 Document Library
                             </CardTitle>
                             <CardDescription>
                                 {documents.length === 0
-                                    ? "No documents uploaded yet."
+                                    ? "Upload documents to enrich your knowledge base."
                                     : `${documents.length} document${documents.length === 1 ? '' : 's'} uploaded`}
                             </CardDescription>
                         </div>
@@ -277,98 +280,112 @@ export default function DocumentList({
                 <CardContent className="space-y-4">
                     {/* Documents List */}
                     {documents.length > 0 ? (
-                        <div className="space-y-2">
-                            {documents.map((doc) => (
-                                <div
-                                    key={doc.id}
-                                    className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs hover:bg-muted/50 transition-colors"
-                                >
-                                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                                        {getStatusIcon(doc.extractionStatus)}
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="truncate block font-medium">{doc.name}</span>
-                                                {doc.size && (
-                                                    <Badge variant="outline" className="text-[10px]">
-                                                        {formatFileSize(doc.size)}
-                                                    </Badge>
-                                                )}
-                                                {getStatusBadge(doc.extractionStatus)}
-                                            </div>
-                                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                                {doc.uploadedAt && (
-                                                    <span className="text-muted-foreground text-[10px]">
-                                                        Uploaded {formatDate(doc.uploadedAt)}
-                                                    </span>
-                                                )}
-                                                {doc.extractedAt && doc.extractionStatus === "COMPLETED" && (
-                                                    <>
-                                                        <span className="text-muted-foreground text-[10px]">•</span>
-                                                        <span className="text-muted-foreground text-[10px]">
-                                                            Processed {formatDate(doc.extractedAt)}
+                        <ScrollArea className={scrollAreaClassName ?? "max-h-[60vh]"}>
+                            <div className="space-y-3 pr-4">
+                                {documents.map((doc) => (
+                                    <div
+                                        key={doc.id}
+                                        className="flex items-center justify-between rounded-lg border px-4 py-3 text-base hover:bg-muted/50 transition-colors"
+                                    >
+                                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                                            <div className="mt-1">{getStatusIcon(doc.extractionStatus)}</div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="truncate block font-semibold text-base">{doc.name}</span>
+                                                    {doc.size && (
+                                                        <Badge variant="outline" className="text-base leading-none">
+                                                            {formatFileSize(doc.size)}
+                                                        </Badge>
+                                                    )}
+                                                    {getStatusBadge(doc.extractionStatus)}
+                                                </div>
+
+                                                <div className="flex items-center gap-2 mt-1 flex-wrap text-base">
+                                                    {doc.uploadedAt && (
+                                                        <span className="text-muted-foreground">
+                                                            Uploaded {formatDate(doc.uploadedAt)}
                                                         </span>
-                                                    </>
-                                                )}
-                                                {doc.extractionStatus === "COMPLETED" && doc.insights && doc.insights.length > 0 && (
-                                                    <>
-                                                        <span className="text-muted-foreground text-[10px]">•</span>
-                                                        <span className="text-[10px] text-[color:var(--accent-strong)] font-medium">
-                                                            {doc.insights.length} insight{doc.insights.length > 1 ? 's' : ''} extracted
-                                                        </span>
-                                                    </>
+                                                    )}
+                                                    {doc.extractedAt && doc.extractionStatus === "COMPLETED" && (
+                                                        <>
+                                                            <span className="text-muted-foreground">•</span>
+                                                            <span className="text-muted-foreground">
+                                                                Processed {formatDate(doc.extractedAt)}
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                    {doc.extractionStatus === "COMPLETED" && doc.insights && doc.insights.length > 0 && (
+                                                        <>
+                                                            <span className="text-muted-foreground">•</span>
+                                                            <span className="text-[color:var(--accent-strong)] font-semibold">
+                                                                {doc.insights.length} insight{doc.insights.length > 1 ? 's' : ''} extracted
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                </div>
+
+                                                {doc.extractionError && doc.extractionStatus === "FAILED" && (
+                                                    <div className="text-destructive mt-1 text-base">
+                                                        {doc.extractionError}
+                                                    </div>
                                                 )}
                                             </div>
-                                            {doc.extractionError && doc.extractionStatus === "FAILED" && (
-                                                <span className="text-destructive text-[10px] block mt-0.5">
-                                                    {doc.extractionError}
-                                                </span>
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                                            {doc.url && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-9 w-9"
+                                                    onClick={() => {
+                                                        setPreviewDocument(doc);
+                                                        setPreviewOpen(true);
+                                                    }}
+                                                    title="View document"
+                                                >
+                                                    <EyeIcon className="h-5 w-5" />
+                                                </Button>
                                             )}
+                                            {doc.extractionStatus === "COMPLETED" && doc.insights && doc.insights.length > 0 && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-9 w-9"
+                                                    onClick={() => setCompletionModal({ open: true, document: doc })}
+                                                    title="View insights"
+                                                >
+                                                    <Sparkles className="w-5 h-5" />
+                                                </Button>
+                                            )}
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-9 w-9 text-destructive hover:text-destructive"
+                                                onClick={() => handleDeleteClick(doc.id, doc.name)}
+                                                title="Delete document"
+                                            >
+                                                <Trash2 className="w-5 h-5" />
+                                            </Button>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        {doc.url && (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-6 text-xs"
-                                                onClick={() => {
-                                                    setPreviewDocument(doc);
-                                                    setPreviewOpen(true);
-                                                }}
-                                            >
-                                                View
-                                            </Button>
-                                        )}
-                                        {doc.extractionStatus === "COMPLETED" && doc.insights && doc.insights.length > 0 && (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-6 text-xs"
-                                                onClick={() => setCompletionModal({ open: true, document: doc })}
-                                            >
-                                                <Sparkles className="w-3 h-3" />
-                                            </Button>
-                                        )}
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 text-xs text-destructive hover:text-destructive"
-                                            onClick={() => handleDeleteClick(doc.id, doc.name)}
-                                        >
-                                            <Trash2 className="w-3 h-3" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        </ScrollArea>
                     ) : (
-                        <div className="text-center py-4">
-                            <p className="text-base text-muted-foreground">
-                                No documents uploaded yet. Upload files from the Knowledge Base page to get started.
-                            </p>
+                        <div className="py-10 space-y-4 text-center">
+                            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                                <FolderOpenIcon className="h-10 w-10 text-[color:var(--accent-strong)]" />
+                            </div>
+                            <div className="space-y-2 max-w-md mx-auto">
+                                <p className="text-lg font-semibold">No documents uploaded yet</p>
+                                <p className="text-base text-muted-foreground">
+                                    Upload business documents from your knowledge base page to auto-fill key fields and improve AI results.
+                                </p>
+                            </div>
                         </div>
                     )}
                 </CardContent>

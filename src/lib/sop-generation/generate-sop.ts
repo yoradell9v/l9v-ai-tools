@@ -321,7 +321,6 @@ ${formData.mainSteps || ""}
     prompt += `\n\n## Additional Context (Brain Dump)\n${formData.additionalContext}`;
   }
 
-  // Add job analysis context if provided
   if (jobAnalysis && jobAnalysis.analysis) {
     const analysis = jobAnalysis.analysis;
     const intakeData = jobAnalysis.intakeData || {};
@@ -329,7 +328,6 @@ ${formData.mainSteps || ""}
     prompt += `\n\n## Linked Job Description Analysis\n`;
     prompt += `This SOP is being created for the role defined in the following job analysis:\n\n`;
 
-    // Service type and role title
     const serviceType =
       analysis.preview?.service_type ||
       analysis.full_package?.service_structure?.service_type ||
@@ -347,12 +345,10 @@ ${formData.mainSteps || ""}
       prompt += `**Business Name**: ${intakeData.businessName}\n`;
     }
 
-    // Primary outcome
     if (analysis.preview?.primary_outcome) {
       prompt += `**Primary Outcome**: ${analysis.preview.primary_outcome}\n`;
     }
 
-    // Tasks and responsibilities
     const serviceStructure = analysis.full_package?.service_structure;
     if (serviceStructure?.dedicated_va_role?.task_allocation?.from_intake) {
       prompt += `\n**Key Tasks & Responsibilities**:\n`;
@@ -373,7 +369,6 @@ ${formData.mainSteps || ""}
       }
     }
 
-    // Skills and requirements
     if (serviceStructure?.dedicated_va_role?.skill_requirements) {
       const skills = serviceStructure.dedicated_va_role.skill_requirements;
       if (skills.required && skills.required.length > 0) {
@@ -384,7 +379,6 @@ ${formData.mainSteps || ""}
       }
     }
 
-    // Hours and work structure
     const hoursPerWeek =
       analysis.preview?.hours_per_week ||
       serviceStructure?.dedicated_va_role?.hours_per_week ||
@@ -392,7 +386,6 @@ ${formData.mainSteps || ""}
       "40";
     prompt += `**Hours per Week**: ${hoursPerWeek}\n`;
 
-    // Tools mentioned in analysis
     if (intakeData.tools) {
       const tools =
         typeof intakeData.tools === "string"
@@ -403,7 +396,6 @@ ${formData.mainSteps || ""}
       }
     }
 
-    // Management style and reporting
     if (serviceStructure?.dedicated_va_role?.interaction_model) {
       const interaction = serviceStructure.dedicated_va_role.interaction_model;
       if (interaction.reports_to) {
@@ -414,7 +406,6 @@ ${formData.mainSteps || ""}
       }
     }
 
-    // Core responsibility
     if (serviceStructure?.dedicated_va_role?.core_responsibility) {
       prompt += `\n**Core Responsibility**: ${serviceStructure.dedicated_va_role.core_responsibility}\n`;
     }
@@ -487,15 +478,6 @@ export interface GenerateSOPResult {
   };
 }
 
-/**
- * Generates an SOP from form data and knowledge base context.
- * Returns both HTML and markdown versions.
- *
- * @param formData - The SOP form data
- * @param knowledgeBase - The organization knowledge base
- * @param openai - The OpenAI client instance
- * @param jobAnalysis - Optional job analysis context (when creating SOP from job description)
- */
 export async function generateSOP(
   formData: Record<string, any>,
   knowledgeBase: any | null,
@@ -520,28 +502,21 @@ export async function generateSOP(
     throw new Error("OpenAI returned empty response");
   }
 
-  // Strip code fences if the markdown is wrapped in them
-  // Handle both ```markdown and ``` formats
   generatedSOPMarkdown = generatedSOPMarkdown.trim();
   if (generatedSOPMarkdown.startsWith("```")) {
-    // Find the first newline after the opening fence
     const firstNewline = generatedSOPMarkdown.indexOf("\n");
     if (firstNewline !== -1) {
-      // Check if it ends with closing fence
       const lastBackticks = generatedSOPMarkdown.lastIndexOf("```");
       if (lastBackticks > firstNewline) {
-        // Extract content between fences
         generatedSOPMarkdown = generatedSOPMarkdown
           .substring(firstNewline + 1, lastBackticks)
           .trim();
       } else {
-        // Only opening fence, remove it and everything before first newline
         generatedSOPMarkdown = generatedSOPMarkdown
           .substring(firstNewline + 1)
           .trim();
       }
     } else {
-      // No newline, just remove the backticks
       generatedSOPMarkdown = generatedSOPMarkdown
         .replace(/^```[\w]*\n?/, "")
         .replace(/\n?```$/, "")
@@ -553,7 +528,6 @@ export async function generateSOP(
   const completionTokens = completion.usage?.completion_tokens || 0;
   const totalTokens = completion.usage?.total_tokens || 0;
 
-  // Convert markdown to HTML
   let generatedSOPHtml: string;
   try {
     generatedSOPHtml = await markdownToHtml(generatedSOPMarkdown);
@@ -563,7 +537,6 @@ export async function generateSOP(
     }
   } catch (error) {
     console.error("[SOP Generation] Error converting markdown to HTML:", error);
-    // Fallback: use OpenAI to convert markdown to HTML
     try {
       const htmlCompletion = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -583,7 +556,6 @@ export async function generateSOP(
 
       const htmlContent = htmlCompletion.choices[0].message.content || "";
       if (htmlContent && htmlContent.trim().length > 0) {
-        // Strip any code fences from the HTML response too
         let cleanedHtml = htmlContent.trim();
         if (cleanedHtml.startsWith("```")) {
           const firstNewline = cleanedHtml.indexOf("\n");
@@ -608,7 +580,6 @@ export async function generateSOP(
         "[SOP Generation] Fallback HTML conversion also failed:",
         fallbackError,
       );
-      // Last resort: wrap markdown in pre tag (but escape HTML)
       generatedSOPHtml = `<pre>${generatedSOPMarkdown.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
     }
   }

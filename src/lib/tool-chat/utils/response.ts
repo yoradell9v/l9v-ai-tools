@@ -1,9 +1,6 @@
 import type { ToolChatResponse } from "@/lib/tool-chat/types";
 import type { ValidationResult } from "./validation";
 
-/**
- * Creates a clarification response when required fields are missing.
- */
 export function createClarificationResponse(
   missingFields: string[],
   suggestedQuestions: string[],
@@ -21,9 +18,7 @@ export function createClarificationResponse(
   };
 }
 
-/**
- * Creates a success response with extracted action.
- */
+
 export function createSuccessResponse<T>(
   assistantMessage: string,
   action: T,
@@ -36,9 +31,7 @@ export function createSuccessResponse<T>(
   };
 }
 
-/**
- * Creates an error response.
- */
+
 export function createErrorResponse(
   error: string,
   details?: string,
@@ -49,10 +42,6 @@ export function createErrorResponse(
   };
 }
 
-/**
- * Creates a response with AI suggestions for missing fields.
- * This is the proactive approach - AI generates suggestions instead of asking questions.
- */
 export function createSuggestionResponse<T>(
   extractedData: T,
   suggestedFields: Record<string, any>,
@@ -100,10 +89,7 @@ export function createSuggestionResponse<T>(
   };
 }
 
-/**
- * Creates a response from validation result.
- * Returns clarification response if validation failed, otherwise returns null (caller should create success response).
- */
+
 export function createValidationResponse<T>(
   validation: ValidationResult,
   extractedData: T,
@@ -116,5 +102,5 @@ export function createValidationResponse<T>(
     ) as ToolChatResponse<T>;
   }
 
-  return null; // Caller should create success response if validation passed
+  return null;
 }

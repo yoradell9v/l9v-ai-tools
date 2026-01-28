@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import AnalysisCard, { SavedAnalysis } from "@/components/ui/AnalysisCard";
-import { FileText, AlertCircle, Plus, Loader2 } from "lucide-react";
+import { FileText, AlertCircle, Plus, Loader2, Briefcase } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,12 +20,8 @@ export default function SavedPage() {
     const lastUserIdRef = useRef<string | undefined>(undefined);
 
     useEffect(() => {
-        // Only fetch if we have a user ID and either:
-        // 1. We haven't fetched yet, or
-        // 2. The user ID has changed
         if (!user?.id) return;
 
-        // Skip if we've already fetched for this user ID
         if (hasFetchedRef.current && lastUserIdRef.current === user.id) return;
 
         hasFetchedRef.current = true;
@@ -61,7 +57,6 @@ export default function SavedPage() {
                 console.error("Error fetching saved analyses:", err);
                 setError(err.message || "Unable to load saved analyses. Please try again.");
                 setSavedItems([]);
-                // Reset ref on error so we can retry
                 hasFetchedRef.current = false;
             } finally {
                 setIsLoading(false);
@@ -72,7 +67,6 @@ export default function SavedPage() {
     }, [user?.id]);
 
     const handleEdit = (analysis: SavedAnalysis) => {
-        // Redirect to role-builder page with analysis ID and open refinement dialog
         router.push(`/dashboard/role-builder?analysisId=${analysis.id}&refine=true`);
     };
 
@@ -132,7 +126,7 @@ export default function SavedPage() {
                 </div>
                 <div className="transition-all duration-300 ease-in-out min-h-screen">
                     <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
-                        {/* Breadcrumb */}
+
                         <div className="flex items-center gap-2 mb-4 text-base text-muted-foreground">
                             <a
                                 href="/dashboard/role-builder"
@@ -144,22 +138,28 @@ export default function SavedPage() {
                             <span>Saved Analyses</span>
                         </div>
 
-                        <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-                            <div className="p-4 rounded-xl mb-4 bg-muted">
-                                <FileText className="h-10 w-10 text-muted-foreground" />
+                        <div className="py-16 space-y-6 text-center">
+                            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                                <Briefcase className="h-12 w-12 text-[color:var(--accent-strong)]" />
                             </div>
-                            <h3 className="text-lg font-medium mb-3">
-                                No saved analyses
-                            </h3>
-                            <p className="text-base mb-4 max-w-sm text-muted-foreground">
-                                Start by creating your first job description analysis. Your saved analyses will appear here.
-                            </p>
-                            <Button asChild>
-                                <a href="/dashboard/role-builder">
-                                    <Plus className="h-4 w-4" />
-                                    <span>Start Analysis</span>
-                                </a>
-                            </Button>
+                            <div className="space-y-3 max-w-2xl mx-auto">
+                                <h3 className="text-2xl font-semibold">No saved analyses yet</h3>
+                                <p className="text-base text-muted-foreground">
+                                    Start by creating your first job description analysis. Your saved analyses will appear here once you save them.
+                                </p>
+                            </div>
+                            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                                <Button
+                                    asChild
+                                    size="lg"
+                                    className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                >
+                                    <a href="/dashboard/role-builder">
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        <span>Start Analysis</span>
+                                    </a>
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -174,9 +174,9 @@ export default function SavedPage() {
             </div>
             <div className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden overflow-x-hidden">
                 <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col flex-1 min-h-0">
-                    {/* Fixed Header */}
+
                     <div className="flex-shrink-0 pt-0">
-                        {/* Breadcrumb */}
+
                         <div className="flex items-center gap-2 mb-4 text-base text-muted-foreground">
                             <a
                                 href="/dashboard/role-builder"
@@ -188,7 +188,6 @@ export default function SavedPage() {
                             <span>Saved Analyses</span>
                         </div>
 
-                        {/* Header */}
                         <div className="flex items-center justify-between">
                             <div className="pb-2">
                                 <h1 className="text-2xl font-semibold mb-1">
@@ -207,7 +206,6 @@ export default function SavedPage() {
                         </div>
                     </div>
 
-                    {/* Scrollable Analyses List */}
                     <div className="flex-1 overflow-y-auto overflow-x-hidden">
                         <div className="space-y-3">
                             {savedItems.map((item) => (

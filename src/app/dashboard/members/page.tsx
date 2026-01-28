@@ -629,19 +629,17 @@ export default function TenantMembers() {
                                 </CardContent>
                             </Card>
                         ) : !selectedOrganization ? (
-                            <Card>
-                                <CardContent className="py-12 text-center space-y-3">
-                                    <div className="mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                                        <Users className="h-6 w-6 text-muted-foreground" />
-                                    </div>
-                                    <div>
-                                        <p className="font-medium">No organizations found</p>
-                                        <p className="text-base text-muted-foreground">
-                                            You need to be a tenant admin to view and manage members.
-                                        </p>
-                                    </div>
-                                </CardContent>
-                            </Card>
+                            <div className="py-16 space-y-6 text-center">
+                                <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                                    <Users className="h-12 w-12 text-[color:var(--accent-strong)]" />
+                                </div>
+                                <div className="space-y-3 max-w-2xl mx-auto">
+                                    <p className="text-2xl font-semibold">No organizations found</p>
+                                    <p className="text-base text-muted-foreground">
+                                        You need to be a tenant admin to view and manage members. Ask your admin to grant you access.
+                                    </p>
+                                </div>
+                            </div>
                         ) : (
                             <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className=" space-y-4">
                                 <TabsList className="inline-flex">

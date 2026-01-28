@@ -5,17 +5,9 @@ import {
   updateServicePreferences,
   updateSkillRequirements,
   updateBottleneckHistory,
-} from "@/lib/job-description/jd-field-updaters";
+} from "@/lib/jd-analysis/jd-field-updaters";
 import type { JDAnalysisResult } from "./types";
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Formats knowledge base data into context string for AI prompts.
- * This is a simplified version for JD analysis (doesn't need toolId).
- */
 function formatKnowledgeBaseContext(kb: any): string {
   if (!kb) return "";
 
@@ -132,11 +124,6 @@ function cleanTeamSupportAreas(analysisResult: any): any {
 
   return analysisResult;
 }
-
-// ============================================================================
-// ANALYSIS STAGES
-// ============================================================================
-
 //Stage 1: Deep Discovery
 
 async function runDeepDiscovery(
@@ -815,10 +802,7 @@ Make every section rich and specific. Avoid generic statements.`;
   return JSON.parse(completion.choices[0].message.content || "{}");
 }
 
-// ============================================================================
 // STAGE 3B: PROJECT SPECS GENERATOR (For Projects on Demand)
-// ============================================================================
-
 async function generateProjectSpecs(
   openai: OpenAI,
   projects: any[],
@@ -1043,7 +1027,6 @@ function assembleClientPackage(
   const recommendedService =
     serviceClassification.service_type_analysis.recommended_service;
 
-  // Clean architecture: Remove team_support_areas for Dedicated VA
   const cleanedArchitecture = { ...architecture };
   if (
     recommendedService === "Dedicated VA" &&
@@ -1118,10 +1101,6 @@ function assembleClientPackage(
     },
   };
 }
-
-// ============================================================================
-// HELPER FUNCTIONS FOR PACKAGE ASSEMBLY
-// ============================================================================
 
 function generateExecutiveSummary(discovery: any, intakeData: any) {
   const context = discovery.business_context || {};
@@ -1404,20 +1383,6 @@ function generateMonitoringPlan(validation: any) {
   };
 }
 
-// ============================================================================
-// MAIN PIPELINE FUNCTION
-// ============================================================================
-
-/**
- * Runs the complete JD analysis pipeline.
- * This function orchestrates all analysis stages and returns the final result.
- * 
- * @param intakeData - Normalized intake data from form or chat extraction
- * @param sopText - Extracted SOP text (can be null)
- * @param knowledgeBase - Organization knowledge base (can be null)
- * @param websiteContent - Extracted website content (can be null)
- * @returns Complete analysis result with preview, full package, and metadata
- */
 export async function runJDAnalysisPipeline(
   intakeData: any,
   sopText: string | null,
@@ -1428,7 +1393,6 @@ export async function runJDAnalysisPipeline(
     apiKey: process.env.OPENAI_API_KEY,
   });
 
-  // Prepare intake data with website content
   const augmentedIntakeData = {
     ...intakeData,
     websiteContent: websiteContent || null,
@@ -1511,7 +1475,6 @@ export async function runJDAnalysisPipeline(
     serviceClassification
   );
 
-  // Build preview
   const preview: any = {
     summary: clientPackage.executive_summary.what_you_told_us,
     primary_outcome: intakeData.outcome_90d,
@@ -1547,7 +1510,6 @@ export async function runJDAnalysisPipeline(
     preview.team_support_areas = architecture.team_support_areas.length;
   }
 
-  // Build metadata
   const metadata = {
     stages_completed: [
       "Discovery",
@@ -1565,20 +1527,17 @@ export async function runJDAnalysisPipeline(
     quality_scores: validation.quality_assessment,
   };
 
-  // Clean response (remove team_support_areas for Dedicated VA)
   const cleanedResponse = cleanTeamSupportAreas({
     preview,
     full_package: clientPackage,
     metadata,
   });
 
-  // Extract insights (optional - can be done in route if needed)
   const extractedInsights = await extractInsights(
     "JOB_DESCRIPTION",
     cleanedResponse
   );
 
-  // Update KB fields if knowledge base is available
   if (knowledgeBase && architecture) {
     try {
       const roleTitle =
@@ -1651,5 +1610,4 @@ export async function runJDAnalysisPipeline(
   };
 }
 
-// Export helper functions that might be needed elsewhere
 export { normalizeTasks, normalizeStringArray, cleanTeamSupportAreas };

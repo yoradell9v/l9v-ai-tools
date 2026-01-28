@@ -7,16 +7,9 @@ export interface ValidationResult {
   missingFields: string[];
 }
 
-/**
- * Validates extracted data against form configuration.
- * 
- * @param data - Extracted data to validate
- * @param formConfig - Form configuration with validation rules
- * @returns Validation result with errors, warnings, and missing fields
- */
 export function validateExtractedData(
   data: Record<string, any>,
-  formConfig: FormConfig
+  formConfig: FormConfig,
 ): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -26,21 +19,20 @@ export function validateExtractedData(
     section.fields.forEach((field) => {
       const value = data[field.id];
 
-      // Check required fields
       if (field.required) {
         if (!value || (typeof value === "string" && !value.trim())) {
           missingFields.push(field.id);
           errors.push(`${field.label} is required`);
         }
       }
-
-      // Check minItems for arrays
       if (field.type === "array" && field.minItems) {
         const arrayValue = Array.isArray(value) ? value : [];
-        const filledItems = arrayValue.filter((item: string) => item?.trim()).length;
+        const filledItems = arrayValue.filter((item: string) =>
+          item?.trim(),
+        ).length;
         if (filledItems < field.minItems) {
           errors.push(
-            `${field.label} requires at least ${field.minItems} item${field.minItems === 1 ? "" : "s"}`
+            `${field.label} requires at least ${field.minItems} item${field.minItems === 1 ? "" : "s"}`,
           );
           if (!missingFields.includes(field.id)) {
             missingFields.push(field.id);
@@ -48,17 +40,15 @@ export function validateExtractedData(
         }
       }
 
-      // Check maxItems for arrays
       if (field.type === "array" && field.maxItems) {
         const arrayValue = Array.isArray(value) ? value : [];
         if (arrayValue.length > field.maxItems) {
           warnings.push(
-            `${field.label} has more than ${field.maxItems} items (will be truncated)`
+            `${field.label} has more than ${field.maxItems} items (will be truncated)`,
           );
         }
       }
 
-      // Check validation patterns
       if (field.validation && value) {
         if (field.validation.pattern) {
           const regex = new RegExp(field.validation.pattern);
@@ -66,33 +56,39 @@ export function validateExtractedData(
             errors.push(`${field.label} format is invalid`);
           }
         }
-        if (field.validation.minLength && String(value).length < field.validation.minLength) {
+        if (
+          field.validation.minLength &&
+          String(value).length < field.validation.minLength
+        ) {
           errors.push(
-            `${field.label} is too short (min ${field.validation.minLength} characters)`
+            `${field.label} is too short (min ${field.validation.minLength} characters)`,
           );
         }
-        if (field.validation.maxLength && String(value).length > field.validation.maxLength) {
+        if (
+          field.validation.maxLength &&
+          String(value).length > field.validation.maxLength
+        ) {
           warnings.push(
-            `${field.label} is too long (max ${field.validation.maxLength} characters)`
+            `${field.label} is too long (max ${field.validation.maxLength} characters)`,
           );
         }
       }
 
-      // Check conditional fields (showIf)
       if (field.showIf) {
         const conditionValue = data[field.showIf.field];
         if (conditionValue === field.showIf.value) {
-          // Field should be shown, check if it's required
-          if (field.required && (!value || (typeof value === "string" && !value.trim()))) {
+          if (
+            field.required &&
+            (!value || (typeof value === "string" && !value.trim()))
+          ) {
             missingFields.push(field.id);
             errors.push(
-              `${field.label} is required when ${field.showIf.field} is ${field.showIf.value}`
+              `${field.label} is required when ${field.showIf.field} is ${field.showIf.value}`,
             );
           }
         }
       }
 
-      // Type-specific validations
       if (value !== undefined && value !== null) {
         switch (field.type) {
           case "array":
@@ -105,7 +101,6 @@ export function validateExtractedData(
               errors.push(`${field.label} must be a number between 0 and 100`);
             }
             break;
-          // Add other type validations as needed
         }
       }
     });

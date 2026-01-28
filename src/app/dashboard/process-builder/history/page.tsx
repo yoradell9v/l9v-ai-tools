@@ -19,7 +19,9 @@ import {
     ChevronUp,
     Layers,
     List,
+    Plus,
 } from "lucide-react";
+import { ClipboardDocumentCheckIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -126,8 +128,7 @@ export default function SOPHistoryPage() {
                 groupBySOP: viewMode === "grouped" ? "true" : "false",
                 sortBy: sortBy,
             });
-            
-            // Add draft filter if not "all"
+
             if (draftFilter === "drafts") {
                 params.append("isDraft", "true");
             } else if (draftFilter === "published") {
@@ -180,16 +181,13 @@ export default function SOPHistoryPage() {
     };
 
     const handleViewSOP = (sopId: string) => {
-        // Navigate to the main SOP page with the SOP ID
-        // The main page will load this SOP
         router.push(`/dashboard/process-builder?sopId=${sopId}`);
     };
 
     const handleDownloadPDF = async (sop: SavedSOP, e: React.MouseEvent) => {
-        e.stopPropagation(); // Prevent card click
+        e.stopPropagation();
 
         try {
-            // Extract content - prefer HTML, fallback to markdown
             let content = "";
             if (typeof sop.content === "string") {
                 content = sop.content;
@@ -302,7 +300,7 @@ export default function SOPHistoryPage() {
             </div>
             <div className="min-h-screen">
                 <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
-                    {/* Header */}
+
                     <div className="flex flex-col gap-4 mb-6">
                         <div className="flex items-center gap-4">
                             <Button
@@ -325,10 +323,8 @@ export default function SOPHistoryPage() {
                         </div>
                     </div>
 
-                    {/* View Controls and Search */}
                     <div className="mb-6 space-y-4">
                         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                            {/* View Mode Toggle */}
                             <div className="flex items-center gap-2">
                                 <span className="text-base text-muted-foreground">View:</span>
                                 <div className="flex border rounded-md">
@@ -360,7 +356,6 @@ export default function SOPHistoryPage() {
                             </div>
 
                             <div className="flex items-center gap-4">
-                                {/* Draft/Published Filter */}
                                 <div className="flex items-center gap-2">
                                     <span className="text-base text-muted-foreground">Filter:</span>
                                     <div className="flex border rounded-md">
@@ -400,7 +395,6 @@ export default function SOPHistoryPage() {
                                     </div>
                                 </div>
 
-                                {/* Sort Dropdown */}
                                 <div className="flex items-center gap-2">
                                     <span className="text-base text-muted-foreground">Sort by:</span>
                                     <Select
@@ -422,7 +416,6 @@ export default function SOPHistoryPage() {
                             </div>
                         </div>
 
-                        {/* Search */}
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
@@ -434,7 +427,6 @@ export default function SOPHistoryPage() {
                         </div>
                     </div>
 
-                    {/* Loading State */}
                     {isLoading && (
                         <Card>
                             <CardContent className="flex items-center justify-center gap-3 py-12">
@@ -444,36 +436,36 @@ export default function SOPHistoryPage() {
                         </Card>
                     )}
 
-                    {/* Empty State */}
                     {!isLoading &&
                         ((viewMode === "grouped" && filteredGroups.length === 0) ||
                             (viewMode === "individual" && filteredSOPs.length === 0)) && (
-                            <Card className="text-center">
-                                <CardContent className="py-12 space-y-4">
-                                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                                        <FileText className="h-6 w-6 text-primary" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <h3 className="text-lg font-semibold">No SOPs Found</h3>
-                                        <p className="text-base text-muted-foreground max-w-sm mx-auto">
-                                            {searchQuery
-                                                ? "No SOPs match your search criteria."
-                                                : "You haven't generated any SOPs yet. Create your first one to get started."}
-                                        </p>
-                                    </div>
-                                    {!searchQuery && (
+                            <div className="py-16 space-y-6 text-center">
+                                <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                                    <ClipboardDocumentCheckIcon className="h-12 w-12 text-[color:var(--accent-strong)]" />
+                                </div>
+                                <div className="space-y-3 max-w-2xl mx-auto">
+                                    <h3 className="text-2xl font-semibold">No SOPs found</h3>
+                                    <p className="text-base text-muted-foreground">
+                                        {searchQuery
+                                            ? "No SOPs match your search criteria."
+                                            : "You haven't generated any SOPs yet. Generate your first SOP to see it here."}
+                                    </p>
+                                </div>
+                                {!searchQuery && (
+                                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                                         <Button
                                             onClick={() => router.push("/dashboard/process-builder")}
+                                            size="lg"
                                             className="inline-flex items-center gap-2 bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
                                         >
+                                            <Plus className="h-4 w-4" />
                                             Generate Your First SOP
                                         </Button>
-                                    )}
-                                </CardContent>
-                            </Card>
+                                    </div>
+                                )}
+                            </div>
                         )}
 
-                    {/* Grouped SOPs View */}
                     {!isLoading && viewMode === "grouped" && filteredGroups.length > 0 && (
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -641,7 +633,6 @@ export default function SOPHistoryPage() {
                                 })}
                             </div>
 
-                            {/* Pagination for Groups */}
                             {totalPages > 1 && (
                                 <div className="flex items-center justify-between">
                                     <div className="text-base text-muted-foreground">
@@ -678,7 +669,6 @@ export default function SOPHistoryPage() {
                         </>
                     )}
 
-                    {/* Individual SOPs Grid */}
                     {!isLoading && viewMode === "individual" && filteredSOPs.length > 0 && (
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -733,7 +723,6 @@ export default function SOPHistoryPage() {
                                 ))}
                             </div>
 
-                            {/* Pagination */}
                             {totalPages > 1 && (
                                 <div className="flex items-center justify-between">
                                     <div className="text-base text-muted-foreground">
@@ -770,7 +759,6 @@ export default function SOPHistoryPage() {
                         </>
                     )}
 
-                    {/* No Results for Search */}
                     {!isLoading &&
                         ((viewMode === "grouped" && sopGroups.length > 0 && filteredGroups.length === 0) ||
                             (viewMode === "individual" && sops.length > 0 && filteredSOPs.length === 0)) && (

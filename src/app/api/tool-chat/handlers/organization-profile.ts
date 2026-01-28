@@ -125,8 +125,8 @@ export async function handleOrganizationProfile(
       }
     }
 
-    // Step 4: Construct response message with actual insights displayed
-    let assistantMessage = "Thank you for sharing that information! I've extracted the following insights from our conversation:\n\n";
+    // Step 4: Construct concise one-paragraph summary response
+    let assistantMessage = "";
     
     if (extractedInsights.length > 0) {
       // Separate insights by confidence level
@@ -137,49 +137,28 @@ export async function handleOrganizationProfile(
         (insight) => (insight.confidence || 70) < CONFIDENCE_THRESHOLDS.HIGH
       );
 
-      // Display high-confidence insights (auto-applied)
-      if (highConfidenceInsights.length > 0) {
-        assistantMessage += `AUTO-APPLIED INSIGHTS (${highConfidenceInsights.length}):\n`;
-        assistantMessage += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-        highConfidenceInsights.forEach((insight, idx) => {
-          const confidence = insight.confidence || 70;
-          const category = insight.category.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase());
-          assistantMessage += `\n${idx + 1}. [${category}] (${confidence}% confidence)\n`;
-          assistantMessage += `   ${insight.insight}\n`;
-        });
-        assistantMessage += "\n";
-      }
-
-      // Display medium/low confidence insights (saved for review)
-      if (mediumLowInsights.length > 0) {
-        assistantMessage += `SAVED FOR REVIEW (${mediumLowInsights.length}):\n`;
-        assistantMessage += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-        mediumLowInsights.forEach((insight, idx) => {
-          const confidence = insight.confidence || 70;
-          const category = insight.category.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase());
-          assistantMessage += `\n${idx + 1}. [${category}] (${confidence}% confidence)\n`;
-          assistantMessage += `   ${insight.insight}\n`;
-        });
-        assistantMessage += "\n";
-      }
-
-      // Summary
+      // Build a concise summary paragraph
+      const insightCategories = [...new Set(extractedInsights.map(i => i.category.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase())))];
+      
+      assistantMessage = "Thank you for sharing that information! ";
+      
       if (appliedCount > 0) {
-        assistantMessage += `\n✓ I've automatically applied ${appliedCount} high-confidence insight${appliedCount > 1 ? "s" : ""} to your knowledge base.`;
+        assistantMessage += `I've extracted ${extractedInsights.length} insight${extractedInsights.length > 1 ? "s" : ""} from our conversation and automatically applied ${appliedCount} high-confidence ${appliedCount > 1 ? "insights" : "insight"} to your knowledge base.`;
         if (fieldsUpdated.length > 0) {
-          assistantMessage += ` Updated fields: ${fieldsUpdated.slice(0, 3).join(", ")}${fieldsUpdated.length > 3 ? `, and ${fieldsUpdated.length - 3} more` : ""}.`;
+          assistantMessage += ` This updated ${fieldsUpdated.length} field${fieldsUpdated.length > 1 ? "s" : ""} including ${fieldsUpdated.slice(0, 2).join(" and ")}${fieldsUpdated.length > 2 ? `, and ${fieldsUpdated.length - 2} more` : ""}.`;
         }
-        assistantMessage += "\n";
+      } else {
+        assistantMessage += `I've extracted ${extractedInsights.length} insight${extractedInsights.length > 1 ? "s" : ""} from our conversation covering ${insightCategories.slice(0, 3).join(", ")}${insightCategories.length > 3 ? `, and ${insightCategories.length - 3} more area${insightCategories.length - 3 > 1 ? "s" : ""}` : ""}.`;
       }
-
+      
       if (mediumLowInsights.length > 0) {
-        assistantMessage += `\n• ${mediumLowInsights.length} insight${mediumLowInsights.length > 1 ? "s have" : " has"} been saved for review (medium confidence).`;
-        assistantMessage += "\n";
+        assistantMessage += ` ${mediumLowInsights.length} additional insight${mediumLowInsights.length > 1 ? "s have" : " has"} been saved for your review.`;
       }
+      
+      assistantMessage += " Feel free to share more details about your business, and I'll continue learning!";
+    } else {
+      assistantMessage = "I've received your information and I'm processing it to improve your knowledge base. Feel free to tell me more about your business, tools, processes, or any other relevant information!";
     }
-
-    assistantMessage += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-    assistantMessage += "Please review the insights above. If anything is incorrect or needs adjustment, just let me know and I'll update it!";
 
     // Build action payload with summary of what was learned
     const action = {

@@ -856,8 +856,16 @@ export default function AIBusinessBrainPage() {
                         <div className="px-4 py-3 text-base text-red-500">{conversationsError}</div>
                     )}
                     {!conversationsLoading && !conversationsError && conversations.length === 0 && (
-                        <div className="px-4 py-6 text-base text-[var(--text-secondary)]">
-                            No conversations yet. Start a new one to see it here.
+                        <div className="py-10 space-y-4 text-center px-4">
+                            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                                <Brain className="h-12 w-12 text-[color:var(--accent-strong)]" />
+                            </div>
+                            <div className="space-y-2 max-w-md mx-auto">
+                                <p className="text-lg font-semibold text-[var(--text-primary)]">No conversations yet</p>
+                                <p className="text-base text-[var(--text-secondary)]">
+                                    Start a new chat to ask questions, refine processes, or explore insights from your knowledge base.
+                                </p>
+                            </div>
                         </div>
                     )}
 

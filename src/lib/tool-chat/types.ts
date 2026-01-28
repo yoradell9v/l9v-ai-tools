@@ -31,19 +31,7 @@ export type ToolChatUiConfig = {
   title: string;
   description?: string;
   placeholder?: string;
-  /**
-   * Sample prompts to show when chat is empty.
-   */
   samplePrompts?: string[];
-  /**
-   * When false, ToolChat will not call network and will show a stub response.
-   * Use this until the backend endpoints accept the ToolChat envelope.
-   */
   enabled: boolean;
-  /**
-   * API endpoint expected to accept ToolChatRequest and return ToolChatResponse.
-   * (May be unused until enabled=true.)
-   */
   endpoint: string;
 };
-

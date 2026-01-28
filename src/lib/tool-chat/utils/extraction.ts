@@ -11,36 +11,23 @@ export interface ExtractionResult {
   suggestedQuestions: string[];
   kbDefaultsUsed: string[];
   extractionErrors: string[];
-  // Proactive suggestions: AI-generated values for missing fields
   suggestedFields?: Record<string, any>;
-  fieldSources?: Record<string, "user" | "kb" | "suggested">; // Track where each field came from
+  fieldSources?: Record<string, "user" | "kb" | "suggested">;
 }
 
-/**
- * Extracts structured data from conversation using form config as schema.
- * Uses KB context to fill defaults when conversation doesn't specify.
- * 
- * @param openai - OpenAI client instance
- * @param conversation - Conversation history
- * @param formConfig - Form configuration to use as extraction schema
- * @param knowledgeBase - Organization knowledge base (can be null)
- * @param toolId - Tool ID for KB context formatting
- * @returns Extraction result with data, validation, and suggestions
- */
 export async function extractStructuredDataFromConversation(
   openai: OpenAI,
   conversation: ChatMessage[],
   formConfig: FormConfig,
   knowledgeBase: OrganizationKnowledgeBase | null,
-  toolId: ToolId
+  toolId: ToolId,
 ): Promise<ExtractionResult> {
   const kbContext = formatKnowledgeBaseContext(knowledgeBase, toolId);
 
-  // Build extraction prompt
   const extractionPrompt = buildExtractionPrompt(
     conversation,
     formConfig,
-    kbContext
+    kbContext,
   );
 
   try {
@@ -49,28 +36,33 @@ export async function extractStructuredDataFromConversation(
       messages: [
         {
           role: "system",
-          content: "You are an expert at extracting structured data from conversations and generating intelligent, context-aware suggestions for missing information. Be precise, accurate, and proactive in suggesting realistic values based on role descriptions and industry standards.",
+          content:
+            "You are an expert at extracting structured data from conversations and generating intelligent, context-aware suggestions for missing information. Be precise, accurate, and proactive in suggesting realistic values based on role descriptions and industry standards.",
         },
         { role: "user", content: extractionPrompt },
       ],
       response_format: { type: "json_object" },
-      temperature: 0.5, // Slightly higher for creative but still accurate suggestions
-      max_tokens: 3000, // Increased to accommodate suggestions
+      temperature: 0.5,
+      max_tokens: 3000,
     });
 
-    const response = JSON.parse(
-      completion.choices[0].message.content || "{}"
-    );
+    const response = JSON.parse(completion.choices[0].message.content || "{}");
 
-    // Validate and normalize extraction
-    return normalizeExtractionResult(response, formConfig, knowledgeBase, toolId);
+    return normalizeExtractionResult(
+      response,
+      formConfig,
+      knowledgeBase,
+      toolId,
+    );
   } catch (error) {
     console.error("Extraction error:", error);
     return {
       extractedData: {},
       missingRequiredFields: [],
       confidence: {},
-      suggestedQuestions: ["Could you provide more details about what you need?"],
+      suggestedQuestions: [
+        "Could you provide more details about what you need?",
+      ],
       kbDefaultsUsed: [],
       extractionErrors: [
         error instanceof Error ? error.message : "Extraction failed",
@@ -79,14 +71,10 @@ export async function extractStructuredDataFromConversation(
   }
 }
 
-/**
- * Builds the extraction prompt with form config, conversation, and KB context.
- * Includes proactive suggestion generation for missing fields.
- */
 function buildExtractionPrompt(
   conversation: ChatMessage[],
   formConfig: FormConfig,
-  kbContext: string
+  kbContext: string,
 ): string {
   const conversationText = conversation
     .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
@@ -150,14 +138,11 @@ RESPONSE FORMAT:
 Be proactive and helpful. Generate complete, usable suggestions rather than leaving fields empty.`;
 }
 
-/**
- * Normalizes and validates extraction result against form config.
- */
 function normalizeExtractionResult(
   response: any,
   formConfig: FormConfig,
   knowledgeBase: OrganizationKnowledgeBase | null,
-  toolId: ToolId
+  toolId: ToolId,
 ): ExtractionResult {
   const extractedData = response.extractedData || {};
   const confidence = response.confidence || {};
@@ -166,19 +151,23 @@ function normalizeExtractionResult(
   const suggestedFields = response.suggestedFields || {};
   const fieldSources = response.fieldSources || {};
 
-  // Normalize data types
   normalizeExtractedData(extractedData, formConfig);
-
-  // Apply KB defaults for missing fields (if KB available)
-  // Only apply KB defaults if field wasn't already suggested by AI
   if (knowledgeBase) {
-    applyKBDefaults(extractedData, formConfig, knowledgeBase, toolId, kbDefaultsUsed, suggestedFields);
+    applyKBDefaults(
+      extractedData,
+      formConfig,
+      knowledgeBase,
+      toolId,
+      kbDefaultsUsed,
+      suggestedFields,
+    );
   }
 
-  // Merge AI suggestions into extractedData if they're not already there
-  // This ensures suggestedFields are included in the final extractedData
   Object.keys(suggestedFields).forEach((field) => {
-    if (!extractedData[field] || (typeof extractedData[field] === "string" && !extractedData[field].trim())) {
+    if (
+      !extractedData[field] ||
+      (typeof extractedData[field] === "string" && !extractedData[field].trim())
+    ) {
       extractedData[field] = suggestedFields[field];
       if (!fieldSources[field]) {
         fieldSources[field] = "suggested";
@@ -186,10 +175,9 @@ function normalizeExtractionResult(
     }
   });
 
-  // Validate against form config
   const missingRequiredFields = validateRequiredFields(
     extractedData,
-    formConfig
+    formConfig,
   );
 
   return {
@@ -204,12 +192,9 @@ function normalizeExtractionResult(
   };
 }
 
-/**
- * Validates required fields against form config.
- */
 function validateRequiredFields(
   data: Record<string, any>,
-  formConfig: FormConfig
+  formConfig: FormConfig,
 ): string[] {
   const missing: string[] = [];
 
@@ -222,7 +207,9 @@ function validateRequiredFields(
         } else if (field.type === "array") {
           const arrayValue = Array.isArray(value) ? value : [];
           const minItems = field.minItems || 0;
-          const filledItems = arrayValue.filter((item: string) => item?.trim()).length;
+          const filledItems = arrayValue.filter((item: string) =>
+            item?.trim(),
+          ).length;
           if (filledItems < minItems) {
             missing.push(field.id);
           }
@@ -234,12 +221,9 @@ function validateRequiredFields(
   return missing;
 }
 
-/**
- * Normalizes extracted data types to match form config expectations.
- */
 function normalizeExtractedData(
   data: Record<string, any>,
-  formConfig: FormConfig
+  formConfig: FormConfig,
 ): void {
   formConfig.sections.forEach((section) => {
     section.fields.forEach((field) => {
@@ -257,55 +241,64 @@ function normalizeExtractedData(
             data[field.id] = Number(value) || 50;
           }
           break;
-        // Add other type normalizations as needed
       }
     });
   });
 }
 
-/**
- * Applies KB defaults to missing fields.
- * This is a basic implementation - can be enhanced later with more sophisticated mapping.
- * Only applies KB defaults if field wasn't already suggested by AI.
- */
 function applyKBDefaults(
   data: Record<string, any>,
   formConfig: FormConfig,
   kb: OrganizationKnowledgeBase,
   toolId: ToolId,
   kbDefaultsUsed: string[],
-  suggestedFields?: Record<string, any>
+  suggestedFields?: Record<string, any>,
 ): void {
-  // Tool-specific KB field mapping
   if (toolId === "role-builder") {
-    // Map KB fields to form fields
-    // Only apply if not already suggested by AI
-    if (!data.weeklyHours && !suggestedFields?.weeklyHours && kb.defaultWeeklyHours) {
+    if (
+      !data.weeklyHours &&
+      !suggestedFields?.weeklyHours &&
+      kb.defaultWeeklyHours
+    ) {
       data.weeklyHours = kb.defaultWeeklyHours;
       kbDefaultsUsed.push("weeklyHours");
     }
-    if (!data.managementStyle && !suggestedFields?.managementStyle && kb.defaultManagementStyle) {
+    if (
+      !data.managementStyle &&
+      !suggestedFields?.managementStyle &&
+      kb.defaultManagementStyle
+    ) {
       data.managementStyle = "__ORG_DEFAULT__";
       kbDefaultsUsed.push("managementStyle");
     }
-    if (!data.englishLevel && !suggestedFields?.englishLevel && kb.defaultEnglishLevel) {
+    if (
+      !data.englishLevel &&
+      !suggestedFields?.englishLevel &&
+      kb.defaultEnglishLevel
+    ) {
       data.englishLevel = "__ORG_DEFAULT__";
       kbDefaultsUsed.push("englishLevel");
     }
-    if (!data.businessGoal && !suggestedFields?.businessGoal && kb.primaryGoal) {
+    if (
+      !data.businessGoal &&
+      !suggestedFields?.businessGoal &&
+      kb.primaryGoal
+    ) {
       data.businessGoal = "__ORG_DEFAULT__";
       kbDefaultsUsed.push("businessGoal");
     }
-    // Tools are automatically included from KB, but can add role-specific tools
-    if (kb.toolStack && Array.isArray(kb.toolStack) && kb.toolStack.length > 0) {
-      // Note: tools field in form is a textarea, so we don't auto-populate it
-      // but the KB tools will be used in analysis
+    if (
+      kb.toolStack &&
+      Array.isArray(kb.toolStack) &&
+      kb.toolStack.length > 0
+    ) {
     }
   } else if (toolId === "process-builder") {
-    // For process builder, KB tools are automatically included
-    if (kb.toolStack && Array.isArray(kb.toolStack) && kb.toolStack.length > 0) {
-      // Similar note - toolsUsed is a textarea, KB tools are used in analysis
+    if (
+      kb.toolStack &&
+      Array.isArray(kb.toolStack) &&
+      kb.toolStack.length > 0
+    ) {
     }
   }
-  // Add more tool-specific mappings as needed
 }

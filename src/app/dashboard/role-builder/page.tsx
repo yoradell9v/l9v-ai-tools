@@ -7,9 +7,9 @@ import { jdFormConfig, getJDFormConfigWithKB } from "@/components/forms/configs/
 import { ToolChatDialog } from "@/components/chat/ToolChatDialog";
 import { useUser } from "@/context/UserContext";
 import { OrganizationKnowledgeBase } from "@/lib/knowledge-base/organization-knowledge-base";
-import { mapOrgKBToJDForm, resolveJDFormWithOrgKB, resolvedJDFormToIntakePayload } from "@/lib/job-description/field-mapping";
+import { mapOrgKBToJDForm, resolveJDFormWithOrgKB, resolvedJDFormToIntakePayload } from "@/lib/jd-analysis/field-mapping";
 import { Briefcase, Sparkles, CheckCircle2, ShieldAlert, AlertTriangle, TrendingUp, Target, AlertCircle, Network, FileText, Plus, MoreVertical, Edit, Download, Save, History, Loader2, Clock, Calendar, Zap, ArrowRight, X, Check, AlertCircle as AlertCircleIcon, ChevronDown, Copy } from "lucide-react";
-import { SparklesIcon, ClipboardIcon } from "@heroicons/react/24/outline";
+import { SparklesIcon, ClipboardIcon, BriefcaseIcon } from "@heroicons/react/24/outline";
 import { getConfidenceValue, getConfidenceColor } from '@/utils/confidence';
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -557,7 +557,7 @@ export default function JdBuilderPage() {
             };
             setAnalysisResult(result);
             setIntakeData(input);
-            setAnalysisSource('form'); // Mark as generated from intake form
+            setAnalysisSource('form'); 
 
             const usedKnowledgeBaseVersion = apiResult.knowledgeBase?.version ?? null;
             const knowledgeBaseSnapshot = apiResult.knowledgeBase?.snapshot ?? null;
@@ -635,7 +635,7 @@ export default function JdBuilderPage() {
                 metadata: apiResult.metadata,
             } as AnalysisResult);
             setIntakeData(input);
-            setAnalysisSource('form'); // Mark as generated from intake form (even if there was an error)
+            setAnalysisSource('form');
         } finally {
             setIsProcessing(false);
             setCurrentStage("");
@@ -721,19 +721,18 @@ export default function JdBuilderPage() {
         return `Good evening, ${user.firstname}`;
     };
 
-    // Load specific analysis from query param or latest analysis
     useEffect(() => {
         const loadAnalysis = async () => {
             if (!user || analysisResult || isLoadingLatest) return;
-            
+
             const analysisId = searchParams?.get('analysisId');
             const shouldRefine = searchParams?.get('refine') === 'true';
-            
+
             const currentUserId = user.id;
             if (lastLoadedUserIdRef.current !== currentUserId) {
                 hasAttemptedLoadRef.current = false;
             }
-            if (hasAttemptedLoadRef.current && !analysisId) return; // Only skip if no specific analysisId
+            if (hasAttemptedLoadRef.current && !analysisId) return; 
 
             hasAttemptedLoadRef.current = true;
             lastLoadedUserIdRef.current = currentUserId;
@@ -741,9 +740,8 @@ export default function JdBuilderPage() {
             try {
                 let response;
                 let analysis;
-                
+
                 if (analysisId) {
-                    // Load specific analysis - fetch all and find the matching one
                     response = await fetch("/api/jd/saved?page=1&limit=100", {
                         method: "GET",
                         credentials: "include",
@@ -763,7 +761,6 @@ export default function JdBuilderPage() {
                         throw new Error("Analysis not found");
                     }
                 } else {
-                    // Load latest analysis
                     response = await fetch("/api/jd/saved?page=1&limit=1", {
                         method: "GET",
                         credentials: "include",
@@ -794,7 +791,6 @@ export default function JdBuilderPage() {
                     contributedInsights: analysis.contributedInsights ?? null,
                 });
 
-                // Open refinement dialog if requested
                 if (shouldRefine) {
                     setIsRefinementModalOpen(true);
                 }
@@ -946,7 +942,7 @@ export default function JdBuilderPage() {
                             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
                                 <div className="space-y-1">
                                     <h1 className="text-2xl font-semibold mb-1">
-                                        Job Description Builder AI
+                                        Role Builder
                                     </h1>
                                     <p className="text-base text-muted-foreground">
                                         Create comprehensive job descriptions with AI-powered analysis
@@ -1053,28 +1049,34 @@ export default function JdBuilderPage() {
                             )}
 
                             {!analysisResult && !isProcessing && !isDownloading && !isLoadingLatest && hasNoSavedAnalyses && (
-                                <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-                                    <div className="p-4 rounded-xl mb-4 bg-muted">
-                                        <FileText className="h-10 w-10 text-muted-foreground" />
+                                <div className="py-16 space-y-6 text-center">
+                                    <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                                        <BriefcaseIcon className="h-12 w-12 text-[color:var(--accent-strong)]" />
                                     </div>
-                                    <h3 className="text-base font-medium mb-1">
-                                        {getCurrentGreeting()}
-                                    </h3>
-                                    <p className="text-base mb-6 max-w-sm text-muted-foreground">
-                                        Let's find your perfect virtual assistant. Start by creating a new analysis.
-                                    </p>
-                                    <Button
-                                        onClick={() => setIsModalOpen(true)}
-                                    >
-                                        <Plus className="h-4 w-4" />
-                                        <span>Start New Analysis</span>
-                                    </Button>
+                                    <div className="space-y-3 max-w-2xl mx-auto">
+                                        <h3 className="text-2xl font-semibold">
+                                            {getCurrentGreeting()}
+                                        </h3>
+                                        <p className="text-base text-muted-foreground">
+                                            Let's find your perfect virtual assistant. Start by creating a new analysis.
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                                        <Button
+                                            onClick={() => setIsModalOpen(true)}
+                                            size="lg"
+                                            className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                        >
+                                            <Plus className="h-4 w-4 mr-2" />
+                                            <span>Create New Role</span>
+                                        </Button>
+                                    </div>
                                 </div>
                             )}
 
                             {analysisResult && !isProcessing && !isDownloading && (
                                 <div className="w-full max-w-full flex flex-col h-full overflow-hidden">
-                                    {/* Sticky Header Section - Key Info at First Glance */}
+                                   
                                     <div id="analysis-display" className="flex-shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b p-4 mb-6">
                                         <div className="flex items-start justify-between gap-4">
                                             <div className="flex-1 space-y-4">
@@ -1089,9 +1091,8 @@ export default function JdBuilderPage() {
                                                     )}
                                                 </div>
 
-                                                {/* Key Metrics Grid - No Borders */}
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                    {/* Primary Role/Project */}
+                                                    
                                                     {(analysisResult.preview.service_type === "Dedicated VA" && analysisResult.preview.role_title) ||
                                                         (analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.preview.core_va_title) ||
                                                         (analysisResult.preview.service_type === "Projects on Demand" && analysisResult.preview.project_count) ? (
@@ -1112,7 +1113,6 @@ export default function JdBuilderPage() {
                                                         </div>
                                                     ) : null}
 
-                                                    {/* Hours/Time */}
                                                     {(analysisResult.preview.hours_per_week ||
                                                         analysisResult.preview.core_va_hours ||
                                                         analysisResult.preview.total_hours ||
@@ -1132,7 +1132,6 @@ export default function JdBuilderPage() {
                                                         </div>
                                                     ) : null}
 
-                                                    {/* Confidence - Circular Progress */}
                                                     {analysisResult.preview.service_confidence && (() => {
                                                         const confidenceValue = getConfidenceValue(analysisResult.preview.service_confidence);
                                                         const radius = 20;
@@ -1186,7 +1185,6 @@ export default function JdBuilderPage() {
                                                     })()}
                                                 </div>
 
-                                                {/* Supporting Roles (Unicorn VA) */}
                                                 {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.preview.team_support_areas && (
                                                     <div className="mt-2">
                                                         <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Supporting Roles</p>
@@ -1204,23 +1202,22 @@ export default function JdBuilderPage() {
                                                     <DropdownMenuItem onClick={async () => {
                                                         setActionsMenuOpen(false);
                                                         if (analysisResult) {
-                                                            // Format the analysis result as a readable text summary
                                                             const summary = [
                                                                 `Service Type: ${analysisResult.preview?.service_type || 'N/A'}`,
                                                                 `Service Reasoning: ${analysisResult.preview?.service_reasoning || 'N/A'}`,
                                                                 `Confidence: ${analysisResult.preview?.service_confidence || 'N/A'}`,
                                                                 '',
                                                                 'Role Details:',
-                                                                analysisResult.full_package?.service_structure?.dedicated_va_role?.title || 
-                                                                analysisResult.full_package?.service_structure?.core_va_role?.title || 
+                                                                analysisResult.full_package?.service_structure?.dedicated_va_role?.title ||
+                                                                analysisResult.full_package?.service_structure?.core_va_role?.title ||
                                                                 'N/A',
                                                                 '',
                                                                 'Key Requirements:',
-                                                                ...(analysisResult.full_package?.service_structure?.dedicated_va_role?.skill_requirements?.required || 
-                                                                    analysisResult.full_package?.service_structure?.core_va_role?.skill_requirements?.required || 
+                                                                ...(analysisResult.full_package?.service_structure?.dedicated_va_role?.skill_requirements?.required ||
+                                                                    analysisResult.full_package?.service_structure?.core_va_role?.skill_requirements?.required ||
                                                                     []),
                                                             ].join('\n');
-                                                            
+
                                                             const success = await copyToClipboard(
                                                                 summary,
                                                                 () => toast.success("Analysis summary copied to clipboard"),
@@ -1249,7 +1246,6 @@ export default function JdBuilderPage() {
                                                     <DropdownMenuItem
                                                         onClick={async () => {
                                                             setActionsMenuOpen(false);
-                                                            // Save analysis if not already saved
                                                             if (!savedAnalysisId && analysisResult && intakeData && user) {
                                                                 try {
                                                                     const title = `${intakeData.businessName} - ${analysisResult.preview?.service_type || analysisResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
@@ -1284,7 +1280,6 @@ export default function JdBuilderPage() {
                                                                     toast.error("Failed to save analysis. Please try again.");
                                                                 }
                                                             } else if (analysisResult) {
-                                                                // Open refinement chat dialog
                                                                 setIsRefinementModalOpen(true);
                                                             } else {
                                                                 toast.error("Please save your analysis first before refining.");
@@ -1308,11 +1303,10 @@ export default function JdBuilderPage() {
                                         </div>
                                     </div>
 
-                                    {/* Scrollable Content with Accordions */}
                                     <ScrollArea className="flex-1 min-h-0">
                                         <div className="pr-4">
                                             <Accordion type="multiple" defaultValue={["role-details", "skills-requirements", "what-you-told-us"]} className="w-full space-y-4">
-                                                {/* Role/Project Details */}
+                                               
                                                 <AccordionItem value="role-details" className="rounded-lg px-4 bg-card">
                                                     <AccordionTrigger className="hover:no-underline">
                                                         <div className="flex items-center gap-3">
@@ -1331,10 +1325,8 @@ export default function JdBuilderPage() {
                                                     </AccordionTrigger>
                                                     <AccordionContent className="pt-4 pb-6">
                                                         <div className="space-y-6">
-                                                            {/* Role/Project Information */}
                                                             {analysisResult.full_package?.service_structure && (
                                                                 <div className="space-y-4">
-                                                                    {/* Dedicated VA Role */}
                                                                     {analysisResult.preview.service_type === "Dedicated VA" && analysisResult.full_package.service_structure.dedicated_va_role && (
                                                                         <div className="space-y-4">
                                                                             <div>
@@ -1364,7 +1356,6 @@ export default function JdBuilderPage() {
                                                                         </div>
                                                                     )}
 
-                                                                    {/* Unicorn VA - Core Role */}
                                                                     {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package.service_structure.core_va_role && (
                                                                         <div className="space-y-4">
                                                                             <div>
@@ -1394,7 +1385,6 @@ export default function JdBuilderPage() {
                                                                         </div>
                                                                     )}
 
-                                                                    {/* Projects on Demand */}
                                                                     {analysisResult.preview.service_type === "Projects on Demand" && (
                                                                         <div className="space-y-4">
                                                                             {(analysisResult.full_package.detailed_specifications?.projects || analysisResult.full_package.service_structure.projects || []).map((project: any, idx: number) => (
@@ -1421,7 +1411,6 @@ export default function JdBuilderPage() {
                                                                         </div>
                                                                     )}
 
-                                                                    {/* Supporting Roles for Unicorn VA */}
                                                                     {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package.service_structure.team_support_areas && Array.isArray(analysisResult.full_package.service_structure.team_support_areas) && analysisResult.full_package.service_structure.team_support_areas.length > 0 && (
                                                                         <div className="space-y-3 mt-4">
                                                                             <h4 className="text-base font-semibold">Supporting Roles</h4>
@@ -1440,7 +1429,6 @@ export default function JdBuilderPage() {
                                                     </AccordionContent>
                                                 </AccordionItem>
 
-                                                {/* Skills & Requirements */}
                                                 <AccordionItem value="skills-requirements" className="rounded-lg px-4 bg-card">
                                                     <AccordionTrigger className="hover:no-underline">
                                                         <div className="flex items-center gap-3">
@@ -1453,7 +1441,6 @@ export default function JdBuilderPage() {
                                                     </AccordionTrigger>
                                                     <AccordionContent className="pt-4 pb-6">
                                                         <div className="space-y-4">
-                                                            {/* Dedicated VA Skills */}
                                                             {analysisResult.preview.service_type === "Dedicated VA" && analysisResult.full_package?.service_structure?.dedicated_va_role?.skill_requirements && (
                                                                 <div className="space-y-3">
                                                                     {analysisResult.full_package.service_structure.dedicated_va_role.skill_requirements.required?.length > 0 && (
@@ -1481,7 +1468,6 @@ export default function JdBuilderPage() {
                                                                 </div>
                                                             )}
 
-                                                            {/* Unicorn VA Skills */}
                                                             {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package?.service_structure?.core_va_role?.skill_requirements && (
                                                                 <div className="space-y-3">
                                                                     {analysisResult.full_package.service_structure.core_va_role.skill_requirements.required?.length > 0 && (
@@ -1509,7 +1495,6 @@ export default function JdBuilderPage() {
                                                                 </div>
                                                             )}
 
-                                                            {/* Project Skills */}
                                                             {analysisResult.preview.service_type === "Projects on Demand" && analysisResult.full_package?.service_structure?.projects && (
                                                                 <div className="space-y-4">
                                                                     {analysisResult.full_package.service_structure.projects.map((project: any, idx: number) => (
@@ -1530,7 +1515,6 @@ export default function JdBuilderPage() {
                                                     </AccordionContent>
                                                 </AccordionItem>
 
-                                                {/* What You Told Us */}
                                                 {summary && (
                                                     <AccordionItem value="what-you-told-us" className="rounded-lg px-4 bg-card">
                                                         <AccordionTrigger className="hover:no-underline">
@@ -1544,7 +1528,7 @@ export default function JdBuilderPage() {
                                                         </AccordionTrigger>
                                                         <AccordionContent className="pt-4 pb-6">
                                                             <div className="space-y-4">
-                                                                {/* Company Stage */}
+                                                               
                                                                 <div className="flex items-start gap-3">
                                                                     <TrendingUp className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                                                                     <div className="flex-1 min-w-0">
@@ -1552,7 +1536,7 @@ export default function JdBuilderPage() {
                                                                         <p className="text-base mt-0.5 font-medium">{summary?.company_stage}</p>
                                                                     </div>
                                                                 </div>
-                                                                {/* 90-Day Outcome */}
+                                                                
                                                                 <div className="flex items-start gap-3">
                                                                     <Target className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                                                                     <div className="flex-1 min-w-0">
@@ -1560,7 +1544,7 @@ export default function JdBuilderPage() {
                                                                         <p className="text-base mt-0.5 font-medium leading-relaxed">{summary?.outcome_90d}</p>
                                                                     </div>
                                                                 </div>
-                                                                {/* Primary Bottleneck */}
+
                                                                 <div className="flex items-start gap-3">
                                                                     <AlertCircle className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                                                                     <div className="flex-1 min-w-0">
@@ -1572,7 +1556,6 @@ export default function JdBuilderPage() {
                                                                     </div>
                                                                 </div>
 
-                                                                {/* Key Risks */}
                                                                 {analysisResult.preview.key_risks && analysisResult.preview.key_risks.length > 0 && (
                                                                     <div className="pt-4 border-t">
                                                                         <h4 className="text-base font-semibold mb-3 flex items-center gap-2">
@@ -1590,7 +1573,6 @@ export default function JdBuilderPage() {
                                                                     </div>
                                                                 )}
 
-                                                                {/* Critical Questions */}
                                                                 {analysisResult.preview.critical_questions && analysisResult.preview.critical_questions.length > 0 && (
                                                                     <div className="pt-4 border-t">
                                                                         <div className="flex items-center justify-between mb-3">
@@ -1623,7 +1605,6 @@ export default function JdBuilderPage() {
                                                     </AccordionItem>
                                                 )}
 
-                                                {/* Implementation */}
                                                 {implementationPlan && (
                                                     <AccordionItem value="implementation" className="rounded-lg px-4 bg-card">
                                                         <AccordionTrigger className="hover:no-underline">
@@ -1637,83 +1618,81 @@ export default function JdBuilderPage() {
                                                         </AccordionTrigger>
                                                         <AccordionContent className="pt-4 pb-6">
                                                             <div className="space-y-6">
-                                                                {/* Implementation Plan */}
                                                                 {implementationPlan?.immediate_next_steps && implementationPlan.immediate_next_steps.length > 0 && (
-                                                                        <div>
-                                                                            <h4 className="text-base font-semibold mb-3">Immediate Next Steps</h4>
-                                                                            <div className="space-y-3">
-                                                                                {implementationPlan.immediate_next_steps.map((item, index) => (
-                                                                                    <div key={index} className="pb-3 border-b border-border last:border-0 last:pb-0">
-                                                                                        <div className="flex items-start gap-3">
-                                                                                            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                                                                                <span className="text-xs font-semibold text-primary">{index + 1}</span>
-                                                                                            </div>
-                                                                                            <div className="flex-1 space-y-1">
-                                                                                                <h5 className="text-sm font-semibold">{item.step}</h5>
-                                                                                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                                                                                                    <span><span className="font-medium">Owner:</span> {item.owner}</span>
-                                                                                                    <span><span className="font-medium">Timeline:</span> {item.timeline}</span>
-                                                                                                </div>
+                                                                    <div>
+                                                                        <h4 className="text-base font-semibold mb-3">Immediate Next Steps</h4>
+                                                                        <div className="space-y-3">
+                                                                            {implementationPlan.immediate_next_steps.map((item, index) => (
+                                                                                <div key={index} className="pb-3 border-b border-border last:border-0 last:pb-0">
+                                                                                    <div className="flex items-start gap-3">
+                                                                                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                                                            <span className="text-xs font-semibold text-primary">{index + 1}</span>
+                                                                                        </div>
+                                                                                        <div className="flex-1 space-y-1">
+                                                                                            <h5 className="text-sm font-semibold">{item.step}</h5>
+                                                                                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                                                                                <span><span className="font-medium">Owner:</span> {item.owner}</span>
+                                                                                                <span><span className="font-medium">Timeline:</span> {item.timeline}</span>
                                                                                             </div>
                                                                                         </div>
                                                                                     </div>
-                                                                                ))}
-                                                                            </div>
+                                                                                </div>
+                                                                            ))}
                                                                         </div>
-                                                                    )}
-                                                                    {/* Create Process Button */}
-                                                                    {savedAnalysisId && analysisResult && (
-                                                                        <div className="pt-4 border-t">
-                                                                            <Button
-                                                                                onClick={async () => {
-                                                                                    // Ensure analysis is saved
-                                                                                    if (!savedAnalysisId && analysisResult && intakeData && user) {
-                                                                                        try {
-                                                                                            const title = `${intakeData.businessName} - ${analysisResult.preview?.service_type || analysisResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
-                                                                                            const saveResponse = await fetch("/api/jd/save", {
-                                                                                                method: "POST",
-                                                                                                headers: {
-                                                                                                    "Content-Type": "application/json",
-                                                                                                },
-                                                                                                credentials: "include",
-                                                                                                body: JSON.stringify({
-                                                                                                    title,
-                                                                                                    intakeData,
-                                                                                                    analysis: analysisResult,
-                                                                                                    isFinalized: false,
-                                                                                                    organizationId: kbMetadata?.organizationId ?? null,
-                                                                                                    usedKnowledgeBaseVersion: kbMetadata?.usedKnowledgeBaseVersion ?? null,
-                                                                                                    knowledgeBaseSnapshot: kbMetadata?.knowledgeBaseSnapshot ?? null,
-                                                                                                    contributedInsights: kbMetadata?.contributedInsights ?? null,
-                                                                                                }),
-                                                                                            });
-                                                                                            const saveData = await saveResponse.json();
-                                                                                            if (saveResponse.ok && saveData.savedAnalysis?.id) {
-                                                                                                setSavedAnalysisId(saveData.savedAnalysis.id);
-                                                                                                setIsCreateProcessDialogOpen(true);
-                                                                                            } else {
-                                                                                                toast.error("Please save your analysis first before creating a process.");
-                                                                                            }
-                                                                                        } catch (error) {
-                                                                                            console.error("Error saving analysis:", error);
-                                                                                            toast.error("Failed to save analysis. Please try again.");
+                                                                    </div>
+                                                                )}
+
+                                                                {savedAnalysisId && analysisResult && (
+                                                                    <div className="pt-4 border-t">
+                                                                        <Button
+                                                                            onClick={async () => {
+                                                                                if (!savedAnalysisId && analysisResult && intakeData && user) {
+                                                                                    try {
+                                                                                        const title = `${intakeData.businessName} - ${analysisResult.preview?.service_type || analysisResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
+                                                                                        const saveResponse = await fetch("/api/jd/save", {
+                                                                                            method: "POST",
+                                                                                            headers: {
+                                                                                                "Content-Type": "application/json",
+                                                                                            },
+                                                                                            credentials: "include",
+                                                                                            body: JSON.stringify({
+                                                                                                title,
+                                                                                                intakeData,
+                                                                                                analysis: analysisResult,
+                                                                                                isFinalized: false,
+                                                                                                organizationId: kbMetadata?.organizationId ?? null,
+                                                                                                usedKnowledgeBaseVersion: kbMetadata?.usedKnowledgeBaseVersion ?? null,
+                                                                                                knowledgeBaseSnapshot: kbMetadata?.knowledgeBaseSnapshot ?? null,
+                                                                                                contributedInsights: kbMetadata?.contributedInsights ?? null,
+                                                                                            }),
+                                                                                        });
+                                                                                        const saveData = await saveResponse.json();
+                                                                                        if (saveResponse.ok && saveData.savedAnalysis?.id) {
+                                                                                            setSavedAnalysisId(saveData.savedAnalysis.id);
+                                                                                            setIsCreateProcessDialogOpen(true);
+                                                                                        } else {
+                                                                                            toast.error("Please save your analysis first before creating a process.");
                                                                                         }
-                                                                                    } else {
-                                                                                        setIsCreateProcessDialogOpen(true);
+                                                                                    } catch (error) {
+                                                                                        console.error("Error saving analysis:", error);
+                                                                                        toast.error("Failed to save analysis. Please try again.");
                                                                                     }
-                                                                                }}
-                                                                                className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
-                                                                                size="lg"
-                                                                            >
-                                                                                <FileText className="h-4 w-4 mr-2" />
-                                                                                Create Process
-                                                                            </Button>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </AccordionContent>
-                                                        </AccordionItem>
-                                                    )}
+                                                                                } else {
+                                                                                    setIsCreateProcessDialogOpen(true);
+                                                                                }
+                                                                            }}
+                                                                            className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                                            size="lg"
+                                                                        >
+                                                                            <FileText className="h-4 w-4 mr-2" />
+                                                                            Create Process
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </AccordionContent>
+                                                    </AccordionItem>
+                                                )}
                                             </Accordion>
                                         </div>
                                     </ScrollArea>
@@ -1997,32 +1976,26 @@ export default function JdBuilderPage() {
                                     businessName: intakeData?.businessName,
                                 }}
                                 onViewAnalysis={() => {
-                                    // Close the dialog first
                                     setIsRefinementModalOpen(false);
-                                    // Wait for dialog to close, then scroll to analysis
                                     setTimeout(() => {
                                         const analysisElement = document.getElementById('analysis-display');
                                         if (analysisElement) {
-                                            analysisElement.scrollIntoView({ 
-                                                behavior: 'smooth', 
-                                                block: 'start' 
+                                            analysisElement.scrollIntoView({
+                                                behavior: 'smooth',
+                                                block: 'start'
                                             });
                                         } else {
-                                            // Fallback: scroll to top if element not found
                                             window.scrollTo({ top: 0, behavior: 'smooth' });
                                         }
                                     }, 100);
                                 }}
                                 onApplyAction={async (action: any) => {
                                     try {
-                                        // Support both refinedAnalysis and analysis properties
                                         const refinedAnalysis = action?.refinedAnalysis || action?.analysis;
-                                        
+
                                         if (refinedAnalysis) {
-                                            // Update the analysis result with refined version
                                             setAnalysisResult(refinedAnalysis);
-                                            
-                                            // Save the refined analysis
+
                                             if (savedAnalysisId || intakeData) {
                                                 try {
                                                     await fetch("/api/jd/save", {
@@ -2042,7 +2015,7 @@ export default function JdBuilderPage() {
                                                             contributedInsights: kbMetadata?.contributedInsights ?? null,
                                                         }),
                                                     });
-                                                    
+
                                                     toast.success("Analysis refined and saved", {
                                                         description: action?.changeSummary?.summary || "Your changes have been applied.",
                                                     });
@@ -2051,7 +2024,7 @@ export default function JdBuilderPage() {
                                                     toast.error("Failed to save refined analysis");
                                                 }
                                             }
-                                            
+
                                             setIsRefinementModalOpen(false);
                                         }
                                     } catch (error) {
@@ -2060,15 +2033,13 @@ export default function JdBuilderPage() {
                                     }
                                 }}
                                 parseAction={(raw: unknown) => {
-                                    // Parse the action to extract refined analysis
-                                    // Map refinedAnalysis to analysis so ToolChat can display it using AnalysisDisplay
                                     if (typeof raw === 'object' && raw !== null) {
                                         const action = raw as any;
                                         if (action.refinedAnalysis) {
                                             return {
                                                 ...action,
-                                                analysis: action.refinedAnalysis, // Map to analysis for display
-                                                refinedAnalysis: action.refinedAnalysis, // Keep original for onApplyAction
+                                                analysis: action.refinedAnalysis, 
+                                                refinedAnalysis: action.refinedAnalysis,
                                             };
                                         }
                                     }
@@ -2077,7 +2048,6 @@ export default function JdBuilderPage() {
                             />
                         )}
 
-                        {/* Create Process Dialog - Process Builder */}
                         {savedAnalysisId && analysisResult && (
                             <ToolChatDialog
                                 toolId="process-builder"
@@ -2114,9 +2084,8 @@ export default function JdBuilderPage() {
                                     try {
                                         const generatedSOP = action?.sop || action?.refinedSOP;
                                         const formData = action?.formData;
-                                        
+
                                         if (generatedSOP) {
-                                            // Store the generated SOP in sessionStorage to pass to process-builder page
                                             try {
                                                 sessionStorage.setItem('pending-sop', JSON.stringify({
                                                     sop: generatedSOP,
@@ -2127,8 +2096,7 @@ export default function JdBuilderPage() {
                                             } catch (e) {
                                                 console.warn("Failed to store SOP in sessionStorage:", e);
                                             }
-                                            
-                                            // Navigate to process-builder page
+
                                             router.push("/dashboard/process-builder");
                                             toast.success("Process created successfully!", {
                                                 description: "Your SOP has been generated. You can view it on the Process Builder page.",
@@ -2141,7 +2109,6 @@ export default function JdBuilderPage() {
                                     }
                                 }}
                                 parseAction={(raw: unknown) => {
-                                    // Parse the action to extract SOP
                                     if (typeof raw === 'object' && raw !== null) {
                                         const action = raw as any;
                                         if (action.sop) {
@@ -2158,7 +2125,6 @@ export default function JdBuilderPage() {
                     </>
                 )}
 
-                {/* Controlled Tool Chat Dialog */}
                 <Dialog open={isToolChatOpen} onOpenChange={setIsToolChatOpen}>
                     <DialogContent className="w-[min(900px,95vw)] sm:max-w-3xl max-h-[90vh] overflow-hidden p-0 sm:p-2">
                         <DialogHeader className="px-4 pt-4 pb-2">
@@ -2208,13 +2174,10 @@ export default function JdBuilderPage() {
                                             niceToHaveSkills: formData.niceToHaveSkills || "",
                                         };
 
-                                        // Populate the form with extracted data
                                         if (intakeFormRef.current) {
                                             intakeFormRef.current.setFormData(intakeData);
                                         }
 
-                                        // Set analysis result directly to display on page
-                                        // This is similar to how SOPs are displayed in process-builder
                                         if (analysis && Object.keys(analysis).length > 0) {
                                             const result: AnalysisResult = {
                                                 preview: analysis.preview ?? {
@@ -2245,24 +2208,67 @@ export default function JdBuilderPage() {
 
                                             setAnalysisResult(result);
                                             setIntakeData(intakeData);
-                                            setAnalysisSource('chat'); // Mark as generated from chat
+                                            setAnalysisSource('chat');
+                                            setHasNoSavedAnalyses(false);
+                                            setSavedAnalysisId(null);
 
-                                            // Set KB metadata if available
                                             const usedKnowledgeBaseVersion = analysis.knowledgeBase?.version ?? action?.kbDefaultsUsed?.length > 0 ? organizationKB?.version ?? null : null;
                                             const knowledgeBaseSnapshot = analysis.knowledgeBase?.snapshot ?? null;
                                             const organizationId = analysis.knowledgeBase?.organizationId ?? organizationKB?.organizationId ?? null;
                                             const contributedInsights = analysis.extractedInsights ?? null;
 
-                                            setKbMetadata({
+                                            const nextKbMetadata = {
                                                 usedKnowledgeBaseVersion,
                                                 knowledgeBaseSnapshot,
                                                 organizationId,
                                                 contributedInsights,
-                                            });
+                                            };
 
-                                            // Clear any errors
+                                            setKbMetadata(nextKbMetadata);
+
                                             setAnalysisError(null);
                                             setIsProcessing(false);
+
+                                            try {
+                                                const serviceType =
+                                                    result.preview?.service_type ||
+                                                    result.full_package?.service_structure?.service_type ||
+                                                    "Job Description Analysis";
+                                                const title = `${intakeData.businessName || "Analysis"} - ${serviceType}`;
+
+                                                const saveResponse = await fetch("/api/jd/save", {
+                                                    method: "POST",
+                                                    headers: {
+                                                        "Content-Type": "application/json",
+                                                    },
+                                                    credentials: "include",
+                                                    body: JSON.stringify({
+                                                        title,
+                                                        intakeData,
+                                                        analysis: result,
+                                                        isFinalized: false,
+                                                        organizationId: nextKbMetadata.organizationId ?? null,
+                                                        usedKnowledgeBaseVersion: nextKbMetadata.usedKnowledgeBaseVersion ?? null,
+                                                        knowledgeBaseSnapshot: nextKbMetadata.knowledgeBaseSnapshot ?? null,
+                                                        contributedInsights: nextKbMetadata.contributedInsights ?? null,
+                                                    }),
+                                                });
+
+                                                const saveData = await saveResponse.json().catch(() => ({}));
+                                                if (saveResponse.ok && (saveData as any)?.savedAnalysis?.id) {
+                                                    setSavedAnalysisId((saveData as any).savedAnalysis.id);
+                                                } else if (!saveResponse.ok) {
+                                                    console.error("Failed to auto-save analysis:", (saveData as any)?.error || saveData);
+                                                    toast.error("Auto-save failed", {
+                                                        description: "Your analysis is shown on the page, but it wasn’t saved. You can click Save to retry.",
+                                                    });
+                                                }
+                                            } catch (e) {
+                                                console.error("Error auto-saving analysis:", e);
+                                                toast.error("Auto-save failed", {
+                                                    description: "Your analysis is shown on the page, but it wasn’t saved. You can click Save to retry.",
+                                                });
+                                            }
                                         }
 
                                         setIsToolChatOpen(false);

@@ -14,13 +14,6 @@ export interface AuthResult {
   knowledgeBaseSnapshot: any | null;
 }
 
-/**
- * Fetches authentication and knowledge base data for tool chat requests.
- * Returns null values if not authenticated (non-blocking).
- *
- * @param toolId - Tool ID to determine which KB fields to fetch
- * @returns AuthResult with user, org, and KB data
- */
 export async function getToolChatAuth(toolId: ToolId): Promise<AuthResult> {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get("accessToken")?.value;
@@ -73,12 +66,11 @@ export async function getToolChatAuth(toolId: ToolId): Promise<AuthResult> {
       };
     }
 
-    // Fetch KB with tool-specific fields (using function from KB file)
     const kbFieldsRaw = getKBFieldsForTool(toolId);
     let kbFields: Record<string, any> | undefined =
       kbFieldsRaw && typeof kbFieldsRaw === "object" ? kbFieldsRaw : undefined;
     if (kbFields && Object.keys(kbFields).length === 0) {
-      // Prisma does not allow an empty select.
+      
       kbFields = { id: true, organizationId: true, version: true };
     }
     const knowledgeBase = await prisma.organizationKnowledgeBase.findUnique({
@@ -121,10 +113,6 @@ export async function getToolChatAuth(toolId: ToolId): Promise<AuthResult> {
   }
 }
 
-/**
- * Creates a snapshot of KB state for audit trail.
- * Excludes large JSON fields to optimize storage.
- */
 function createKBSnapshot(kb: any): any {
   const {
     aiInsights,

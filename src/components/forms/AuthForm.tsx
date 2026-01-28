@@ -165,7 +165,7 @@ export default function AuthForm({
 
                                     <div className="grid gap-2">
                                         <Label htmlFor="email" className="text-base">Email</Label>
-                                        <Input id="email" name="email" type="email" placeholder="you@example.com" value={values.email} onChange={handleChange} autoComplete="email" required className="focus-visible:border-[var(--primary-dark)] focus-visible:ring-[var(--primary-dark)]" />
+                                        <Input id="email" name="email" type="email" placeholder="you@example.com" value={values.email} onChange={handleChange} autoComplete="email" required />
                                     </div>
 
                                     <div className="grid gap-2">

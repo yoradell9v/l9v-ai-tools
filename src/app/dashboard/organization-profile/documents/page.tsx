@@ -1,36 +1,28 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Loader2, FileText, Trash2, AlertCircle, CheckCircle2, Sparkles } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import DocumentList, { Document } from "@/components/organization/DocumentList";
 
 export default function DocumentsPage() {
     const [documents, setDocuments] = useState<Document[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [completionModal, setCompletionModal] = useState<{
-        open: boolean;
-        document: Document | null;
-    }>({ open: false, document: null });
+    const [searchQuery, setSearchQuery] = useState("");
+    const [sortBy, setSortBy] = useState<"recent" | "oldest">("recent");
+    const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "processing" | "pending" | "failed">("all");
 
     useEffect(() => {
         loadDocuments();
@@ -80,17 +72,26 @@ export default function DocumentsPage() {
         }
     };
 
-    const formatDate = (dateString?: string) => {
-        if (!dateString) return "Unknown date";
-        const date = new Date(dateString);
-        return date.toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
+    const filteredAndSortedDocuments = useMemo(() => {
+        const filtered = documents.filter((doc) => {
+            const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesStatus =
+                statusFilter === "all" ||
+                (statusFilter === "completed" && doc.extractionStatus === "COMPLETED") ||
+                (statusFilter === "processing" && doc.extractionStatus === "PROCESSING") ||
+                (statusFilter === "pending" && doc.extractionStatus === "PENDING") ||
+                (statusFilter === "failed" && doc.extractionStatus === "FAILED");
+            return matchesSearch && matchesStatus;
         });
-    };
+
+        filtered.sort((a, b) => {
+            const dateA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+            const dateB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+            return sortBy === "recent" ? dateB - dateA : dateA - dateB;
+        });
+
+        return filtered;
+    }, [documents, searchQuery, sortBy, statusFilter]);
 
     if (isLoading) {
         return (
@@ -110,10 +111,10 @@ export default function DocumentsPage() {
             <div className="flex items-center gap-2 p-4 border-b">
                 <SidebarTrigger />
             </div>
-            <div className="min-h-screen">
-                <div className="py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 space-y-6">
-                    <div className="flex flex-col gap-4">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="h-[calc(100vh-64px)] overflow-hidden">
+                <div className="w-full max-w-full h-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col min-h-0">
+                    <div className="flex-shrink-0">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-6">
                             <div>
                                 <h1 className="text-2xl font-semibold mb-2">Documents</h1>
                                 <p className="text-base text-muted-foreground">
@@ -121,108 +122,100 @@ export default function DocumentsPage() {
                                 </p>
                             </div>
                         </div>
+
+                        {error && (
+                            <Card className="border-destructive/30 bg-destructive/10 mb-6">
+                                <CardContent className="py-4">
+                                    <p className="text-base text-destructive">{error}</p>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        <div className="mb-6 space-y-4">
+                            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-base text-muted-foreground">Filter:</span>
+                                    <div className="flex border rounded-md">
+                                        <Button
+                                            variant={statusFilter === "all" ? "default" : "ghost"}
+                                            size="sm"
+                                            onClick={() => setStatusFilter("all")}
+                                            className={statusFilter === "all" ? "rounded-r-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-r-none"}
+                                        >
+                                            All
+                                        </Button>
+                                        <Button
+                                            variant={statusFilter === "completed" ? "default" : "ghost"}
+                                            size="sm"
+                                            onClick={() => setStatusFilter("completed")}
+                                            className={statusFilter === "completed" ? "rounded-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-none"}
+                                        >
+                                            Completed
+                                        </Button>
+                                        <Button
+                                            variant={statusFilter === "processing" ? "default" : "ghost"}
+                                            size="sm"
+                                            onClick={() => setStatusFilter("processing")}
+                                            className={statusFilter === "processing" ? "rounded-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-none"}
+                                        >
+                                            Processing
+                                        </Button>
+                                        <Button
+                                            variant={statusFilter === "pending" ? "default" : "ghost"}
+                                            size="sm"
+                                            onClick={() => setStatusFilter("pending")}
+                                            className={statusFilter === "pending" ? "rounded-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-none"}
+                                        >
+                                            Pending
+                                        </Button>
+                                        <Button
+                                            variant={statusFilter === "failed" ? "default" : "ghost"}
+                                            size="sm"
+                                            onClick={() => setStatusFilter("failed")}
+                                            className={statusFilter === "failed" ? "rounded-l-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-l-none"}
+                                        >
+                                            Failed
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <span className="text-base text-muted-foreground">Sort:</span>
+                                    <Select value={sortBy} onValueChange={(v: "recent" | "oldest") => setSortBy(v)}>
+                                        <SelectTrigger className="w-[170px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="recent">Date uploaded (newest)</SelectItem>
+                                            <SelectItem value="oldest">Date uploaded (oldest)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search documents by name..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-10"
+                                />
+                            </div>
+                        </div>
                     </div>
 
-                    {error && (
-                        <Card className="border-destructive/30 bg-destructive/10">
-                            <CardContent className="py-4">
-                                <p className="text-base text-destructive">{error}</p>
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    <DocumentList
-                        documents={documents}
-                        onDocumentsChange={setDocuments}
-                        onDeleteDocument={handleDeleteDocument}
-                        showUploadInterface={false}
-                    />
+                    <div className="flex-1 min-h-0">
+                        <DocumentList
+                            documents={filteredAndSortedDocuments}
+                            onDocumentsChange={setDocuments}
+                            onDeleteDocument={handleDeleteDocument}
+                            showUploadInterface={false}
+                            scrollAreaClassName="h-full"
+                        />
+                    </div>
                 </div>
             </div>
-
-            {/* Completion Modal */}
-            <Dialog open={completionModal.open} onOpenChange={(open) => setCompletionModal({ open, document: null })}>
-                <DialogContent className="max-w-2xl max-h-[80vh]">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <Sparkles className="h-5 w-5 text-[color:var(--accent-strong)]" />
-                            Document Processing Complete
-                        </DialogTitle>
-                        <DialogDescription>
-                            {completionModal.document?.name && (
-                                <span className="font-medium">{completionModal.document.name}</span>
-                            )}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <ScrollArea className="max-h-[60vh] pr-4">
-                        <div className="space-y-4">
-                            {completionModal.document?.extractedContent?.summary && (
-                                <div className="space-y-2">
-                                    <h4 className="text-base font-semibold">Summary</h4>
-                                    <p className="text-base text-muted-foreground">
-                                        {completionModal.document.extractedContent.summary}
-                                    </p>
-                                </div>
-                            )}
-
-                            {completionModal.document?.insights && completionModal.document.insights.length > 0 && (
-                                <div className="space-y-3">
-                                    <h4 className="text-base font-semibold">
-                                        Insights Extracted ({completionModal.document.insights.length})
-                                    </h4>
-                                    <div className="space-y-2">
-                                        {completionModal.document.insights.map((insight, idx) => (
-                                            <div
-                                                key={idx}
-                                                className="p-3 rounded-lg border bg-muted/30 space-y-1"
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <Badge variant="outline" className="text-[10px] border-[var(--primary-dark)] text-[var(--primary-dark)]">
-                                                        {insight.field}
-                                                    </Badge>
-                                                    <span className="text-[10px] text-muted-foreground">
-                                                        {insight.confidence}% confidence
-                                                    </span>
-                                                </div>
-                                                <p className="text-base mt-1">{insight.insight}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {completionModal.document?.extractedContent?.keyPoints &&
-                                completionModal.document.extractedContent.keyPoints.length > 0 && (
-                                    <div className="space-y-2">
-                                        <h4 className="text-base font-semibold">Key Points</h4>
-                                        <ul className="list-disc list-inside space-y-1 text-base text-muted-foreground">
-                                            {completionModal.document.extractedContent.keyPoints.map((point, idx) => (
-                                                <li key={idx}>{point}</li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-
-                            {(!completionModal.document?.insights || completionModal.document.insights.length === 0) &&
-                                !completionModal.document?.extractedContent?.summary && (
-                                    <div className="text-center py-4">
-                                        <p className="text-base text-muted-foreground">
-                                            Document processed successfully. Content has been added to your knowledge base.
-                                        </p>
-                                    </div>
-                                )}
-                        </div>
-                    </ScrollArea>
-                    <div className="flex justify-end gap-2 pt-4 border-t">
-                        <Button
-                            onClick={() => setCompletionModal({ open: false, document: null })}
-                            className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
-                        >
-                            Close
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
         </>
     );
 }
