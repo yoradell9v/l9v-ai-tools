@@ -16,7 +16,6 @@ import {
     CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
@@ -811,14 +810,13 @@ export default function OrganizationProfilePage() {
                                         )}
                                     </div>
 
-                                    {/* Next Milestone */}
+                                    {/* Next Milestone / Completion Message */}
                                     {nextMilestone ? (
                                         <div className="space-y-2">
-                                            <div className="flex items-center justify-between">
-                                                <p className="text-base font-medium">{nextMilestone.message}</p>
-                                                <span className="text-sm font-semibold text-muted-foreground">{nextMilestone.progress}%</span>
-                                            </div>
-                                            <Progress value={nextMilestone.progress} className="h-2" />
+                                            <p className="text-2xl font-semibold">Keep building your AI Knowledge Base</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {nextMilestone.message}
+                                            </p>
                                         </div>
                                     ) : (
                                         <div className="space-y-2">
