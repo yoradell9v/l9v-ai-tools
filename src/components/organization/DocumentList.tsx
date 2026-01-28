@@ -366,7 +366,7 @@ export default function DocumentList({
                         </div>
                     ) : (
                         <div className="text-center py-4">
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-base text-muted-foreground">
                                 No documents uploaded yet. Upload files from the Knowledge Base page to get started.
                             </p>
                         </div>
@@ -392,8 +392,8 @@ export default function DocumentList({
                         <div className="space-y-4">
                             {completionModal.document?.extractedContent?.summary && (
                                 <div className="space-y-2">
-                                    <h4 className="text-sm font-semibold">Summary</h4>
-                                    <p className="text-sm text-muted-foreground">
+                                    <h4 className="text-base font-semibold">Summary</h4>
+                                    <p className="text-base text-muted-foreground">
                                         {completionModal.document.extractedContent.summary}
                                     </p>
                                 </div>
@@ -401,7 +401,7 @@ export default function DocumentList({
 
                             {completionModal.document?.insights && completionModal.document.insights.length > 0 && (
                                 <div className="space-y-3">
-                                    <h4 className="text-sm font-semibold">
+                                    <h4 className="text-base font-semibold">
                                         Insights Extracted ({completionModal.document.insights.length})
                                     </h4>
                                     <div className="space-y-2">
@@ -418,7 +418,7 @@ export default function DocumentList({
                                                         {insight.confidence}% confidence
                                                     </span>
                                                 </div>
-                                                <p className="text-sm mt-1">{insight.insight}</p>
+                                                <p className="text-base mt-1">{insight.insight}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -428,8 +428,8 @@ export default function DocumentList({
                             {completionModal.document?.extractedContent?.keyPoints &&
                                 completionModal.document.extractedContent.keyPoints.length > 0 && (
                                     <div className="space-y-2">
-                                        <h4 className="text-sm font-semibold">Key Points</h4>
-                                        <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                                        <h4 className="text-base font-semibold">Key Points</h4>
+                                        <ul className="list-disc list-inside space-y-1 text-base text-muted-foreground">
                                             {completionModal.document.extractedContent.keyPoints.map((point, idx) => (
                                                 <li key={idx}>{point}</li>
                                             ))}
@@ -440,7 +440,7 @@ export default function DocumentList({
                             {(!completionModal.document?.insights || completionModal.document.insights.length === 0) &&
                                 !completionModal.document?.extractedContent?.summary && (
                                     <div className="text-center py-4">
-                                        <p className="text-sm text-muted-foreground">
+                                        <p className="text-base text-muted-foreground">
                                             Document processed successfully. Content has been added to your knowledge base.
                                         </p>
                                     </div>

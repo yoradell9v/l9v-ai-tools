@@ -58,6 +58,9 @@ interface SavedSOP {
         organizationProfileUsed?: boolean;
         generatedAt?: string;
     };
+    isDraft?: boolean;
+    versionNumber?: number;
+    isCurrentVersion?: boolean;
     createdAt: string;
     updatedAt: string;
     userOrganization: {
@@ -104,6 +107,7 @@ export default function SOPHistoryPage() {
     const [total, setTotal] = useState(0);
     const [viewMode, setViewMode] = useState<"grouped" | "individual">("grouped");
     const [sortBy, setSortBy] = useState<"recent" | "oldest">("recent");
+    const [draftFilter, setDraftFilter] = useState<"all" | "drafts" | "published">("all");
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const limit = 12; // Items per page
 
@@ -111,7 +115,7 @@ export default function SOPHistoryPage() {
         if (user) {
             loadSOPs();
         }
-    }, [user, currentPage, viewMode, sortBy]);
+    }, [user, currentPage, viewMode, sortBy, draftFilter]);
 
     const loadSOPs = async () => {
         setIsLoading(true);
@@ -122,6 +126,13 @@ export default function SOPHistoryPage() {
                 groupBySOP: viewMode === "grouped" ? "true" : "false",
                 sortBy: sortBy,
             });
+            
+            // Add draft filter if not "all"
+            if (draftFilter === "drafts") {
+                params.append("isDraft", "true");
+            } else if (draftFilter === "published") {
+                params.append("isDraft", "false");
+            }
 
             const response = await fetch(
                 `/api/sop/saved?${params.toString()}`,
@@ -290,7 +301,7 @@ export default function SOPHistoryPage() {
                 <SidebarTrigger />
             </div>
             <div className="min-h-screen">
-                <div className="max-w-7xl mx-auto py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
+                <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
                     {/* Header */}
                     <div className="flex flex-col gap-4 mb-6">
                         <div className="flex items-center gap-4">
@@ -328,7 +339,7 @@ export default function SOPHistoryPage() {
                                             setViewMode("grouped");
                                             setCurrentPage(1);
                                         }}
-                                        className="rounded-r-none"
+                                        className={viewMode === "grouped" ? "rounded-r-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-r-none"}
                                     >
                                         <Layers className="h-4 w-4 mr-2" />
                                         Grouped
@@ -340,7 +351,7 @@ export default function SOPHistoryPage() {
                                             setViewMode("individual");
                                             setCurrentPage(1);
                                         }}
-                                        className="rounded-l-none"
+                                        className={viewMode === "individual" ? "rounded-l-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-l-none"}
                                     >
                                         <List className="h-4 w-4 mr-2" />
                                         All Versions
@@ -348,24 +359,66 @@ export default function SOPHistoryPage() {
                                 </div>
                             </div>
 
-                            {/* Sort Dropdown */}
-                            <div className="flex items-center gap-2">
-                                <span className="text-base text-muted-foreground">Sort by:</span>
-                                <Select
-                                    value={sortBy}
-                                    onValueChange={(value: "recent" | "oldest") => {
-                                        setSortBy(value);
-                                        setCurrentPage(1);
-                                    }}
-                                >
-                                    <SelectTrigger className="w-[140px]">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="recent">Most Recent</SelectItem>
-                                        <SelectItem value="oldest">Oldest</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                            <div className="flex items-center gap-4">
+                                {/* Draft/Published Filter */}
+                                <div className="flex items-center gap-2">
+                                    <span className="text-base text-muted-foreground">Filter:</span>
+                                    <div className="flex border rounded-md">
+                                        <Button
+                                            variant={draftFilter === "all" ? "default" : "ghost"}
+                                            size="sm"
+                                            onClick={() => {
+                                                setDraftFilter("all");
+                                                setCurrentPage(1);
+                                            }}
+                                            className={draftFilter === "all" ? "rounded-r-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-r-none"}
+                                        >
+                                            All
+                                        </Button>
+                                        <Button
+                                            variant={draftFilter === "drafts" ? "default" : "ghost"}
+                                            size="sm"
+                                            onClick={() => {
+                                                setDraftFilter("drafts");
+                                                setCurrentPage(1);
+                                            }}
+                                            className={draftFilter === "drafts" ? "rounded-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-none"}
+                                        >
+                                            Drafts
+                                        </Button>
+                                        <Button
+                                            variant={draftFilter === "published" ? "default" : "ghost"}
+                                            size="sm"
+                                            onClick={() => {
+                                                setDraftFilter("published");
+                                                setCurrentPage(1);
+                                            }}
+                                            className={draftFilter === "published" ? "rounded-l-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-l-none"}
+                                        >
+                                            Published
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Sort Dropdown */}
+                                <div className="flex items-center gap-2">
+                                    <span className="text-base text-muted-foreground">Sort by:</span>
+                                    <Select
+                                        value={sortBy}
+                                        onValueChange={(value: "recent" | "oldest") => {
+                                            setSortBy(value);
+                                            setCurrentPage(1);
+                                        }}
+                                    >
+                                        <SelectTrigger className="w-[140px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="recent">Most Recent</SelectItem>
+                                            <SelectItem value="oldest">Oldest</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
                         </div>
 
@@ -411,7 +464,7 @@ export default function SOPHistoryPage() {
                                     {!searchQuery && (
                                         <Button
                                             onClick={() => router.push("/dashboard/process-builder")}
-                                            className="inline-flex items-center gap-2"
+                                            className="inline-flex items-center gap-2 bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
                                         >
                                             Generate Your First SOP
                                         </Button>
@@ -475,9 +528,16 @@ export default function SOPHistoryPage() {
                                             <CardContent>
                                                 <div className="space-y-3">
                                                     <div className="flex items-center justify-between text-xs">
-                                                        <Badge variant="secondary">
-                                                            {group.versionCount} version{group.versionCount !== 1 ? "s" : ""}
-                                                        </Badge>
+                                                        <div className="flex items-center gap-2">
+                                                            <Badge variant="secondary">
+                                                                {group.versionCount} version{group.versionCount !== 1 ? "s" : ""}
+                                                            </Badge>
+                                                            {currentVersion.isDraft && (
+                                                                <Badge variant="outline" className="bg-[var(--accent-strong)] text-black border-[var(--accent-strong)]">
+                                                                    Draft
+                                                                </Badge>
+                                                            )}
+                                                        </div>
                                                         {currentVersion.metadata?.organizationProfileUsed && (
                                                             <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">
                                                                 Org Profile
@@ -488,10 +548,10 @@ export default function SOPHistoryPage() {
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        className="w-full"
+                                                        className="w-full border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10"
                                                         onClick={() => handleViewSOP(currentVersion.id)}
                                                     >
-                                                        <Eye className="h-4 w-4 mr-2" />
+                                                        <Eye className="h-4 w-4 mr-2 text-[var(--primary-dark)]" />
                                                         View Current Version
                                                     </Button>
 
@@ -523,10 +583,16 @@ export default function SOPHistoryPage() {
                                                                         >
                                                                             <div className="flex-1 min-w-0">
                                                                                 <div className="flex items-center gap-2">
-                                                                                    <span className="text-xs font-medium">
-                                                                                        v{getVersion(version)}
-                                                                                    </span>
-                                                                                    {version.id === currentVersion.id && (
+                                                                                    {version.isDraft ? (
+                                                                                        <Badge variant="outline" className="bg-[var(--accent-strong)] text-black border-[var(--accent-strong)] text-xs">
+                                                                                            Draft
+                                                                                        </Badge>
+                                                                                    ) : (
+                                                                                        <span className="text-xs font-medium">
+                                                                                            v{version.versionNumber || getVersion(version)}
+                                                                                        </span>
+                                                                                    )}
+                                                                                    {version.id === currentVersion.id && !version.isDraft && (
                                                                                         <Badge variant="default" className="text-xs">
                                                                                             Current
                                                                                         </Badge>
@@ -722,6 +788,7 @@ export default function SOPHistoryPage() {
                                     <Button
                                         variant="outline"
                                         onClick={() => setSearchQuery("")}
+                                        className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white border-[var(--primary-dark)]"
                                     >
                                         Clear Search
                                     </Button>

@@ -519,7 +519,7 @@ export default function DocumentLibrary({ documents, onDocumentsChange }: Docume
                     />
                     <div className="flex flex-col items-center justify-center text-center">
                         <Upload className="w-10 h-10 mb-3 text-muted-foreground" />
-                        <p className="text-sm font-medium mb-1">
+                        <p className="text-base font-medium mb-1">
                             {dragOver ? "Drop files here" : "Drag and drop files here"}
                         </p>
                         <p className="text-xs text-muted-foreground mb-2">or click to browse</p>
@@ -576,7 +576,7 @@ export default function DocumentLibrary({ documents, onDocumentsChange }: Docume
                 {documents.length > 0 && (
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium">Uploaded Documents ({documents.length})</p>
+                            <p className="text-base font-medium">Uploaded Documents ({documents.length})</p>
                         </div>
                         <div className="space-y-2">
                             {documents.map((doc) => (
@@ -657,7 +657,7 @@ export default function DocumentLibrary({ documents, onDocumentsChange }: Docume
                 {/* Empty State */}
                 {documents.length === 0 && files.length === 0 && !hasUploading && (
                     <div className="text-center py-4">
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-base text-muted-foreground">
                             No documents uploaded yet. Upload files to add context to your knowledge base.
                         </p>
                     </div>
@@ -682,8 +682,8 @@ export default function DocumentLibrary({ documents, onDocumentsChange }: Docume
                         <div className="space-y-4">
                             {completionModal.document?.extractedContent?.summary && (
                                 <div className="space-y-2">
-                                    <h4 className="text-sm font-semibold">Summary</h4>
-                                    <p className="text-sm text-muted-foreground">
+                                    <h4 className="text-base font-semibold">Summary</h4>
+                                    <p className="text-base text-muted-foreground">
                                         {completionModal.document.extractedContent.summary}
                                     </p>
                                 </div>
@@ -691,7 +691,7 @@ export default function DocumentLibrary({ documents, onDocumentsChange }: Docume
 
                             {completionModal.document?.insights && completionModal.document.insights.length > 0 && (
                                 <div className="space-y-3">
-                                    <h4 className="text-sm font-semibold">
+                                    <h4 className="text-base font-semibold">
                                         Insights Extracted ({completionModal.document.insights.length})
                                     </h4>
                                     <div className="space-y-2">
@@ -708,7 +708,7 @@ export default function DocumentLibrary({ documents, onDocumentsChange }: Docume
                                                         {insight.confidence}% confidence
                                                     </span>
                                                 </div>
-                                                <p className="text-sm mt-1">{insight.insight}</p>
+                                                <p className="text-base mt-1">{insight.insight}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -718,8 +718,8 @@ export default function DocumentLibrary({ documents, onDocumentsChange }: Docume
                             {completionModal.document?.extractedContent?.keyPoints &&
                                 completionModal.document.extractedContent.keyPoints.length > 0 && (
                                     <div className="space-y-2">
-                                        <h4 className="text-sm font-semibold">Key Points</h4>
-                                        <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                                        <h4 className="text-base font-semibold">Key Points</h4>
+                                        <ul className="list-disc list-inside space-y-1 text-base text-muted-foreground">
                                             {completionModal.document.extractedContent.keyPoints.map((point, idx) => (
                                                 <li key={idx}>{point}</li>
                                             ))}
@@ -730,7 +730,7 @@ export default function DocumentLibrary({ documents, onDocumentsChange }: Docume
                             {(!completionModal.document?.insights || completionModal.document.insights.length === 0) &&
                                 !completionModal.document?.extractedContent?.summary && (
                                     <div className="text-center py-4">
-                                        <p className="text-sm text-muted-foreground">
+                                        <p className="text-base text-muted-foreground">
                                             Document processed successfully. Content has been added to your knowledge base.
                                         </p>
                                     </div>

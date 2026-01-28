@@ -1,22 +1,25 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import BaseIntakeForm, { BaseIntakeFormRef } from "@/components/forms/BaseIntakeForm";
 import { jdFormConfig, getJDFormConfigWithKB } from "@/components/forms/configs/jdFormConfig";
-import RefinementForm from "@/components/forms/RefinementForm";
+import { ToolChatDialog } from "@/components/chat/ToolChatDialog";
 import { useUser } from "@/context/UserContext";
 import { OrganizationKnowledgeBase } from "@/lib/knowledge-base/organization-knowledge-base";
 import { mapOrgKBToJDForm, resolveJDFormWithOrgKB, resolvedJDFormToIntakePayload } from "@/lib/job-description/field-mapping";
-import { Briefcase, Sparkles, CheckCircle2, ShieldAlert, AlertTriangle, TrendingUp, Target, AlertCircle, Network, FileText, Plus, MoreVertical, Edit, Download, Save, History, Loader2, Clock, Calendar, Zap, ArrowRight, X, Check, AlertCircle as AlertCircleIcon } from "lucide-react";
+import { Briefcase, Sparkles, CheckCircle2, ShieldAlert, AlertTriangle, TrendingUp, Target, AlertCircle, Network, FileText, Plus, MoreVertical, Edit, Download, Save, History, Loader2, Clock, Calendar, Zap, ArrowRight, X, Check, AlertCircle as AlertCircleIcon, ChevronDown, Copy } from "lucide-react";
+import { SparklesIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import { getConfidenceValue, getConfidenceColor } from '@/utils/confidence';
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { UserIcon, ClockIcon, ChartPieIcon } from "@heroicons/react/24/outline";
 import {
     Dialog,
     DialogContent,
@@ -33,6 +36,9 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from "@/lib/rate-limiting/rate-limit-client";
 import { toast } from "sonner";
+import { ToolChat } from "@/components/chat/ToolChat";
+import { getToolChatConfig } from "@/lib/tool-chat/registry";
+import { copyToClipboard } from "@/lib/utils/copy-to-clipboard";
 
 interface AnalysisResult {
     preview: {
@@ -484,14 +490,16 @@ interface IntakeFormData {
 export default function JdBuilderPage() {
     const { user } = useUser();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [intakeData, setIntakeData] = useState<IntakeFormData | null>(null);
-    const [activeTab, setActiveTab] = useState<'overview' | 'roles' | 'getting-started' | 'risks-monitoring'>('overview');
+    const [analysisSource, setAnalysisSource] = useState<'form' | 'chat' | null>(null);
     const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
     const [isRefinementModalOpen, setIsRefinementModalOpen] = useState(false);
+    const [isCreateProcessDialogOpen, setIsCreateProcessDialogOpen] = useState(false);
     const [savedAnalysisId, setSavedAnalysisId] = useState<string | null>(null);
     const [currentStage, setCurrentStage] = useState<string>("");
     const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -500,6 +508,7 @@ export default function JdBuilderPage() {
     const [organizationKB, setOrganizationKB] = useState<OrganizationKnowledgeBase | null>(null);
     const [isLoadingOrgKB, setIsLoadingOrgKB] = useState(false);
 
+    const [isToolChatOpen, setIsToolChatOpen] = useState(false);
     const [kbMetadata, setKbMetadata] = useState<{
         usedKnowledgeBaseVersion: number | null;
         knowledgeBaseSnapshot: any | null;
@@ -510,7 +519,6 @@ export default function JdBuilderPage() {
     const hasAttemptedLoadRef = useRef(false);
     const lastLoadedUserIdRef = useRef<string | null>(null);
 
-    // Generate dynamic form config based on whether Organization KB exists
     const dynamicFormConfig = useMemo(
         () => getJDFormConfigWithKB(organizationKB !== null),
         [organizationKB]
@@ -549,6 +557,7 @@ export default function JdBuilderPage() {
             };
             setAnalysisResult(result);
             setIntakeData(input);
+            setAnalysisSource('form'); // Mark as generated from intake form
 
             const usedKnowledgeBaseVersion = apiResult.knowledgeBase?.version ?? null;
             const knowledgeBaseSnapshot = apiResult.knowledgeBase?.snapshot ?? null;
@@ -626,6 +635,7 @@ export default function JdBuilderPage() {
                 metadata: apiResult.metadata,
             } as AnalysisResult);
             setIntakeData(input);
+            setAnalysisSource('form'); // Mark as generated from intake form (even if there was an error)
         } finally {
             setIsProcessing(false);
             setCurrentStage("");
@@ -639,7 +649,6 @@ export default function JdBuilderPage() {
     const serviceStructure = analysisResult?.full_package?.service_structure;
     const executiveSummary = analysisResult?.full_package?.executive_summary;
 
-    // Helper functions for extracting key data
     const getPrimaryRoleTitle = () => {
         if (analysisResult?.preview?.service_type === "Dedicated VA") {
             return analysisResult?.preview?.role_title || serviceStructure?.dedicated_va_role?.title || "Dedicated VA";
@@ -712,55 +721,93 @@ export default function JdBuilderPage() {
         return `Good evening, ${user.firstname}`;
     };
 
+    // Load specific analysis from query param or latest analysis
     useEffect(() => {
-        const loadLatestAnalysis = async () => {
+        const loadAnalysis = async () => {
             if (!user || analysisResult || isLoadingLatest) return;
+            
+            const analysisId = searchParams?.get('analysisId');
+            const shouldRefine = searchParams?.get('refine') === 'true';
+            
             const currentUserId = user.id;
             if (lastLoadedUserIdRef.current !== currentUserId) {
                 hasAttemptedLoadRef.current = false;
             }
-            if (hasAttemptedLoadRef.current) return;
+            if (hasAttemptedLoadRef.current && !analysisId) return; // Only skip if no specific analysisId
 
             hasAttemptedLoadRef.current = true;
             lastLoadedUserIdRef.current = currentUserId;
             setIsLoadingLatest(true);
             try {
-                const response = await fetch("/api/jd/saved?page=1&limit=1", {
-                    method: "GET",
-                    credentials: "include",
+                let response;
+                let analysis;
+                
+                if (analysisId) {
+                    // Load specific analysis - fetch all and find the matching one
+                    response = await fetch("/api/jd/saved?page=1&limit=100", {
+                        method: "GET",
+                        credentials: "include",
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Failed to fetch analyses");
+                    }
+
+                    const data = await response.json();
+                    if (data.success && data.data?.analyses) {
+                        analysis = data.data.analyses.find((a: any) => a.id === analysisId);
+                        if (!analysis) {
+                            throw new Error("Analysis not found");
+                        }
+                    } else {
+                        throw new Error("Analysis not found");
+                    }
+                } else {
+                    // Load latest analysis
+                    response = await fetch("/api/jd/saved?page=1&limit=1", {
+                        method: "GET",
+                        credentials: "include",
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Failed to fetch saved analyses");
+                    }
+
+                    const data = await response.json();
+                    if (data.success && data.data?.analyses && data.data.analyses.length > 0) {
+                        analysis = data.data.analyses[0];
+                    } else {
+                        setHasNoSavedAnalyses(true);
+                        return;
+                    }
+                }
+
+                setAnalysisResult(analysis.analysis as AnalysisResult);
+                setIntakeData(analysis.intakeData as IntakeFormData);
+                setSavedAnalysisId(analysis.id);
+                setHasNoSavedAnalyses(false);
+                setAnalysisSource(analysis.intakeData ? 'form' : null);
+                setKbMetadata({
+                    usedKnowledgeBaseVersion: analysis.usedKnowledgeBaseVersion ?? null,
+                    knowledgeBaseSnapshot: analysis.knowledgeBaseSnapshot ?? null,
+                    organizationId: analysis.organizationId ?? null,
+                    contributedInsights: analysis.contributedInsights ?? null,
                 });
 
-                if (!response.ok) {
-                    throw new Error("Failed to fetch saved analyses");
-                }
-
-                const data = await response.json();
-                if (data.success && data.data?.analyses && data.data.analyses.length > 0) {
-                    const latestAnalysis = data.data.analyses[0];
-                    setAnalysisResult(latestAnalysis.analysis as AnalysisResult);
-                    setIntakeData(latestAnalysis.intakeData as IntakeFormData);
-                    setSavedAnalysisId(latestAnalysis.id);
-                    setHasNoSavedAnalyses(false);
-                    // Store KB metadata from saved analysis
-                    setKbMetadata({
-                        usedKnowledgeBaseVersion: latestAnalysis.usedKnowledgeBaseVersion ?? null,
-                        knowledgeBaseSnapshot: latestAnalysis.knowledgeBaseSnapshot ?? null,
-                        organizationId: latestAnalysis.organizationId ?? null,
-                        contributedInsights: latestAnalysis.contributedInsights ?? null,
-                    });
-                } else {
-                    setHasNoSavedAnalyses(true);
+                // Open refinement dialog if requested
+                if (shouldRefine) {
+                    setIsRefinementModalOpen(true);
                 }
             } catch (error) {
-                console.error("Error loading latest analysis:", error);
+                console.error("Error loading analysis:", error);
                 setHasNoSavedAnalyses(true);
             } finally {
                 setIsLoadingLatest(false);
             }
         };
 
-        loadLatestAnalysis();
-    }, [user, analysisResult]);
+        loadAnalysis();
+    }, [user, analysisResult, searchParams]);
 
     useEffect(() => {
         const fetchOrgKB = async () => {
@@ -887,14 +934,14 @@ export default function JdBuilderPage() {
 
     return (
         <>
-            <div className="w-full max-w-screen overflow-x-hidden">
-                <div className="flex items-center gap-2 p-4 border-b">
+            <div className="w-full max-w-screen overflow-x-hidden h-screen flex flex-col">
+                <div className="flex items-center gap-2 p-4 border-b flex-shrink-0">
                     <SidebarTrigger />
                 </div>
                 <div
-                    className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full"
+                    className="transition-all duration-300 ease-in-out flex-1 min-h-0 flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full"
                 >
-                    <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col h-full">
+                    <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col flex-1 min-h-0">
                         <div className="flex-shrink-0 p-2">
                             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
                                 <div className="space-y-1">
@@ -907,16 +954,30 @@ export default function JdBuilderPage() {
                                 </div>
                                 <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-4 mt-1 md:mt-0">
                                     {!isProcessing && (
-                                        <Button
-                                            onClick={() => setIsModalOpen(true)}
-                                        >
-                                            <Plus className="h-4 w-4" />
-                                            <span>{analysisResult ? "New Analysis" : "Start Analysis"}</span>
-                                        </Button>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
+                                                    <Plus className="h-4 w-4" />
+                                                    <span>{analysisResult ? "New Analysis" : "Start Analysis"}</span>
+                                                    <ChevronDown className="h-4 w-4 ml-2" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onClick={() => setIsModalOpen(true)}>
+                                                    <FileText className="h-4 w-4 mr-2" />
+                                                    Fill Out Form
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => setIsToolChatOpen(true)}>
+                                                    <SparklesIcon className="h-4 w-4 mr-2" />
+                                                    Generate with AI
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     )}
                                     <Button
                                         variant="outline"
                                         onClick={() => router.push("/dashboard/role-builder/history")}
+                                        className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10"
                                     >
                                         <History className="h-4 w-4" />
                                         History
@@ -926,9 +987,7 @@ export default function JdBuilderPage() {
                             <Separator />
                         </div>
 
-                        {/* Scrollable Content Area */}
-                        <div className="flex-1 overflow-y-auto overflow-x-hidden">
-                            {/* Error State */}
+                        <div className="flex-1 min-h-0 overflow-hidden">
                             {analysisError && !isProcessing && (
                                 <div className="flex flex-col items-center justify-center py-16 px-6">
                                     <div className="max-w-md w-full">
@@ -960,7 +1019,6 @@ export default function JdBuilderPage() {
                                 </div>
                             )}
 
-                            {/* Processing State */}
                             {isProcessing && !analysisError && !isDownloading && (
                                 <div className="flex flex-col items-center justify-center py-16">
                                     <Loader2 className="h-8 w-8 mb-3 animate-spin" />
@@ -973,7 +1031,6 @@ export default function JdBuilderPage() {
                                 </div>
                             )}
 
-                            {/* Downloading State */}
                             {isDownloading && (
                                 <div className="flex flex-col items-center justify-center py-16">
                                     <Loader2 className="h-8 w-8 mb-3 animate-spin" />
@@ -986,7 +1043,6 @@ export default function JdBuilderPage() {
                                 </div>
                             )}
 
-                            {/* Loading Latest Analysis */}
                             {isLoadingLatest && !analysisResult && !isProcessing && !isDownloading && (
                                 <div className="flex flex-col items-center justify-center py-16">
                                     <Loader2 className="h-8 w-8 mb-3 animate-spin" />
@@ -996,7 +1052,6 @@ export default function JdBuilderPage() {
                                 </div>
                             )}
 
-                            {/* Empty State */}
                             {!analysisResult && !isProcessing && !isDownloading && !isLoadingLatest && hasNoSavedAnalyses && (
                                 <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
                                     <div className="p-4 rounded-xl mb-4 bg-muted">
@@ -1017,29 +1072,184 @@ export default function JdBuilderPage() {
                                 </div>
                             )}
 
-                            {/* Results State */}
                             {analysisResult && !isProcessing && !isDownloading && (
-                                <Card className="flex flex-col w-full max-w-full gap-2" style={{ maxHeight: 'calc(100vh - 200px)' }}>
-                                    <CardHeader className="flex-shrink-0 sm:px-6 sm:pt-4 sm:pb-2">
-                                        <div className="flex items-start justify-between">
-                                            <div>
-                                                <CardTitle className="text-xl mb-1">
-                                                    {analysisResult.preview.service_type || 'Your recommendations'}
-                                                </CardTitle>
-                                                <CardDescription className="pb-0">
-                                                    {analysisResult.preview.service_reasoning}
-                                                </CardDescription>
+                                <div className="w-full max-w-full flex flex-col h-full overflow-hidden">
+                                    {/* Sticky Header Section - Key Info at First Glance */}
+                                    <div id="analysis-display" className="flex-shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b p-4 mb-6">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="flex-1 space-y-4">
+                                                <div>
+                                                    <h2 className="text-2xl font-semibold mb-1">
+                                                        {analysisResult.preview.service_type || 'Your Recommendations'}
+                                                    </h2>
+                                                    {analysisResult.preview.service_reasoning && (
+                                                        <p className="text-base text-muted-foreground mt-1">
+                                                            {analysisResult.preview.service_reasoning}
+                                                        </p>
+                                                    )}
+                                                </div>
+
+                                                {/* Key Metrics Grid - No Borders */}
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                    {/* Primary Role/Project */}
+                                                    {(analysisResult.preview.service_type === "Dedicated VA" && analysisResult.preview.role_title) ||
+                                                        (analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.preview.core_va_title) ||
+                                                        (analysisResult.preview.service_type === "Projects on Demand" && analysisResult.preview.project_count) ? (
+                                                        <div className="flex items-center gap-3">
+                                                            <UserIcon className="w-5 h-5 text-primary flex-shrink-0" />
+                                                            <div>
+                                                                <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
+                                                                    {analysisResult.preview.service_type === "Projects on Demand" ? "Projects" : "Role"}
+                                                                </p>
+                                                                <p className="text-lg font-bold">
+                                                                    {analysisResult.preview.service_type === "Dedicated VA"
+                                                                        ? analysisResult.preview.role_title
+                                                                        : analysisResult.preview.service_type === "Unicorn VA Service"
+                                                                            ? analysisResult.preview.core_va_title
+                                                                            : `${analysisResult.preview.project_count || 0} Projects`}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    ) : null}
+
+                                                    {/* Hours/Time */}
+                                                    {(analysisResult.preview.hours_per_week ||
+                                                        analysisResult.preview.core_va_hours ||
+                                                        analysisResult.preview.total_hours ||
+                                                        analysisResult.preview.estimated_timeline) ? (
+                                                        <div className="flex items-center gap-3">
+                                                            <ClockIcon className="w-5 h-5 text-primary flex-shrink-0" />
+                                                            <div>
+                                                                <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
+                                                                    {analysisResult.preview.service_type === "Projects on Demand" ? "Timeline" : "Hours/Week"}
+                                                                </p>
+                                                                <p className="text-lg font-bold">
+                                                                    {analysisResult.preview.service_type === "Projects on Demand"
+                                                                        ? (analysisResult.preview.estimated_timeline || analysisResult.preview.total_hours || "N/A")
+                                                                        : (analysisResult.preview.hours_per_week || analysisResult.preview.core_va_hours || "N/A")}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    ) : null}
+
+                                                    {/* Confidence - Circular Progress */}
+                                                    {analysisResult.preview.service_confidence && (() => {
+                                                        const confidenceValue = getConfidenceValue(analysisResult.preview.service_confidence);
+                                                        const radius = 20;
+                                                        const circumference = 2 * Math.PI * radius;
+                                                        const offset = circumference - (confidenceValue / 100) * circumference;
+                                                        return (
+                                                            <div className="flex items-center gap-3">
+                                                                <ChartPieIcon className="w-5 h-5 text-primary flex-shrink-0" />
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="relative w-12 h-12">
+                                                                        <svg className="w-12 h-12 transform -rotate-90" viewBox="0 0 44 44">
+                                                                            <defs>
+                                                                                <linearGradient id="confidenceGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                                                    <stop offset="0%" stopColor="#f0b214" />
+                                                                                    <stop offset="100%" stopColor="#1374B4" />
+                                                                                </linearGradient>
+                                                                            </defs>
+                                                                            <circle
+                                                                                cx="22"
+                                                                                cy="22"
+                                                                                r={radius}
+                                                                                stroke="currentColor"
+                                                                                strokeWidth="4"
+                                                                                fill="none"
+                                                                                className="text-muted"
+                                                                            />
+                                                                            <circle
+                                                                                cx="22"
+                                                                                cy="22"
+                                                                                r={radius}
+                                                                                stroke="url(#confidenceGradient)"
+                                                                                strokeWidth="4"
+                                                                                fill="none"
+                                                                                strokeDasharray={circumference}
+                                                                                strokeDashoffset={offset}
+                                                                                className="transition-all duration-500"
+                                                                                strokeLinecap="round"
+                                                                            />
+                                                                        </svg>
+                                                                        <div className="absolute inset-0 flex items-center justify-center">
+                                                                            <span className="text-xs font-bold">{confidenceValue}%</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Confidence</p>
+                                                                        <p className="text-lg font-bold">{analysisResult.preview.service_confidence}</p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+
+                                                {/* Supporting Roles (Unicorn VA) */}
+                                                {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.preview.team_support_areas && (
+                                                    <div className="mt-2">
+                                                        <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Supporting Roles</p>
+                                                        <p className="text-base font-medium">{analysisResult.preview.team_support_areas} team support areas</p>
+                                                    </div>
+                                                )}
                                             </div>
                                             <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="outline" size="icon">
+                                                    <Button variant="outline" size="icon" className="flex-shrink-0 border-[var(--accent-strong)] text-[var(--accent-strong)] hover:bg-[var(--accent-strong)]/10">
                                                         <MoreVertical className="h-4 w-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-48">
+                                                    <DropdownMenuItem onClick={async () => {
+                                                        setActionsMenuOpen(false);
+                                                        if (analysisResult) {
+                                                            // Format the analysis result as a readable text summary
+                                                            const summary = [
+                                                                `Service Type: ${analysisResult.preview?.service_type || 'N/A'}`,
+                                                                `Service Reasoning: ${analysisResult.preview?.service_reasoning || 'N/A'}`,
+                                                                `Confidence: ${analysisResult.preview?.service_confidence || 'N/A'}`,
+                                                                '',
+                                                                'Role Details:',
+                                                                analysisResult.full_package?.service_structure?.dedicated_va_role?.title || 
+                                                                analysisResult.full_package?.service_structure?.core_va_role?.title || 
+                                                                'N/A',
+                                                                '',
+                                                                'Key Requirements:',
+                                                                ...(analysisResult.full_package?.service_structure?.dedicated_va_role?.skill_requirements?.required || 
+                                                                    analysisResult.full_package?.service_structure?.core_va_role?.skill_requirements?.required || 
+                                                                    []),
+                                                            ].join('\n');
+                                                            
+                                                            const success = await copyToClipboard(
+                                                                summary,
+                                                                () => toast.success("Analysis summary copied to clipboard"),
+                                                                (error) => toast.error("Failed to copy", { description: error.message })
+                                                            );
+                                                        } else {
+                                                            toast.error("No analysis to copy");
+                                                        }
+                                                    }}>
+                                                        <Copy className="h-4 w-4 mr-2" />
+                                                        Copy to Clipboard
+                                                    </DropdownMenuItem>
+                                                    {analysisSource === 'form' && (
+                                                        <>
+                                                            <Separator />
+                                                            <DropdownMenuItem onClick={() => {
+                                                                setActionsMenuOpen(false);
+                                                                setIsModalOpen(true);
+                                                            }}>
+                                                                <ClipboardIcon className="h-4 w-4 mr-2" />
+                                                                Edit Intake Form
+                                                            </DropdownMenuItem>
+                                                        </>
+                                                    )}
+                                                    <Separator />
                                                     <DropdownMenuItem
                                                         onClick={async () => {
                                                             setActionsMenuOpen(false);
+                                                            // Save analysis if not already saved
                                                             if (!savedAnalysisId && analysisResult && intakeData && user) {
                                                                 try {
                                                                     const title = `${intakeData.businessName} - ${analysisResult.preview?.service_type || analysisResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
@@ -1067,16 +1277,17 @@ export default function JdBuilderPage() {
                                                                         setSavedAnalysisId(saveData.savedAnalysis.id);
                                                                         setIsRefinementModalOpen(true);
                                                                     } else {
-                                                                        alert("Please save your analysis first before refining.");
+                                                                        toast.error("Please save your analysis first before refining.");
                                                                     }
                                                                 } catch (error) {
                                                                     console.error("Error saving analysis:", error);
-                                                                    alert("Failed to save analysis. Please try again.");
+                                                                    toast.error("Failed to save analysis. Please try again.");
                                                                 }
-                                                            } else if (savedAnalysisId) {
+                                                            } else if (analysisResult) {
+                                                                // Open refinement chat dialog
                                                                 setIsRefinementModalOpen(true);
                                                             } else {
-                                                                alert("Please save your analysis first before refining.");
+                                                                toast.error("Please save your analysis first before refining.");
                                                             }
                                                         }}
                                                     >
@@ -1095,1633 +1306,418 @@ export default function JdBuilderPage() {
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </div>
-                                    </CardHeader>
+                                    </div>
 
-                                    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1 flex flex-col min-h-0">
-                                        <TabsList className="mx-4 sm:mx-6 mt-0 mb-4">
-                                            {(['summary', 'overview', 'roles', 'implementation', 'risks'] as const).map((tab) => (
-                                                <TabsTrigger key={tab} value={tab} className="capitalize">
-                                                    {tab}
-                                                </TabsTrigger>
-                                            ))}
-                                        </TabsList>
-
-                                        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4 sm:px-6 sm:pb-6 min-h-0">
-                                            <TabsContent value="summary" className="mt-0 space-y-6">
-                                                <Card>
-                                                    <CardHeader>
-                                                        <div className="flex items-center justify-between">
-                                                            <CardTitle className="text-lg flex items-center gap-2">
-                                                                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                                    <Sparkles className="w-4 h-4 text-primary" />
-                                                                </div>
-                                                                What You Told Us
-                                                            </CardTitle>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => setIsModalOpen(true)}
-                                                            >
-                                                                <Edit className="h-3.5 w-3.5 mr-1" />
-                                                                Edit
-                                                            </Button>
+                                    {/* Scrollable Content with Accordions */}
+                                    <ScrollArea className="flex-1 min-h-0">
+                                        <div className="pr-4">
+                                            <Accordion type="multiple" defaultValue={["role-details", "skills-requirements", "what-you-told-us"]} className="w-full space-y-4">
+                                                {/* Role/Project Details */}
+                                                <AccordionItem value="role-details" className="rounded-lg px-4 bg-card">
+                                                    <AccordionTrigger className="hover:no-underline">
+                                                        <div className="flex items-center gap-3">
+                                                            <Briefcase className="w-5 h-5 text-primary" />
+                                                            <div className="text-left">
+                                                                <h3 className="text-lg font-semibold">
+                                                                    {analysisResult.preview.service_type === "Projects on Demand" ? "Project Details" : "Role Details"}
+                                                                </h3>
+                                                                <p className="text-sm text-muted-foreground">
+                                                                    {analysisResult.preview.service_type === "Projects on Demand"
+                                                                        ? "View all project specifications"
+                                                                        : "View role responsibilities, tasks, and requirements"}
+                                                                </p>
+                                                            </div>
                                                         </div>
-                                                    </CardHeader>
-                                                    <CardContent>
+                                                    </AccordionTrigger>
+                                                    <AccordionContent className="pt-4 pb-6">
+                                                        <div className="space-y-6">
+                                                            {/* Role/Project Information */}
+                                                            {analysisResult.full_package?.service_structure && (
+                                                                <div className="space-y-4">
+                                                                    {/* Dedicated VA Role */}
+                                                                    {analysisResult.preview.service_type === "Dedicated VA" && analysisResult.full_package.service_structure.dedicated_va_role && (
+                                                                        <div className="space-y-4">
+                                                                            <div>
+                                                                                <h4 className="text-base font-semibold mb-2 flex items-center gap-2">
+                                                                                    <Briefcase className="w-4 h-4 text-primary" />
+                                                                                    {analysisResult.full_package.service_structure.dedicated_va_role.title}
+                                                                                </h4>
+                                                                                <p className="text-sm text-muted-foreground mb-3">
+                                                                                    {analysisResult.full_package.service_structure.dedicated_va_role.hours_per_week} hrs/week
+                                                                                </p>
+                                                                                {analysisResult.full_package.service_structure.dedicated_va_role.core_responsibility && (
+                                                                                    <p className="text-base leading-relaxed mb-4">
+                                                                                        {analysisResult.full_package.service_structure.dedicated_va_role.core_responsibility}
+                                                                                    </p>
+                                                                                )}
+                                                                            </div>
+                                                                            {analysisResult.full_package.service_structure.dedicated_va_role.task_allocation?.from_intake && analysisResult.full_package.service_structure.dedicated_va_role.task_allocation.from_intake.length > 0 && (
+                                                                                <div>
+                                                                                    <p className="text-sm font-semibold text-muted-foreground uppercase mb-2">Tasks</p>
+                                                                                    <ul className="list-disc pl-5 space-y-1 text-base">
+                                                                                        {analysisResult.full_package.service_structure.dedicated_va_role.task_allocation.from_intake.map((task: string, i: number) => (
+                                                                                            <li key={i}>{task}</li>
+                                                                                        ))}
+                                                                                    </ul>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
 
-                                                        <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                                                            {/* Company Stage */}
-                                                            <Card className="p-3">
+                                                                    {/* Unicorn VA - Core Role */}
+                                                                    {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package.service_structure.core_va_role && (
+                                                                        <div className="space-y-4">
+                                                                            <div>
+                                                                                <h4 className="text-base font-semibold mb-2 flex items-center gap-2">
+                                                                                    <Briefcase className="w-4 h-4 text-primary" />
+                                                                                    {analysisResult.full_package.service_structure.core_va_role.title}
+                                                                                </h4>
+                                                                                <p className="text-sm text-muted-foreground mb-3">
+                                                                                    {analysisResult.full_package.service_structure.core_va_role.hours_per_week} hrs/week
+                                                                                </p>
+                                                                                {analysisResult.full_package.service_structure.core_va_role.core_responsibility && (
+                                                                                    <p className="text-base leading-relaxed mb-4">
+                                                                                        {analysisResult.full_package.service_structure.core_va_role.core_responsibility}
+                                                                                    </p>
+                                                                                )}
+                                                                            </div>
+                                                                            {analysisResult.full_package.service_structure.core_va_role.recurring_tasks && analysisResult.full_package.service_structure.core_va_role.recurring_tasks.length > 0 && (
+                                                                                <div>
+                                                                                    <p className="text-sm font-semibold text-muted-foreground uppercase mb-2">Recurring Tasks</p>
+                                                                                    <ul className="list-disc pl-5 space-y-1 text-base">
+                                                                                        {analysisResult.full_package.service_structure.core_va_role.recurring_tasks.map((task: string, i: number) => (
+                                                                                            <li key={i}>{task}</li>
+                                                                                        ))}
+                                                                                    </ul>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Projects on Demand */}
+                                                                    {analysisResult.preview.service_type === "Projects on Demand" && (
+                                                                        <div className="space-y-4">
+                                                                            {(analysisResult.full_package.detailed_specifications?.projects || analysisResult.full_package.service_structure.projects || []).map((project: any, idx: number) => (
+                                                                                <div key={idx} className="border-l-2 border-primary/20 pl-4 py-2">
+                                                                                    <h4 className="text-base font-semibold mb-1">{project.project_name}</h4>
+                                                                                    <p className="text-sm text-muted-foreground mb-2">
+                                                                                        {project.estimated_hours || project.timeline?.estimated_hours} hrs • {typeof project.timeline === "string" ? project.timeline : project.timeline?.duration || "N/A"}
+                                                                                    </p>
+                                                                                    {project.objective && (
+                                                                                        <p className="text-base leading-relaxed mb-2">{project.objective}</p>
+                                                                                    )}
+                                                                                    {project.deliverables?.length > 0 && (
+                                                                                        <div>
+                                                                                            <p className="text-sm font-semibold text-muted-foreground uppercase mb-1">Deliverables</p>
+                                                                                            <ul className="list-disc pl-5 space-y-1 text-sm">
+                                                                                                {project.deliverables.map((del: any, i: number) => (
+                                                                                                    <li key={i}>{typeof del === "string" ? del : del.item || del}</li>
+                                                                                                ))}
+                                                                                            </ul>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Supporting Roles for Unicorn VA */}
+                                                                    {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package.service_structure.team_support_areas && Array.isArray(analysisResult.full_package.service_structure.team_support_areas) && analysisResult.full_package.service_structure.team_support_areas.length > 0 && (
+                                                                        <div className="space-y-3 mt-4">
+                                                                            <h4 className="text-base font-semibold">Supporting Roles</h4>
+                                                                            {analysisResult.full_package.service_structure.team_support_areas.map((support: any, idx: number) => (
+                                                                                <div key={idx} className="border-l-2 border-primary/20 pl-4 py-2">
+                                                                                    <h5 className="text-sm font-semibold">{support.skill_category}</h5>
+                                                                                    <p className="text-xs text-muted-foreground">{support.estimated_hours_monthly} hrs/month</p>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+
+                                                        </div>
+                                                    </AccordionContent>
+                                                </AccordionItem>
+
+                                                {/* Skills & Requirements */}
+                                                <AccordionItem value="skills-requirements" className="rounded-lg px-4 bg-card">
+                                                    <AccordionTrigger className="hover:no-underline">
+                                                        <div className="flex items-center gap-3">
+                                                            <Target className="w-5 h-5 text-primary" />
+                                                            <div className="text-left">
+                                                                <h3 className="text-lg font-semibold">Skills & Requirements</h3>
+                                                                <p className="text-sm text-muted-foreground">Required and nice-to-have skills</p>
+                                                            </div>
+                                                        </div>
+                                                    </AccordionTrigger>
+                                                    <AccordionContent className="pt-4 pb-6">
+                                                        <div className="space-y-4">
+                                                            {/* Dedicated VA Skills */}
+                                                            {analysisResult.preview.service_type === "Dedicated VA" && analysisResult.full_package?.service_structure?.dedicated_va_role?.skill_requirements && (
+                                                                <div className="space-y-3">
+                                                                    {analysisResult.full_package.service_structure.dedicated_va_role.skill_requirements.required?.length > 0 && (
+                                                                        <div>
+                                                                            <p className="text-base font-semibold mb-2">Required Skills</p>
+                                                                            <div className="flex flex-wrap gap-2">
+                                                                                {analysisResult.full_package.service_structure.dedicated_va_role.skill_requirements.required.map((skill: string, i: number) => (
+                                                                                    <Badge key={i} variant="default" className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-base">
+                                                                                        {skill}
+                                                                                    </Badge>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                    {analysisResult.full_package.service_structure.dedicated_va_role.skill_requirements.nice_to_have?.length > 0 && (
+                                                                        <div>
+                                                                            <p className="text-base font-semibold mb-2">Nice to Have</p>
+                                                                            <div className="flex flex-wrap gap-2">
+                                                                                {analysisResult.full_package.service_structure.dedicated_va_role.skill_requirements.nice_to_have.map((skill: string, i: number) => (
+                                                                                    <Badge key={i} variant="outline" className="text-base">{skill}</Badge>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Unicorn VA Skills */}
+                                                            {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package?.service_structure?.core_va_role?.skill_requirements && (
+                                                                <div className="space-y-3">
+                                                                    {analysisResult.full_package.service_structure.core_va_role.skill_requirements.required?.length > 0 && (
+                                                                        <div>
+                                                                            <p className="text-base font-semibold mb-2">Required Skills</p>
+                                                                            <div className="flex flex-wrap gap-2">
+                                                                                {analysisResult.full_package.service_structure.core_va_role.skill_requirements.required.map((skill: string, i: number) => (
+                                                                                    <Badge key={i} variant="default" className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-base">
+                                                                                        {skill}
+                                                                                    </Badge>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                    {analysisResult.full_package.service_structure.core_va_role.skill_requirements.nice_to_have?.length > 0 && (
+                                                                        <div>
+                                                                            <p className="text-base font-semibold mb-2">Nice to Have</p>
+                                                                            <div className="flex flex-wrap gap-2">
+                                                                                {analysisResult.full_package.service_structure.core_va_role.skill_requirements.nice_to_have.map((skill: string, i: number) => (
+                                                                                    <Badge key={i} variant="outline" className="text-base">{skill}</Badge>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Project Skills */}
+                                                            {analysisResult.preview.service_type === "Projects on Demand" && analysisResult.full_package?.service_structure?.projects && (
+                                                                <div className="space-y-4">
+                                                                    {analysisResult.full_package.service_structure.projects.map((project: any, idx: number) => (
+                                                                        project.skills_required && project.skills_required.length > 0 ? (
+                                                                            <div key={idx}>
+                                                                                <p className="text-base font-semibold mb-2">{project.project_name}</p>
+                                                                                <div className="flex flex-wrap gap-2">
+                                                                                    {project.skills_required.map((skill: string, i: number) => (
+                                                                                        <Badge key={i} variant="default" className="text-base">{skill}</Badge>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+                                                                        ) : null
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </AccordionContent>
+                                                </AccordionItem>
+
+                                                {/* What You Told Us */}
+                                                {summary && (
+                                                    <AccordionItem value="what-you-told-us" className="rounded-lg px-4 bg-card">
+                                                        <AccordionTrigger className="hover:no-underline">
+                                                            <div className="flex items-center gap-3">
+                                                                <Sparkles className="w-5 h-5 text-primary" />
+                                                                <div className="text-left">
+                                                                    <h3 className="text-lg font-semibold">What You Told Us</h3>
+                                                                    <p className="text-sm text-muted-foreground">Company stage, outcomes, and bottlenecks</p>
+                                                                </div>
+                                                            </div>
+                                                        </AccordionTrigger>
+                                                        <AccordionContent className="pt-4 pb-6">
+                                                            <div className="space-y-4">
+                                                                {/* Company Stage */}
                                                                 <div className="flex items-start gap-3">
-                                                                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                        <TrendingUp className="w-4.5 h-4.5 text-primary" />
-                                                                    </div>
+                                                                    <TrendingUp className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                                                                     <div className="flex-1 min-w-0">
                                                                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Company Stage</span>
                                                                         <p className="text-base mt-0.5 font-medium">{summary?.company_stage}</p>
                                                                     </div>
                                                                 </div>
-                                                            </Card>
-
-                                                            {/* 90-Day Outcome */}
-                                                            <Card className="p-3">
+                                                                {/* 90-Day Outcome */}
                                                                 <div className="flex items-start gap-3">
-                                                                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                        <Target className="w-4.5 h-4.5 text-primary" />
-                                                                    </div>
+                                                                    <Target className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                                                                     <div className="flex-1 min-w-0">
                                                                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">90-Day Outcome</span>
                                                                         <p className="text-base mt-0.5 font-medium leading-relaxed">{summary?.outcome_90d}</p>
                                                                     </div>
                                                                 </div>
-                                                            </Card>
-
-                                                            {/* Primary Bottleneck */}
-                                                            <Card className="p-3">
+                                                                {/* Primary Bottleneck */}
                                                                 <div className="flex items-start gap-3">
-                                                                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                        <AlertCircle className="w-4.5 h-4.5 text-primary" />
-                                                                    </div>
+                                                                    <AlertCircle className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                                                                     <div className="flex-1 min-w-0">
                                                                         <div className="flex items-center gap-2 mb-1">
                                                                             <span className="text-xs uppercase tracking-wide text-muted-foreground">Primary Bottleneck</span>
-                                                                            <Badge variant="destructive">High Priority</Badge>
+                                                                            <Badge variant="destructive" className="text-xs">High Priority</Badge>
                                                                         </div>
-                                                                        <p className="text-base font-medium leading-relaxed">
-                                                                            {summary?.primary_bottleneck}
-                                                                        </p>
+                                                                        <p className="text-base font-medium leading-relaxed">{summary?.primary_bottleneck}</p>
                                                                     </div>
                                                                 </div>
-                                                            </Card>
 
-                                                            {/* Workflow Analysis */}
-                                                            <Card className="p-3">
-                                                                <div className="flex items-start gap-3">
-                                                                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                        <Network className="w-4.5 h-4.5 text-primary" />
-                                                                    </div>
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1 block">Workflow Analysis</span>
-                                                                        <p className="text-base leading-relaxed">{summary?.workflow_analysis}</p>
-                                                                    </div>
-                                                                </div>
-                                                            </Card>
-
-                                                            {/* SOP Status */}
-                                                            <Card className="p-3">
-                                                                <div className="flex items-start gap-3">
-                                                                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                        <FileText className="w-4.5 h-4.5 text-primary" />
-                                                                    </div>
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1 block">
-                                                                            Documentation Status
-                                                                        </span>
-                                                                        <p className="text-base leading-relaxed mb-3">
-                                                                            {typeof summary?.sop_status === 'string'
-                                                                                ? summary.sop_status
-                                                                                : summary?.sop_status?.summary}
-                                                                        </p>
-                                                                        {summary?.sop_status?.has_sops && (
-                                                                            <div className="space-y-3 mt-2">
-                                                                                {summary.sop_status.pain_points?.length > 0 && (
-                                                                                    <div>
-                                                                                        <p className="text-xs font-semibold mb-1.5 flex items-center gap-1">
-                                                                                            <AlertCircle className="w-3 h-3" />
-                                                                                            Process Pain Points
-                                                                                        </p>
-                                                                                        <ul className="space-y-1">
-                                                                                            {summary.sop_status.pain_points.map((point: string, idx: number) => (
-                                                                                                <li key={idx} className="text-xs text-muted-foreground flex items-start gap-1.5 pl-2">
-                                                                                                    <span className="text-destructive mt-0.5">•</span>
-                                                                                                    <span>{point}</span>
-                                                                                                </li>
-                                                                                            ))}
-                                                                                        </ul>
-                                                                                    </div>
-                                                                                )}
-                                                                                {summary.sop_status.documentation_gaps?.length > 0 && (
-                                                                                    <div>
-                                                                                        <p className="text-xs font-semibold mb-1.5 flex items-center gap-1">
-                                                                                            <FileText className="w-3 h-3" />
-                                                                                            Documentation Gaps
-                                                                                        </p>
-                                                                                        <ul className="space-y-1">
-                                                                                            {summary.sop_status.documentation_gaps.map((gap: string, idx: number) => (
-                                                                                                <li key={idx} className="text-xs text-muted-foreground flex items-start gap-1.5 pl-2">
-                                                                                                    <span className="text-amber-500 mt-0.5">•</span>
-                                                                                                    <span>{gap}</span>
-                                                                                                </li>
-                                                                                            ))}
-                                                                                        </ul>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </Card>
-
-                                                            {/* Role Recommendation */}
-                                                            {summary?.role_recommendation && (
-                                                                <Card className="p-3">
-                                                                    <div className="flex items-start gap-3">
-                                                                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                            <Target className="w-4.5 h-4.5 text-primary" />
-                                                                        </div>
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1 block">Role Recommendation</span>
-                                                                            <p className="text-base leading-relaxed">{summary.role_recommendation}</p>
-                                                                        </div>
-                                                                    </div>
-                                                                </Card>
-                                                            )}
-
-                                                            {/* Key Insights */}
-                                                            {analysisResult.full_package?.executive_summary?.key_insights && analysisResult.full_package.executive_summary.key_insights.length > 0 && (
-                                                                <Card className="p-3">
-                                                                    <div className="flex items-start gap-3">
-                                                                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                            <Sparkles className="w-4.5 h-4.5 text-primary" />
-                                                                        </div>
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 block">Key Insights</span>
-                                                                            <ul className="space-y-2">
-                                                                                {analysisResult.full_package.executive_summary.key_insights.map((insight: string, idx: number) => (
-                                                                                    <li key={idx} className="text-base leading-relaxed flex items-start gap-2">
-                                                                                        <span className="text-primary mt-0.5 flex-shrink-0">•</span>
-                                                                                        <span>{insight}</span>
-                                                                                    </li>
-                                                                                ))}
-                                                                            </ul>
-                                                                        </div>
-                                                                    </div>
-                                                                </Card>
-                                                            )}
-                                                        </div>
-
-                                                        {/* Quick stats footer */}
-                                                        <Separator className="mt-5" />
-                                                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                                            <span>Analysis generated {new Date().toLocaleDateString()}</span>
-                                                            <span className="flex items-center gap-1">
-                                                                <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                                                                Verified
-                                                            </span>
-                                                        </div>
-                                                    </CardContent>
-                                                </Card>
-                                            </TabsContent>
-
-                                            <TabsContent value="overview" className="mt-0 space-y-6">
-                                                {/* Service Type */}
-                                                {analysisResult.preview.service_type && (
-                                                    <Card>
-                                                        <CardHeader>
-                                                            <CardDescription className="text-xs font-semibold uppercase tracking-wide">
-                                                                Recommended Service Type
-                                                            </CardDescription>
-                                                        </CardHeader>
-                                                        <CardContent>
-                                                            <div className="flex items-center gap-3 mb-3">
-                                                                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                    <Sparkles className="w-4.5 h-4.5 text-primary" />
-                                                                </div>
-                                                                <CardTitle className="text-xl">
-                                                                    {analysisResult.preview.service_type}
-                                                                </CardTitle>
-                                                            </div>
-                                                            {analysisResult.preview.service_reasoning && (
-                                                                <p className="text-base leading-relaxed mb-4">
-                                                                    {analysisResult.preview.service_reasoning}
-                                                                </p>
-                                                            )}
-                                                            {analysisResult.preview.service_confidence && (
-                                                                <div className="space-y-2">
-                                                                    <div className="flex items-center justify-between">
-                                                                        <span className="text-xs font-semibold text-muted-foreground uppercase">
-                                                                            Confidence
-                                                                        </span>
-                                                                        <span className="text-base font-semibold">
-                                                                            {analysisResult.preview.service_confidence}
-                                                                        </span>
-                                                                    </div>
-                                                                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                                                                        <div
-                                                                            className={`h-full ${getConfidenceColor(analysisResult.preview.service_confidence)} transition-all duration-500 rounded-full`}
-                                                                            style={{ width: `${getConfidenceValue(analysisResult.preview.service_confidence)}%` }}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </CardContent>
-                                                    </Card>
-                                                )}
-
-                                                {/* Key Risks */}
-                                                {analysisResult.preview.key_risks && analysisResult.preview.key_risks.length > 0 && (
-                                                    <Card>
-                                                        <CardHeader>
-                                                            <div className="flex items-center gap-2">
-                                                                <ShieldAlert className="w-4 h-4 text-destructive" />
-                                                                <CardTitle className="text-lg">Key Risks</CardTitle>
-                                                            </div>
-                                                            <CardDescription>
-                                                                Important risks to be aware of
-                                                            </CardDescription>
-                                                        </CardHeader>
-                                                        <CardContent>
-                                                            <ul className="space-y-2">
-                                                                {analysisResult.preview.key_risks.map((risk: string, idx: number) => (
-                                                                    <li key={idx} className="flex items-start gap-2 text-base">
-                                                                        <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
-                                                                        <span className="leading-relaxed">{risk}</span>
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </CardContent>
-                                                    </Card>
-                                                )}
-
-                                                {/* Critical Questions */}
-                                                {analysisResult.preview.critical_questions && analysisResult.preview.critical_questions.length > 0 && (
-                                                    <Card>
-                                                        <CardHeader>
-                                                            <div className="flex items-center gap-2">
-                                                                <AlertCircle className="w-4 h-4 text-primary" />
-                                                                <CardTitle className="text-lg">Critical Questions</CardTitle>
-                                                            </div>
-                                                            <CardDescription>
-                                                                Questions that need clarification
-                                                            </CardDescription>
-                                                        </CardHeader>
-                                                        <CardContent>
-                                                            <ul className="space-y-3">
-                                                                {analysisResult.preview.critical_questions.map((question: string, idx: number) => (
-                                                                    <li key={idx} className="flex items-start gap-2 text-base">
-                                                                        <span className="font-semibold text-primary mt-0.5 flex-shrink-0">Q{idx + 1}:</span>
-                                                                        <span className="leading-relaxed">{question}</span>
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </CardContent>
-                                                    </Card>
-                                                )}
-
-                                                {/* Role/Project Information */}
-                                                {analysisResult.preview.service_type === "Dedicated VA" && analysisResult.preview.role_title && (
-                                                    <Card>
-                                                        <CardHeader>
-                                                            <CardDescription className="text-xs font-semibold uppercase tracking-wide">
-                                                                Role
-                                                            </CardDescription>
-                                                        </CardHeader>
-                                                        <CardContent>
-                                                            <div className="flex items-center gap-3 mb-4">
-                                                                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                    <Briefcase className="w-4.5 h-4.5 text-primary" />
-                                                                </div>
-                                                                <CardTitle className="text-xl">
-                                                                    {analysisResult.preview.role_title}
-                                                                </CardTitle>
-                                                            </div>
-                                                            <div className="space-y-3">
-                                                                {analysisResult.preview.hours_per_week && (
-                                                                    <div>
-                                                                        <span className="text-xs font-semibold text-muted-foreground uppercase">
-                                                                            Hours per Week:
-                                                                        </span>
-                                                                        <span className="text-base ml-2">
-                                                                            {analysisResult.preview.hours_per_week}
-                                                                        </span>
+                                                                {/* Key Risks */}
+                                                                {analysisResult.preview.key_risks && analysisResult.preview.key_risks.length > 0 && (
+                                                                    <div className="pt-4 border-t">
+                                                                        <h4 className="text-base font-semibold mb-3 flex items-center gap-2">
+                                                                            <ShieldAlert className="w-4 h-4 text-destructive" />
+                                                                            Key Risks
+                                                                        </h4>
+                                                                        <ul className="space-y-2">
+                                                                            {analysisResult.preview.key_risks.map((risk: string, idx: number) => (
+                                                                                <li key={idx} className="flex items-start gap-2 text-base">
+                                                                                    <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
+                                                                                    <span className="leading-relaxed">{risk}</span>
+                                                                                </li>
+                                                                            ))}
+                                                                        </ul>
                                                                     </div>
                                                                 )}
-                                                                {analysisResult.preview.primary_outcome && (
-                                                                    <div>
-                                                                        <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                                                                            Primary Outcome
-                                                                        </p>
-                                                                        <p className="text-base leading-relaxed">
-                                                                            {analysisResult.preview.primary_outcome}
-                                                                        </p>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </CardContent>
-                                                    </Card>
-                                                )}
 
-                                                {/* Unicorn VA Service */}
-                                                {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.preview.core_va_title && (
-                                                    <Card>
-                                                        <CardHeader>
-                                                            <CardDescription className="text-xs font-semibold uppercase tracking-wide">
-                                                                Core Role
-                                                            </CardDescription>
-                                                        </CardHeader>
-                                                        <CardContent>
-                                                            <div className="flex items-center gap-3 mb-4">
-                                                                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                    <Briefcase className="w-4.5 h-4.5 text-primary" />
-                                                                </div>
-                                                                <CardTitle className="text-xl">
-                                                                    {analysisResult.preview.core_va_title}
-                                                                </CardTitle>
-                                                            </div>
-                                                            <div className="space-y-3">
-                                                                {analysisResult.preview.core_va_hours && (
-                                                                    <div>
-                                                                        <span className="text-xs font-semibold text-muted-foreground uppercase">
-                                                                            Hours per Week:
-                                                                        </span>
-                                                                        <span className="text-base ml-2">
-                                                                            {analysisResult.preview.core_va_hours}
-                                                                        </span>
-                                                                    </div>
-                                                                )}
-                                                                {analysisResult.preview.team_support_areas && (
-                                                                    <div>
-                                                                        <span className="text-xs font-semibold text-muted-foreground uppercase">
-                                                                            Team Support Areas:
-                                                                        </span>
-                                                                        <span className="text-base ml-2">
-                                                                            {analysisResult.preview.team_support_areas}
-                                                                        </span>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </CardContent>
-                                                    </Card>
-                                                )}
-
-                                                {/* Projects on Demand */}
-                                                {analysisResult.preview.service_type === "Projects on Demand" && (
-                                                    <Card>
-                                                        <CardHeader>
-                                                            <CardDescription className="text-xs font-semibold uppercase tracking-wide">
-                                                                Project Overview
-                                                            </CardDescription>
-                                                        </CardHeader>
-                                                        <CardContent>
-                                                            <div className="flex items-center gap-3 mb-4">
-                                                                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                    <Briefcase className="w-4.5 h-4.5 text-primary" />
-                                                                </div>
-                                                                <CardTitle className="text-xl">
-                                                                    {analysisResult.preview.project_count || 0} Projects
-                                                                </CardTitle>
-                                                            </div>
-                                                            <div className="space-y-3">
-                                                                {analysisResult.preview.total_hours && (
-                                                                    <div>
-                                                                        <span className="text-xs font-semibold text-muted-foreground uppercase">
-                                                                            Total Hours:
-                                                                        </span>
-                                                                        <span className="text-base ml-2">
-                                                                            {analysisResult.preview.total_hours}
-                                                                        </span>
-                                                                    </div>
-                                                                )}
-                                                                {analysisResult.preview.estimated_timeline && (
-                                                                    <div>
-                                                                        <span className="text-xs font-semibold text-muted-foreground uppercase">
-                                                                            Estimated Timeline:
-                                                                        </span>
-                                                                        <span className="text-base ml-2">
-                                                                            {analysisResult.preview.estimated_timeline}
-                                                                        </span>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </CardContent>
-                                                    </Card>
-                                                )}
-                                            </TabsContent>
-
-                                            <TabsContent value="roles" className="mt-0 space-y-4">
-                                                {analysisResult.full_package?.service_structure && (
-                                                    <div className="space-y-4">
-                                                        {/* Dedicated VA Role */}
-                                                        {analysisResult.preview.service_type === "Dedicated VA" && analysisResult.full_package.service_structure.dedicated_va_role && (
-                                                            <details className="group border border-[var(--border-color)] rounded-lg overflow-hidden">
-                                                                <summary className="cursor-pointer px-4 py-3 bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/80 transition-colors list-none [&::-webkit-details-marker]:hidden">
-                                                                    <div className="flex items-center justify-between">
-                                                                        <div className="flex-1">
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Dedicated VA Role
-                                                                            </p>
-                                                                            <div className="flex items-center gap-3 mb-2">
-                                                                                <div className="w-9 h-9 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
-                                                                                    <Briefcase className="w-4.5 h-4.5 text-[var(--primary)] dark:text-[var(--accent)]" />
-                                                                                </div>
-                                                                                <h4 className="text-lg font-bold text-[var(--primary)]">
-                                                                                    {analysisResult.full_package.service_structure.dedicated_va_role.title}
-                                                                                </h4>
-                                                                            </div>
-                                                                            <p className="text-base text-[var(--text-secondary)]">
-                                                                                {analysisResult.full_package.service_structure.dedicated_va_role.hours_per_week} hrs/week
-                                                                            </p>
-                                                                        </div>
-                                                                        <svg
-                                                                            className="w-5 h-5 text-[var(--text-secondary)] transition-transform group-open:rotate-180"
-                                                                            fill="none"
-                                                                            stroke="currentColor"
-                                                                            viewBox="0 0 24 24"
-                                                                        >
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                                        </svg>
-                                                                    </div>
-                                                                </summary>
-                                                                <div className="p-4 space-y-4">
-                                                                    {analysisResult.full_package.service_structure.dedicated_va_role.core_responsibility && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Core Responsibility
-                                                                            </p>
-                                                                            <p className="text-base text-[var(--text-primary)] leading-relaxed">
-                                                                                {analysisResult.full_package.service_structure.dedicated_va_role.core_responsibility}
-                                                                            </p>
-                                                                        </div>
-                                                                    )}
-                                                                    {analysisResult.full_package.service_structure.dedicated_va_role.task_allocation?.from_intake && analysisResult.full_package.service_structure.dedicated_va_role.task_allocation.from_intake.length > 0 && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Tasks
-                                                                            </p>
-                                                                            <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
-                                                                                {analysisResult.full_package.service_structure.dedicated_va_role.task_allocation.from_intake.map((task: string, i: number) => (
-                                                                                    <li key={i}>{task}</li>
-                                                                                ))}
-                                                                            </ul>
-                                                                        </div>
-                                                                    )}
-                                                                    {analysisResult.full_package.service_structure.dedicated_va_role.skill_requirements && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Skill Requirements
-                                                                            </p>
-                                                                            <div className="space-y-3">
-                                                                                {analysisResult.full_package.service_structure.dedicated_va_role.skill_requirements.required?.length > 0 && (
-                                                                                    <div>
-                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
-                                                                                            Required
-                                                                                        </p>
-                                                                                        <div className="flex flex-wrap gap-2">
-                                                                                            {analysisResult.full_package.service_structure.dedicated_va_role.skill_requirements.required.map((skill: string, i: number) => (
-                                                                                                <span key={i} className="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs rounded-md">
-                                                                                                    {skill}
-                                                                                                </span>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-                                                                                {analysisResult.full_package.service_structure.dedicated_va_role.skill_requirements.nice_to_have?.length > 0 && (
-                                                                                    <div>
-                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
-                                                                                            Nice to Have
-                                                                                        </p>
-                                                                                        <div className="flex flex-wrap gap-2">
-                                                                                            {analysisResult.full_package.service_structure.dedicated_va_role.skill_requirements.nice_to_have.map((skill: string, i: number) => (
-                                                                                                <span key={i} className="px-2 py-1 bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 text-[var(--primary)] dark:text-[var(--accent)] text-xs rounded-md">
-                                                                                                    {skill}
-                                                                                                </span>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </details>
-                                                        )}
-
-                                                        {/* Detailed JD for Dedicated VA */}
-                                                        {analysisResult.preview.service_type === "Dedicated VA" && analysisResult.full_package.detailed_specifications && (
-                                                            <details className="group border border-[var(--border-color)] rounded-lg overflow-hidden mt-4">
-                                                                <summary className="cursor-pointer px-4 py-3 bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/80 transition-colors list-none [&::-webkit-details-marker]:hidden">
-                                                                    <div className="flex items-center justify-between">
-                                                                        <div>
-                                                                            <h4 className="text-base font-semibold text-[var(--primary)]">
-                                                                                {analysisResult.full_package.detailed_specifications.title || "Full Job Description"}
+                                                                {/* Critical Questions */}
+                                                                {analysisResult.preview.critical_questions && analysisResult.preview.critical_questions.length > 0 && (
+                                                                    <div className="pt-4 border-t">
+                                                                        <div className="flex items-center justify-between mb-3">
+                                                                            <h4 className="text-base font-semibold flex items-center gap-2">
+                                                                                <AlertCircle className="w-4 h-4 text-primary" />
+                                                                                Critical Questions
                                                                             </h4>
-                                                                            <p className="text-xs text-[var(--text-secondary)] mt-1">
-                                                                                Mission, Outcomes, Responsibilities, Skills, KPIs & More
-                                                                            </p>
+                                                                            <Button
+                                                                                variant="default"
+                                                                                size="sm"
+                                                                                disabled
+                                                                                className="gap-2 bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                                            >
+                                                                                <SparklesIcon className="h-4 w-4" />
+                                                                                Answer with AI
+                                                                            </Button>
                                                                         </div>
-                                                                        <svg
-                                                                            className="w-5 h-5 text-[var(--text-secondary)] transition-transform group-open:rotate-180"
-                                                                            fill="none"
-                                                                            stroke="currentColor"
-                                                                            viewBox="0 0 24 24"
-                                                                        >
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                                        </svg>
+                                                                        <ul className="space-y-3">
+                                                                            {analysisResult.preview.critical_questions.map((question: string, idx: number) => (
+                                                                                <li key={idx} className="flex items-start gap-2 text-base">
+                                                                                    <span className="font-semibold text-primary mt-0.5 flex-shrink-0">Q{idx + 1}:</span>
+                                                                                    <span className="leading-relaxed">{question}</span>
+                                                                                </li>
+                                                                            ))}
+                                                                        </ul>
                                                                     </div>
-                                                                </summary>
-                                                                <div className="p-4 space-y-4">
-                                                                    {analysisResult.full_package.detailed_specifications.mission_statement && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Mission Statement
-                                                                            </p>
-                                                                            <p className="text-base text-[var(--text-primary)] leading-relaxed">
-                                                                                {analysisResult.full_package.detailed_specifications.mission_statement}
-                                                                            </p>
-                                                                        </div>
-                                                                    )}
-                                                                    {analysisResult.full_package.detailed_specifications.core_outcomes && analysisResult.full_package.detailed_specifications.core_outcomes.length > 0 && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Core Outcomes
-                                                                            </p>
-                                                                            <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
-                                                                                {analysisResult.full_package.detailed_specifications.core_outcomes.map((outcome: string, i: number) => (
-                                                                                    <li key={i}>{outcome}</li>
-                                                                                ))}
-                                                                            </ul>
-                                                                        </div>
-                                                                    )}
-                                                                    {analysisResult.full_package.detailed_specifications.skills_required && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Skills Required
-                                                                            </p>
-                                                                            <div className="space-y-3">
-                                                                                {analysisResult.full_package.detailed_specifications.skills_required.technical?.length > 0 && (
-                                                                                    <div>
-                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
-                                                                                            Technical
-                                                                                        </p>
-                                                                                        <div className="flex flex-wrap gap-2">
-                                                                                            {analysisResult.full_package.detailed_specifications.skills_required.technical.map((skill: any, i: number) => (
-                                                                                                <span key={i} className="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs rounded-md">
-                                                                                                    {typeof skill === "string" ? skill : skill.skill || ""}
-                                                                                                </span>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
+                                                                )}
+                                                            </div>
+                                                        </AccordionContent>
+                                                    </AccordionItem>
+                                                )}
+
+                                                {/* Implementation */}
+                                                {implementationPlan && (
+                                                    <AccordionItem value="implementation" className="rounded-lg px-4 bg-card">
+                                                        <AccordionTrigger className="hover:no-underline">
+                                                            <div className="flex items-center gap-3">
+                                                                <FileText className="w-5 h-5 text-primary" />
+                                                                <div className="text-left">
+                                                                    <h3 className="text-lg font-semibold">Implementation</h3>
+                                                                    <p className="text-sm text-muted-foreground">Next steps and onboarding roadmap</p>
                                                                 </div>
-                                                            </details>
-                                                        )}
-
-                                                        {/* Unicorn VA Service - Core VA Role */}
-                                                        {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package.service_structure.core_va_role && (
-                                                            <details className="group border border-[var(--border-color)] rounded-lg overflow-hidden">
-                                                                <summary className="cursor-pointer px-4 py-3 bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/80 transition-colors list-none [&::-webkit-details-marker]:hidden">
-                                                                    <div className="flex items-center justify-between">
-                                                                        <div className="flex-1">
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Core VA Role
-                                                                            </p>
-                                                                            <div className="flex items-center gap-3 mb-2">
-                                                                                <div className="w-9 h-9 rounded-lg bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
-                                                                                    <Briefcase className="w-4.5 h-4.5 text-[var(--primary)] dark:text-[var(--accent)]" />
-                                                                                </div>
-                                                                                <h4 className="text-lg font-bold text-[var(--primary)]">
-                                                                                    {analysisResult.full_package.service_structure.core_va_role.title}
-                                                                                </h4>
-                                                                            </div>
-                                                                            <p className="text-base text-[var(--text-secondary)]">
-                                                                                {analysisResult.full_package.service_structure.core_va_role.hours_per_week} hrs/week
-                                                                            </p>
-                                                                        </div>
-                                                                        <svg
-                                                                            className="w-5 h-5 text-[var(--text-secondary)] transition-transform group-open:rotate-180"
-                                                                            fill="none"
-                                                                            stroke="currentColor"
-                                                                            viewBox="0 0 24 24"
-                                                                        >
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                                        </svg>
-                                                                    </div>
-                                                                </summary>
-                                                                <div className="p-4 space-y-4">
-                                                                    {analysisResult.full_package.service_structure.core_va_role.core_responsibility && (
+                                                            </div>
+                                                        </AccordionTrigger>
+                                                        <AccordionContent className="pt-4 pb-6">
+                                                            <div className="space-y-6">
+                                                                {/* Implementation Plan */}
+                                                                {implementationPlan?.immediate_next_steps && implementationPlan.immediate_next_steps.length > 0 && (
                                                                         <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Core Responsibility
-                                                                            </p>
-                                                                            <p className="text-base text-[var(--text-primary)] leading-relaxed">
-                                                                                {analysisResult.full_package.service_structure.core_va_role.core_responsibility}
-                                                                            </p>
-                                                                        </div>
-                                                                    )}
-                                                                    {analysisResult.full_package.service_structure.core_va_role.recurring_tasks && analysisResult.full_package.service_structure.core_va_role.recurring_tasks.length > 0 && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Recurring Tasks
-                                                                            </p>
-                                                                            <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
-                                                                                {analysisResult.full_package.service_structure.core_va_role.recurring_tasks.map((task: string, i: number) => (
-                                                                                    <li key={i}>{task}</li>
-                                                                                ))}
-                                                                            </ul>
-                                                                        </div>
-                                                                    )}
-                                                                    {analysisResult.full_package.service_structure.core_va_role.skill_requirements && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Skill Requirements
-                                                                            </p>
+                                                                            <h4 className="text-base font-semibold mb-3">Immediate Next Steps</h4>
                                                                             <div className="space-y-3">
-                                                                                {analysisResult.full_package.service_structure.core_va_role.skill_requirements.required?.length > 0 && (
-                                                                                    <div>
-                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
-                                                                                            Required
-                                                                                        </p>
-                                                                                        <div className="flex flex-wrap gap-2">
-                                                                                            {analysisResult.full_package.service_structure.core_va_role.skill_requirements.required.map((skill: string, i: number) => (
-                                                                                                <span key={i} className="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs rounded-md">
-                                                                                                    {skill}
-                                                                                                </span>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-                                                                                {analysisResult.full_package.service_structure.core_va_role.skill_requirements.nice_to_have?.length > 0 && (
-                                                                                    <div>
-                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
-                                                                                            Nice to Have
-                                                                                        </p>
-                                                                                        <div className="flex flex-wrap gap-2">
-                                                                                            {analysisResult.full_package.service_structure.core_va_role.skill_requirements.nice_to_have.map((skill: string, i: number) => (
-                                                                                                <span key={i} className="px-2 py-1 bg-[var(--primary)]/10 dark:bg-[var(--accent)]/20 text-[var(--primary)] dark:text-[var(--accent)] text-xs rounded-md">
-                                                                                                    {skill}
-                                                                                                </span>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-                                                                    {analysisResult.full_package.service_structure.core_va_role.workflow_ownership && analysisResult.full_package.service_structure.core_va_role.workflow_ownership.length > 0 && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Workflow Ownership
-                                                                            </p>
-                                                                            <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
-                                                                                {analysisResult.full_package.service_structure.core_va_role.workflow_ownership.map((workflow: string, i: number) => (
-                                                                                    <li key={i}>{workflow}</li>
-                                                                                ))}
-                                                                            </ul>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </details>
-                                                        )}
-
-                                                        {/* Unicorn VA Service - Coordination Model */}
-                                                        {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package.service_structure.coordination_model && (
-                                                            <Card>
-                                                                <CardHeader>
-                                                                    <CardTitle className="text-lg flex items-center gap-2">
-                                                                        <Network className="w-4 h-4" />
-                                                                        Coordination Model
-                                                                    </CardTitle>
-                                                                    <CardDescription>
-                                                                        How the core VA and team specialists work together
-                                                                    </CardDescription>
-                                                                </CardHeader>
-                                                                <CardContent>
-                                                                    <p className="text-base leading-relaxed">{analysisResult.full_package.service_structure.coordination_model}</p>
-                                                                </CardContent>
-                                                            </Card>
-                                                        )}
-
-                                                        {/* Unicorn VA Service - Pros and Cons */}
-                                                        {analysisResult.preview.service_type === "Unicorn VA Service" && (analysisResult.full_package.service_structure.pros || analysisResult.full_package.service_structure.cons) && (
-                                                            <div className="grid md:grid-cols-2 gap-4">
-                                                                {analysisResult.full_package.service_structure.pros && Array.isArray(analysisResult.full_package.service_structure.pros) && analysisResult.full_package.service_structure.pros.length > 0 && (
-                                                                    <Card>
-                                                                        <CardHeader>
-                                                                            <CardTitle className="text-lg flex items-center gap-2">
-                                                                                <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                                                                Advantages
-                                                                            </CardTitle>
-                                                                        </CardHeader>
-                                                                        <CardContent>
-                                                                            <ul className="space-y-2">
-                                                                                {analysisResult.full_package.service_structure.pros.map((pro: string, i: number) => (
-                                                                                    <li key={i} className="text-base flex items-start gap-2">
-                                                                                        <span className="text-green-500 mt-0.5">•</span>
-                                                                                        <span>{pro}</span>
-                                                                                    </li>
-                                                                                ))}
-                                                                            </ul>
-                                                                        </CardContent>
-                                                                    </Card>
-                                                                )}
-                                                                {analysisResult.full_package.service_structure.cons && Array.isArray(analysisResult.full_package.service_structure.cons) && analysisResult.full_package.service_structure.cons.length > 0 && (
-                                                                    <Card>
-                                                                        <CardHeader>
-                                                                            <CardTitle className="text-lg flex items-center gap-2">
-                                                                                <AlertTriangle className="w-4 h-4 text-amber-500" />
-                                                                                Considerations
-                                                                            </CardTitle>
-                                                                        </CardHeader>
-                                                                        <CardContent>
-                                                                            <ul className="space-y-2">
-                                                                                {analysisResult.full_package.service_structure.cons.map((con: string, i: number) => (
-                                                                                    <li key={i} className="text-base flex items-start gap-2">
-                                                                                        <span className="text-amber-500 mt-0.5">•</span>
-                                                                                        <span>{con}</span>
-                                                                                    </li>
-                                                                                ))}
-                                                                            </ul>
-                                                                        </CardContent>
-                                                                    </Card>
-                                                                )}
-                                                            </div>
-                                                        )}
-
-                                                        {/* Unicorn VA Service - Scaling Path */}
-                                                        {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package.service_structure.scaling_path && (
-                                                            <Card>
-                                                                <CardHeader>
-                                                                    <CardTitle className="text-lg flex items-center gap-2">
-                                                                        <TrendingUp className="w-4 h-4" />
-                                                                        Scaling Path
-                                                                    </CardTitle>
-                                                                    <CardDescription>
-                                                                        How this structure evolves as needs grow
-                                                                    </CardDescription>
-                                                                </CardHeader>
-                                                                <CardContent>
-                                                                    <p className="text-base leading-relaxed">{analysisResult.full_package.service_structure.scaling_path}</p>
-                                                                </CardContent>
-                                                            </Card>
-                                                        )}
-
-                                                        {/* Unicorn VA Service - Alternative Consideration */}
-                                                        {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package.service_structure.alternative_consideration && (
-                                                            <Card>
-                                                                <CardHeader>
-                                                                    <CardTitle className="text-lg flex items-center gap-2">
-                                                                        <AlertCircle className="w-4 h-4" />
-                                                                        Alternative Consideration
-                                                                    </CardTitle>
-                                                                    <CardDescription>
-                                                                        When to consider a different service type
-                                                                    </CardDescription>
-                                                                </CardHeader>
-                                                                <CardContent>
-                                                                    <p className="text-base leading-relaxed">{analysisResult.full_package.service_structure.alternative_consideration}</p>
-                                                                </CardContent>
-                                                            </Card>
-                                                        )}
-
-                                                        {/* Unicorn VA Service - Team Support Areas */}
-                                                        {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package.service_structure.team_support_areas && Array.isArray(analysisResult.full_package.service_structure.team_support_areas) && analysisResult.full_package.service_structure.team_support_areas.length > 0 && (
-                                                            <div className="space-y-4">
-                                                                <h4 className="text-base font-semibold text-[var(--text-primary)] uppercase tracking-wide">
-                                                                    Team Support Areas
-                                                                </h4>
-                                                                {analysisResult.full_package.service_structure.team_support_areas.map((support: any, idx: number) => (
-                                                                    <details key={idx} className="group border border-[var(--border-color)] rounded-lg overflow-hidden">
-                                                                        <summary className="cursor-pointer px-4 py-3 bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/80 transition-colors list-none [&::-webkit-details-marker]:hidden">
-                                                                            <div className="flex items-center justify-between">
-                                                                                <div className="flex-1">
-                                                                                    <h5 className="text-base font-semibold text-[var(--primary)]">
-                                                                                        {support.skill_category}
-                                                                                    </h5>
-                                                                                    <p className="text-xs text-[var(--text-secondary)] mt-1">
-                                                                                        {support.estimated_hours_monthly} hrs/month
-                                                                                    </p>
-                                                                                </div>
-                                                                                <svg
-                                                                                    className="w-5 h-5 text-[var(--text-secondary)] transition-transform group-open:rotate-180"
-                                                                                    fill="none"
-                                                                                    stroke="currentColor"
-                                                                                    viewBox="0 0 24 24"
-                                                                                >
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                                                </svg>
-                                                                            </div>
-                                                                        </summary>
-                                                                        <div className="p-4 space-y-3">
-                                                                            {support.why_team_not_va && (
-                                                                                <div>
-                                                                                    <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                        Why Team Support
-                                                                                    </p>
-                                                                                    <p className="text-base text-[var(--text-primary)] leading-relaxed">
-                                                                                        {support.why_team_not_va}
-                                                                                    </p>
-                                                                                </div>
-                                                                            )}
-                                                                            {support.use_cases && Array.isArray(support.use_cases) && support.use_cases.length > 0 && (
-                                                                                <div>
-                                                                                    <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                        Use Cases
-                                                                                    </p>
-                                                                                    <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
-                                                                                        {support.use_cases.map((useCase: string, i: number) => (
-                                                                                            <li key={i}>{useCase}</li>
-                                                                                        ))}
-                                                                                    </ul>
-                                                                                </div>
-                                                                            )}
-                                                                            {support.deliverables && Array.isArray(support.deliverables) && support.deliverables.length > 0 && (
-                                                                                <div>
-                                                                                    <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                        Deliverables
-                                                                                    </p>
-                                                                                    <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
-                                                                                        {support.deliverables.map((deliverable: string, i: number) => (
-                                                                                            <li key={i}>{deliverable}</li>
-                                                                                        ))}
-                                                                                    </ul>
-                                                                                </div>
-                                                                            )}
-                                                                            {support.example_requests && Array.isArray(support.example_requests) && support.example_requests.length > 0 && (
-                                                                                <div>
-                                                                                    <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                        Example Requests
-                                                                                    </p>
-                                                                                    <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
-                                                                                        {support.example_requests.map((request: string, i: number) => (
-                                                                                            <li key={i}>{request}</li>
-                                                                                        ))}
-                                                                                    </ul>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </details>
-                                                                ))}
-                                                            </div>
-                                                        )}
-
-                                                        {/* Unicorn VA Service - Team Support Specs (from detailed_specifications) */}
-                                                        {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package.detailed_specifications?.team_support_specs && Array.isArray(analysisResult.full_package.detailed_specifications.team_support_specs) && analysisResult.full_package.detailed_specifications.team_support_specs.length > 0 && (
-                                                            <div className="space-y-4 mt-4">
-                                                                <h4 className="text-base font-semibold text-[var(--text-primary)] uppercase tracking-wide">
-                                                                    Team Support Specifications
-                                                                </h4>
-                                                                {analysisResult.full_package.detailed_specifications.team_support_specs.map((support: any, idx: number) => (
-                                                                    <Card key={idx}>
-                                                                        <CardHeader>
-                                                                            <CardTitle className="text-lg">{support.skill_category}</CardTitle>
-                                                                            <CardDescription>
-                                                                                {support.estimated_hours_monthly} hrs/month
-                                                                            </CardDescription>
-                                                                        </CardHeader>
-                                                                        <CardContent className="space-y-3">
-                                                                            {support.why_team_not_va && (
-                                                                                <div>
-                                                                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                                                                                        Why Team Support
-                                                                                    </p>
-                                                                                    <p className="text-base leading-relaxed">
-                                                                                        {support.why_team_not_va}
-                                                                                    </p>
-                                                                                </div>
-                                                                            )}
-                                                                            {support.use_cases && Array.isArray(support.use_cases) && support.use_cases.length > 0 && (
-                                                                                <div>
-                                                                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                                                                        Use Cases
-                                                                                    </p>
-                                                                                    <ul className="list-disc pl-5 space-y-1 text-base">
-                                                                                        {support.use_cases.map((useCase: string, i: number) => (
-                                                                                            <li key={i}>{useCase}</li>
-                                                                                        ))}
-                                                                                    </ul>
-                                                                                </div>
-                                                                            )}
-                                                                            {support.deliverables && Array.isArray(support.deliverables) && support.deliverables.length > 0 && (
-                                                                                <div>
-                                                                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                                                                        Deliverables
-                                                                                    </p>
-                                                                                    <ul className="list-disc pl-5 space-y-1 text-base">
-                                                                                        {support.deliverables.map((deliverable: string, i: number) => (
-                                                                                            <li key={i}>{deliverable}</li>
-                                                                                        ))}
-                                                                                    </ul>
-                                                                                </div>
-                                                                            )}
-                                                                            {support.example_requests && Array.isArray(support.example_requests) && support.example_requests.length > 0 && (
-                                                                                <div>
-                                                                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                                                                        Example Requests
-                                                                                    </p>
-                                                                                    <ul className="list-disc pl-5 space-y-1 text-base">
-                                                                                        {support.example_requests.map((request: string, i: number) => (
-                                                                                            <li key={i}>{request}</li>
-                                                                                        ))}
-                                                                                    </ul>
-                                                                                </div>
-                                                                            )}
-                                                                        </CardContent>
-                                                                    </Card>
-                                                                ))}
-                                                            </div>
-                                                        )}
-
-                                                        {/* Detailed JD for Unicorn VA Service - Core VA JD */}
-                                                        {analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.full_package.detailed_specifications?.core_va_jd && (
-                                                            <details className="group border border-[var(--border-color)] rounded-lg overflow-hidden mt-4">
-                                                                <summary className="cursor-pointer px-4 py-3 bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/80 transition-colors list-none [&::-webkit-details-marker]:hidden">
-                                                                    <div className="flex items-center justify-between">
-                                                                        <div>
-                                                                            <h4 className="text-base font-semibold text-[var(--primary)]">
-                                                                                {analysisResult.full_package.detailed_specifications.core_va_jd.title || "Full Job Description - Core VA"}
-                                                                            </h4>
-                                                                            <p className="text-xs text-[var(--text-secondary)] mt-1">
-                                                                                Mission, Outcomes, Responsibilities, Skills, KPIs & More
-                                                                            </p>
-                                                                        </div>
-                                                                        <svg
-                                                                            className="w-5 h-5 text-[var(--text-secondary)] transition-transform group-open:rotate-180"
-                                                                            fill="none"
-                                                                            stroke="currentColor"
-                                                                            viewBox="0 0 24 24"
-                                                                        >
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                                        </svg>
-                                                                    </div>
-                                                                </summary>
-                                                                <div className="p-4 space-y-4">
-                                                                    {analysisResult.full_package.detailed_specifications.core_va_jd.mission_statement && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Mission Statement
-                                                                            </p>
-                                                                            <p className="text-base text-[var(--text-primary)] leading-relaxed">
-                                                                                {analysisResult.full_package.detailed_specifications.core_va_jd.mission_statement}
-                                                                            </p>
-                                                                        </div>
-                                                                    )}
-                                                                    {analysisResult.full_package.detailed_specifications.core_va_jd.primary_outcome && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Primary Outcome
-                                                                            </p>
-                                                                            <p className="text-base text-[var(--text-primary)] leading-relaxed">
-                                                                                {analysisResult.full_package.detailed_specifications.core_va_jd.primary_outcome}
-                                                                            </p>
-                                                                        </div>
-                                                                    )}
-                                                                    {analysisResult.full_package.detailed_specifications.core_va_jd.core_outcomes && analysisResult.full_package.detailed_specifications.core_va_jd.core_outcomes.length > 0 && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Core Outcomes
-                                                                            </p>
-                                                                            <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
-                                                                                {analysisResult.full_package.detailed_specifications.core_va_jd.core_outcomes.map((outcome: string, i: number) => (
-                                                                                    <li key={i}>{outcome}</li>
-                                                                                ))}
-                                                                            </ul>
-                                                                        </div>
-                                                                    )}
-                                                                    {analysisResult.full_package.detailed_specifications.core_va_jd.responsibilities && Array.isArray(analysisResult.full_package.detailed_specifications.core_va_jd.responsibilities) && analysisResult.full_package.detailed_specifications.core_va_jd.responsibilities.length > 0 && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Responsibilities
-                                                                            </p>
-                                                                            <div className="space-y-3">
-                                                                                {analysisResult.full_package.detailed_specifications.core_va_jd.responsibilities.map((resp: any, i: number) => (
-                                                                                    <div key={i} className="border-l-2 pl-3 border-primary/20">
-                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
-                                                                                            {resp.category}
-                                                                                        </p>
-                                                                                        {Array.isArray(resp.details) && (
-                                                                                            <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
-                                                                                                {resp.details.map((detail: string, j: number) => (
-                                                                                                    <li key={j}>{detail}</li>
-                                                                                                ))}
-                                                                                            </ul>
-                                                                                        )}
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-                                                                    {analysisResult.full_package.detailed_specifications.core_va_jd.skills_required && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                Skills Required
-                                                                            </p>
-                                                                            <div className="space-y-3">
-                                                                                {analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.technical && Array.isArray(analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.technical) && analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.technical.length > 0 && (
-                                                                                    <div>
-                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
-                                                                                            Technical
-                                                                                        </p>
-                                                                                        <div className="flex flex-wrap gap-2">
-                                                                                            {analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.technical.map((skill: any, i: number) => (
-                                                                                                <span key={i} className="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs rounded-md">
-                                                                                                    {typeof skill === "string" ? skill : skill.skill || ""}
-                                                                                                </span>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-                                                                                {analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.soft && Array.isArray(analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.soft) && analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.soft.length > 0 && (
-                                                                                    <div>
-                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
-                                                                                            Soft Skills
-                                                                                        </p>
-                                                                                        <div className="flex flex-wrap gap-2">
-                                                                                            {analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.soft.map((skill: any, i: number) => (
-                                                                                                <span key={i} className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-md">
-                                                                                                    {typeof skill === "string" ? skill : skill.skill || ""}
-                                                                                                </span>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-                                                                                {analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.domain && Array.isArray(analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.domain) && analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.domain.length > 0 && (
-                                                                                    <div>
-                                                                                        <p className="text-base font-medium text-[var(--primary)] mb-1">
-                                                                                            Domain Knowledge
-                                                                                        </p>
-                                                                                        <div className="flex flex-wrap gap-2">
-                                                                                            {analysisResult.full_package.detailed_specifications.core_va_jd.skills_required.domain.map((skill: string, i: number) => (
-                                                                                                <span key={i} className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded-md">
-                                                                                                    {skill}
-                                                                                                </span>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-                                                                    {analysisResult.full_package.detailed_specifications.core_va_jd.kpis && Array.isArray(analysisResult.full_package.detailed_specifications.core_va_jd.kpis) && analysisResult.full_package.detailed_specifications.core_va_jd.kpis.length > 0 && (
-                                                                        <div>
-                                                                            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                KPIs
-                                                                            </p>
-                                                                            <div className="space-y-2">
-                                                                                {analysisResult.full_package.detailed_specifications.core_va_jd.kpis.map((kpi: any, i: number) => (
-                                                                                    <div key={i} className="p-3 rounded-lg bg-muted/50">
-                                                                                        <p className="text-base font-medium mb-1">{kpi.metric}</p>
-                                                                                        {kpi.target && <p className="text-xs text-muted-foreground"><span className="font-medium">Target:</span> {kpi.target}</p>}
-                                                                                        {kpi.frequency && <p className="text-xs text-muted-foreground"><span className="font-medium">Frequency:</span> {kpi.frequency}</p>}
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </details>
-                                                        )}
-
-                                                        {/* Projects on Demand */}
-                                                        {analysisResult.preview.service_type === "Projects on Demand" && (
-                                                            <div className="space-y-4">
-                                                                <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
-                                                                    Projects
-                                                                </p>
-                                                                {(analysisResult.full_package.detailed_specifications?.projects || analysisResult.full_package.service_structure.projects || []).map((project: any, idx: number) => (
-                                                                    <details key={idx} className="group border border-[var(--border-color)] rounded-lg overflow-hidden">
-                                                                        <summary className="cursor-pointer px-4 py-3 bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/80 transition-colors list-none [&::-webkit-details-marker]:hidden">
-                                                                            <div className="flex items-center justify-between">
-                                                                                <div className="flex-1">
-                                                                                    <h5 className="text-base font-semibold text-[var(--primary)]">
-                                                                                        {project.project_name}
-                                                                                    </h5>
-                                                                                    <p className="text-xs text-[var(--text-secondary)] mt-1">
-                                                                                        {project.estimated_hours || project.timeline?.estimated_hours} hrs • {typeof project.timeline === "string" ? project.timeline : project.timeline?.duration || "N/A"}
-                                                                                    </p>
-                                                                                </div>
-                                                                                <svg
-                                                                                    className="w-5 h-5 text-[var(--text-secondary)] transition-transform group-open:rotate-180"
-                                                                                    fill="none"
-                                                                                    stroke="currentColor"
-                                                                                    viewBox="0 0 24 24"
-                                                                                >
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                                                </svg>
-                                                                            </div>
-                                                                        </summary>
-                                                                        <div className="p-4 space-y-3">
-                                                                            {project.objective && (
-                                                                                <div>
-                                                                                    <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                        Objective
-                                                                                    </p>
-                                                                                    <p className="text-base text-[var(--text-primary)] leading-relaxed">
-                                                                                        {project.objective}
-                                                                                    </p>
-                                                                                </div>
-                                                                            )}
-                                                                            {project.deliverables?.length > 0 && (
-                                                                                <div>
-                                                                                    <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-2">
-                                                                                        Deliverables
-                                                                                    </p>
-                                                                                    <ul className="list-disc pl-5 space-y-1 text-base text-[var(--text-primary)]">
-                                                                                        {project.deliverables.map((del: any, i: number) => (
-                                                                                            <li key={i}>
-                                                                                                {typeof del === "string" ? del : del.item || del}
-                                                                                            </li>
-                                                                                        ))}
-                                                                                    </ul>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </details>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </TabsContent>
-
-                                            <TabsContent value="implementation" className="mt-0 space-y-6">
-                                                {implementationPlan?.immediate_next_steps && implementationPlan.immediate_next_steps.length > 0 && (
-                                                    <Card>
-                                                        <CardHeader>
-                                                            <CardTitle className="text-lg">Immediate Next Steps</CardTitle>
-                                                            <CardDescription>
-                                                                Action items to get started
-                                                            </CardDescription>
-                                                        </CardHeader>
-                                                        <CardContent>
-                                                            <div className="space-y-4">
-                                                                {implementationPlan.immediate_next_steps.map((item, index) => (
-                                                                    <div key={index} className="pb-4 border-b border-border last:border-0 last:pb-0">
-                                                                        <div className="flex items-start gap-3">
-                                                                            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                                                                <span className="text-xs font-semibold text-primary">{index + 1}</span>
-                                                                            </div>
-                                                                            <div className="flex-1 space-y-2">
-                                                                                <h5 className="text-base font-semibold">
-                                                                                    {item.step}
-                                                                                </h5>
-                                                                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                                                                                    <span><span className="font-medium">Owner:</span> {item.owner}</span>
-                                                                                    <span><span className="font-medium">Timeline:</span> {item.timeline}</span>
-                                                                                </div>
-                                                                                {item.output && (
-                                                                                    <p className="text-xs text-muted-foreground mt-1">
-                                                                                        <span className="font-medium">Output:</span> {item.output}
-                                                                                    </p>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </CardContent>
-                                                    </Card>
-                                                )}
-
-                                                {/* Onboarding Roadmap */}
-                                                {implementationPlan?.onboarding_roadmap && (
-                                                    <Card>
-                                                        <CardHeader>
-                                                            <CardTitle className="text-lg">Onboarding Roadmap</CardTitle>
-                                                            <CardDescription>
-                                                                Week-by-week onboarding plan
-                                                            </CardDescription>
-                                                        </CardHeader>
-                                                        <CardContent>
-                                                            <div className="space-y-4">
-                                                                {implementationPlan.onboarding_roadmap.week_1 && (
-                                                                    <div>
-                                                                        <h5 className="text-base font-semibold mb-2 flex items-center gap-2">
-                                                                            <div className="w-2 h-2 rounded-full bg-primary"></div>
-                                                                            Week 1
-                                                                        </h5>
-                                                                        {Array.isArray(implementationPlan.onboarding_roadmap.week_1) ? (
-                                                                            <ul className="space-y-1 ml-4">
-                                                                                {implementationPlan.onboarding_roadmap.week_1.map((item: string, idx: number) => (
-                                                                                    <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
-                                                                                        <span className="text-primary mt-0.5">•</span>
-                                                                                        <span>{item}</span>
-                                                                                    </li>
-                                                                                ))}
-                                                                            </ul>
-                                                                        ) : typeof implementationPlan.onboarding_roadmap.week_1 === 'object' && implementationPlan.onboarding_roadmap.week_1 !== null ? (
-                                                                            Object.entries(implementationPlan.onboarding_roadmap.week_1).map(([key, value]: [string, any]) => (
-                                                                                <div key={key} className="ml-4 mb-3">
-                                                                                    <p className="text-xs font-medium text-muted-foreground mb-1">{key}</p>
-                                                                                    {Array.isArray(value) ? (
-                                                                                        <ul className="space-y-1">
-                                                                                            {value.map((item: string, idx: number) => (
-                                                                                                <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
-                                                                                                    <span className="text-primary mt-0.5">•</span>
-                                                                                                    <span>{item}</span>
-                                                                                                </li>
-                                                                                            ))}
-                                                                                        </ul>
-                                                                                    ) : (
-                                                                                        <p className="text-xs text-muted-foreground">{String(value)}</p>
-                                                                                    )}
-                                                                                </div>
-                                                                            ))
-                                                                        ) : (
-                                                                            <p className="text-xs text-muted-foreground ml-4">{String(implementationPlan.onboarding_roadmap.week_1)}</p>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-                                                                {implementationPlan.onboarding_roadmap.week_2 && (
-                                                                    <div>
-                                                                        <h5 className="text-base font-semibold mb-2 flex items-center gap-2">
-                                                                            <div className="w-2 h-2 rounded-full bg-primary"></div>
-                                                                            Week 2
-                                                                        </h5>
-                                                                        {Array.isArray(implementationPlan.onboarding_roadmap.week_2) ? (
-                                                                            <ul className="space-y-1 ml-4">
-                                                                                {implementationPlan.onboarding_roadmap.week_2.map((item: string, idx: number) => (
-                                                                                    <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
-                                                                                        <span className="text-primary mt-0.5">•</span>
-                                                                                        <span>{item}</span>
-                                                                                    </li>
-                                                                                ))}
-                                                                            </ul>
-                                                                        ) : typeof implementationPlan.onboarding_roadmap.week_2 === 'object' && implementationPlan.onboarding_roadmap.week_2 !== null ? (
-                                                                            Object.entries(implementationPlan.onboarding_roadmap.week_2).map(([key, value]: [string, any]) => (
-                                                                                <div key={key} className="ml-4 mb-3">
-                                                                                    <p className="text-xs font-medium text-muted-foreground mb-1">{key}</p>
-                                                                                    {Array.isArray(value) ? (
-                                                                                        <ul className="space-y-1">
-                                                                                            {value.map((item: string, idx: number) => (
-                                                                                                <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
-                                                                                                    <span className="text-primary mt-0.5">•</span>
-                                                                                                    <span>{item}</span>
-                                                                                                </li>
-                                                                                            ))}
-                                                                                        </ul>
-                                                                                    ) : (
-                                                                                        <p className="text-xs text-muted-foreground">{String(value)}</p>
-                                                                                    )}
-                                                                                </div>
-                                                                            ))
-                                                                        ) : (
-                                                                            <p className="text-xs text-muted-foreground ml-4">{String(implementationPlan.onboarding_roadmap.week_2)}</p>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-                                                                {implementationPlan.onboarding_roadmap.week_3_4 && (
-                                                                    <div>
-                                                                        <h5 className="text-base font-semibold mb-2 flex items-center gap-2">
-                                                                            <div className="w-2 h-2 rounded-full bg-primary"></div>
-                                                                            Weeks 3-4
-                                                                        </h5>
-                                                                        {Array.isArray(implementationPlan.onboarding_roadmap.week_3_4) ? (
-                                                                            <ul className="space-y-1 ml-4">
-                                                                                {implementationPlan.onboarding_roadmap.week_3_4.map((item: string, idx: number) => (
-                                                                                    <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
-                                                                                        <span className="text-primary mt-0.5">•</span>
-                                                                                        <span>{item}</span>
-                                                                                    </li>
-                                                                                ))}
-                                                                            </ul>
-                                                                        ) : typeof implementationPlan.onboarding_roadmap.week_3_4 === 'object' && implementationPlan.onboarding_roadmap.week_3_4 !== null ? (
-                                                                            Object.entries(implementationPlan.onboarding_roadmap.week_3_4).map(([key, value]: [string, any]) => (
-                                                                                <div key={key} className="ml-4 mb-3">
-                                                                                    <p className="text-xs font-medium text-muted-foreground mb-1">{key}</p>
-                                                                                    {Array.isArray(value) ? (
-                                                                                        <ul className="space-y-1">
-                                                                                            {value.map((item: string, idx: number) => (
-                                                                                                <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
-                                                                                                    <span className="text-primary mt-0.5">•</span>
-                                                                                                    <span>{item}</span>
-                                                                                                </li>
-                                                                                            ))}
-                                                                                        </ul>
-                                                                                    ) : (
-                                                                                        <p className="text-xs text-muted-foreground">{String(value)}</p>
-                                                                                    )}
-                                                                                </div>
-                                                                            ))
-                                                                        ) : (
-                                                                            <p className="text-xs text-muted-foreground ml-4">{String(implementationPlan.onboarding_roadmap.week_3_4)}</p>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </CardContent>
-                                                    </Card>
-                                                )}
-
-                                                {/* Success Milestones */}
-                                                {implementationPlan?.success_milestones && (
-                                                    <Card>
-                                                        <CardHeader>
-                                                            <CardTitle className="text-lg">Success Milestones</CardTitle>
-                                                            <CardDescription>
-                                                                Key milestones to track progress
-                                                            </CardDescription>
-                                                        </CardHeader>
-                                                        <CardContent>
-                                                            <div className="space-y-3">
-                                                                {implementationPlan.success_milestones.week_2 && (
-                                                                    <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-                                                                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                            <span className="text-xs font-semibold text-primary">2</span>
-                                                                        </div>
-                                                                        <div className="flex-1">
-                                                                            <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Week 2</p>
-                                                                            <p className="text-base">{implementationPlan.success_milestones.week_2}</p>
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                                {implementationPlan.success_milestones.week_4 && (
-                                                                    <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-                                                                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                            <span className="text-xs font-semibold text-primary">4</span>
-                                                                        </div>
-                                                                        <div className="flex-1">
-                                                                            <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Week 4</p>
-                                                                            <p className="text-base">{implementationPlan.success_milestones.week_4}</p>
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                                {implementationPlan.success_milestones.week_8 && (
-                                                                    <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-                                                                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                            <span className="text-xs font-semibold text-primary">8</span>
-                                                                        </div>
-                                                                        <div className="flex-1">
-                                                                            <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Week 8</p>
-                                                                            <p className="text-base">{implementationPlan.success_milestones.week_8}</p>
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                                {implementationPlan.success_milestones.week_12 && (
-                                                                    <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-                                                                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                                            <span className="text-xs font-semibold text-primary">12</span>
-                                                                        </div>
-                                                                        <div className="flex-1">
-                                                                            <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Week 12</p>
-                                                                            <p className="text-base">{implementationPlan.success_milestones.week_12}</p>
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </CardContent>
-                                                    </Card>
-                                                )}
-                                            </TabsContent>
-
-                                            <TabsContent value="risks" className="mt-0 space-y-6">
-                                                {riskManagement && (
-                                                    <div className="space-y-6">
-                                                        {/* Risks */}
-                                                        {riskManagement.risks?.length > 0 && (
-                                                            <Card>
-                                                                <CardHeader>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <ShieldAlert className="w-4 h-4 text-destructive" />
-                                                                        <CardTitle className="text-lg">Risks</CardTitle>
-                                                                    </div>
-                                                                    <CardDescription>
-                                                                        Potential risks and their mitigation strategies
-                                                                    </CardDescription>
-                                                                </CardHeader>
-                                                                <CardContent>
-                                                                    <div className="space-y-4">
-                                                                        {riskManagement.risks.map((r: any, i: number) => (
-                                                                            <div key={i} className="border-l-2 pl-4 border-destructive/20">
-                                                                                <div className="flex items-start justify-between mb-2">
-                                                                                    <p className="text-base font-semibold">
-                                                                                        {r.risk}
-                                                                                    </p>
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        {r.severity && (
-                                                                                            <Badge variant={r.severity === 'high' ? 'destructive' : r.severity === 'medium' ? 'default' : 'secondary'}>
-                                                                                                {r.severity}
-                                                                                            </Badge>
-                                                                                        )}
-                                                                                    </div>
-                                                                                </div>
-                                                                                <div className="space-y-1 text-xs text-muted-foreground">
-                                                                                    {r.category && (
-                                                                                        <p><span className="font-medium">Category:</span> {r.category}</p>
-                                                                                    )}
-                                                                                    {r.likelihood && (
-                                                                                        <p><span className="font-medium">Likelihood:</span> {r.likelihood}</p>
-                                                                                    )}
-                                                                                    {r.impact && (
-                                                                                        <p><span className="font-medium">Impact:</span> {r.impact}</p>
-                                                                                    )}
-                                                                                    {r.mitigation && (
-                                                                                        <p className="mt-2 pt-2 border-t border-border">
-                                                                                            <span className="font-medium text-primary">Mitigation:</span> {r.mitigation}
-                                                                                        </p>
-                                                                                    )}
-                                                                                    {r.early_warning_signs && Array.isArray(r.early_warning_signs) && r.early_warning_signs.length > 0 && (
-                                                                                        <div className="mt-2 pt-2 border-t border-border">
-                                                                                            <p className="font-medium mb-1">Early Warning Signs:</p>
-                                                                                            <ul className="space-y-1">
-                                                                                                {r.early_warning_signs.map((sign: string, idx: number) => (
-                                                                                                    <li key={idx} className="flex items-start gap-2">
-                                                                                                        <span className="text-amber-500 mt-0.5">•</span>
-                                                                                                        <span>{sign}</span>
-                                                                                                    </li>
-                                                                                                ))}
-                                                                                            </ul>
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </CardContent>
-                                                            </Card>
-                                                        )}
-
-                                                        {/* Assumptions */}
-                                                        {riskManagement.assumptions?.length > 0 && (
-                                                            <Card>
-                                                                <CardHeader>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <AlertTriangle className="w-4 h-4 text-amber-500" />
-                                                                        <CardTitle className="text-lg">Assumptions</CardTitle>
-                                                                    </div>
-                                                                    <CardDescription>
-                                                                        Key assumptions that need validation
-                                                                    </CardDescription>
-                                                                </CardHeader>
-                                                                <CardContent>
-                                                                    <div className="space-y-4">
-                                                                        {riskManagement.assumptions.map((a: any, i: number) => (
-                                                                            <div key={i} className="border-l-2 pl-4 border-amber-500/20">
-                                                                                <p className="text-base font-semibold mb-2">
-                                                                                    {a.assumption}
-                                                                                </p>
-                                                                                <div className="space-y-1 text-xs text-muted-foreground">
-                                                                                    {a.criticality && (
-                                                                                        <p>
-                                                                                            <span className="font-medium">Criticality:</span>
-                                                                                            <Badge variant={a.criticality === 'high' ? 'destructive' : a.criticality === 'medium' ? 'default' : 'secondary'} className="ml-2">
-                                                                                                {a.criticality}
-                                                                                            </Badge>
-                                                                                        </p>
-                                                                                    )}
-                                                                                    {a.validation_method && (
-                                                                                        <p><span className="font-medium">Validation Method:</span> {a.validation_method}</p>
-                                                                                    )}
-                                                                                    {a.if_wrong && (
-                                                                                        <p className="mt-2 pt-2 border-t border-border">
-                                                                                            <span className="font-medium text-destructive">If Wrong:</span> {a.if_wrong}
-                                                                                        </p>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </CardContent>
-                                                            </Card>
-                                                        )}
-
-                                                        {/* Red Flags */}
-                                                        {riskManagement.red_flags?.length > 0 && (
-                                                            <Card>
-                                                                <CardHeader>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <AlertCircle className="w-4 h-4 text-destructive" />
-                                                                        <CardTitle className="text-lg">Red Flags</CardTitle>
-                                                                    </div>
-                                                                    <CardDescription>
-                                                                        Critical concerns that require immediate attention
-                                                                    </CardDescription>
-                                                                </CardHeader>
-                                                                <CardContent>
-                                                                    <div className="space-y-4">
-                                                                        {riskManagement.red_flags.map((flag: any, i: number) => (
-                                                                            <div key={i} className="border-l-2 pl-4 border-destructive">
-                                                                                <p className="text-base font-semibold text-destructive mb-2">
-                                                                                    {flag.flag}
-                                                                                </p>
-                                                                                <div className="space-y-1 text-xs text-muted-foreground">
-                                                                                    {flag.evidence && (
-                                                                                        <p><span className="font-medium">Evidence:</span> {flag.evidence}</p>
-                                                                                    )}
-                                                                                    {flag.recommendation && (
-                                                                                        <p className="mt-2 pt-2 border-t border-border">
-                                                                                            <span className="font-medium text-primary">Recommendation:</span> {flag.recommendation}
-                                                                                        </p>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </CardContent>
-                                                            </Card>
-                                                        )}
-
-                                                        {/* Monitoring Plan */}
-                                                        {monitoringPlan && (
-                                                            <Card>
-                                                                <CardHeader>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <CheckCircle2 className="w-4 h-4 text-primary" />
-                                                                        <CardTitle className="text-lg">Monitoring Plan</CardTitle>
-                                                                    </div>
-                                                                    <CardDescription>
-                                                                        Ongoing monitoring and quality checks
-                                                                    </CardDescription>
-                                                                </CardHeader>
-                                                                <CardContent>
-                                                                    <div className="space-y-4">
-                                                                        {monitoringPlan.high_priority_risks && monitoringPlan.high_priority_risks.length > 0 && (
-                                                                            <div>
-                                                                                <h5 className="text-base font-semibold mb-3">High Priority Risks</h5>
-                                                                                <div className="space-y-3">
-                                                                                    {monitoringPlan.high_priority_risks.map((risk: any, i: number) => (
-                                                                                        <div key={i} className="p-3 rounded-lg bg-muted/50">
-                                                                                            <p className="text-base font-medium mb-2">{risk.risk}</p>
-                                                                                            <p className="text-xs text-muted-foreground mb-2">
-                                                                                                <span className="font-medium">Check-in:</span> {risk.check_in}
-                                                                                            </p>
-                                                                                            {risk.watch_for && Array.isArray(risk.watch_for) && risk.watch_for.length > 0 && (
-                                                                                                <div>
-                                                                                                    <p className="text-xs font-medium text-muted-foreground mb-1">Watch For:</p>
-                                                                                                    <ul className="space-y-1">
-                                                                                                        {risk.watch_for.map((item: string, idx: number) => (
-                                                                                                            <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
-                                                                                                                <span className="text-primary mt-0.5">•</span>
-                                                                                                                <span>{item}</span>
-                                                                                                            </li>
-                                                                                                        ))}
-                                                                                                    </ul>
+                                                                                {implementationPlan.immediate_next_steps.map((item, index) => (
+                                                                                    <div key={index} className="pb-3 border-b border-border last:border-0 last:pb-0">
+                                                                                        <div className="flex items-start gap-3">
+                                                                                            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                                                                <span className="text-xs font-semibold text-primary">{index + 1}</span>
+                                                                                            </div>
+                                                                                            <div className="flex-1 space-y-1">
+                                                                                                <h5 className="text-sm font-semibold">{item.step}</h5>
+                                                                                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                                                                                    <span><span className="font-medium">Owner:</span> {item.owner}</span>
+                                                                                                    <span><span className="font-medium">Timeline:</span> {item.timeline}</span>
                                                                                                 </div>
-                                                                                            )}
+                                                                                            </div>
                                                                                         </div>
-                                                                                    ))}
-                                                                                </div>
+                                                                                    </div>
+                                                                                ))}
                                                                             </div>
-                                                                        )}
-                                                                        {monitoringPlan.quality_checks && monitoringPlan.quality_checks.length > 0 && (
-                                                                            <div>
-                                                                                <h5 className="text-base font-semibold mb-3">Quality Checkpoints</h5>
-                                                                                <div className="space-y-3">
-                                                                                    {monitoringPlan.quality_checks.map((check: any, i: number) => (
-                                                                                        <div key={i} className="p-3 rounded-lg bg-muted/50">
-                                                                                            <p className="text-base font-medium mb-2">{check.checkpoint}</p>
-                                                                                            {check.assess && Array.isArray(check.assess) && (
-                                                                                                <ul className="space-y-1">
-                                                                                                    {check.assess.map((item: string, idx: number) => (
-                                                                                                        <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
-                                                                                                            <span className="text-primary mt-0.5">•</span>
-                                                                                                            <span>{item}</span>
-                                                                                                        </li>
-                                                                                                    ))}
-                                                                                                </ul>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    ))}
-                                                                                </div>
-                                                                            </div>
-                                                                        )}
-                                                                        {monitoringPlan.adjustment_triggers && monitoringPlan.adjustment_triggers.length > 0 && (
-                                                                            <div>
-                                                                                <h5 className="text-base font-semibold mb-3">Adjustment Triggers</h5>
-                                                                                <div className="space-y-2">
-                                                                                    {monitoringPlan.adjustment_triggers.map((trigger: any, i: number) => (
-                                                                                        <div key={i} className="p-3 rounded-lg border border-border">
-                                                                                            <p className="text-base font-medium mb-1">{trigger.trigger}</p>
-                                                                                            <p className="text-xs text-muted-foreground">
-                                                                                                <span className="font-medium">Action:</span> {trigger.action}
-                                                                                            </p>
-                                                                                        </div>
-                                                                                    ))}
-                                                                                </div>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                </CardContent>
-                                                            </Card>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </TabsContent>
+                                                                        </div>
+                                                                    )}
+                                                                    {/* Create Process Button */}
+                                                                    {savedAnalysisId && analysisResult && (
+                                                                        <div className="pt-4 border-t">
+                                                                            <Button
+                                                                                onClick={async () => {
+                                                                                    // Ensure analysis is saved
+                                                                                    if (!savedAnalysisId && analysisResult && intakeData && user) {
+                                                                                        try {
+                                                                                            const title = `${intakeData.businessName} - ${analysisResult.preview?.service_type || analysisResult.full_package?.service_structure?.service_type || 'Job Description Analysis'}`;
+                                                                                            const saveResponse = await fetch("/api/jd/save", {
+                                                                                                method: "POST",
+                                                                                                headers: {
+                                                                                                    "Content-Type": "application/json",
+                                                                                                },
+                                                                                                credentials: "include",
+                                                                                                body: JSON.stringify({
+                                                                                                    title,
+                                                                                                    intakeData,
+                                                                                                    analysis: analysisResult,
+                                                                                                    isFinalized: false,
+                                                                                                    organizationId: kbMetadata?.organizationId ?? null,
+                                                                                                    usedKnowledgeBaseVersion: kbMetadata?.usedKnowledgeBaseVersion ?? null,
+                                                                                                    knowledgeBaseSnapshot: kbMetadata?.knowledgeBaseSnapshot ?? null,
+                                                                                                    contributedInsights: kbMetadata?.contributedInsights ?? null,
+                                                                                                }),
+                                                                                            });
+                                                                                            const saveData = await saveResponse.json();
+                                                                                            if (saveResponse.ok && saveData.savedAnalysis?.id) {
+                                                                                                setSavedAnalysisId(saveData.savedAnalysis.id);
+                                                                                                setIsCreateProcessDialogOpen(true);
+                                                                                            } else {
+                                                                                                toast.error("Please save your analysis first before creating a process.");
+                                                                                            }
+                                                                                        } catch (error) {
+                                                                                            console.error("Error saving analysis:", error);
+                                                                                            toast.error("Failed to save analysis. Please try again.");
+                                                                                        }
+                                                                                    } else {
+                                                                                        setIsCreateProcessDialogOpen(true);
+                                                                                    }
+                                                                                }}
+                                                                                className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                                                size="lg"
+                                                                            >
+                                                                                <FileText className="h-4 w-4 mr-2" />
+                                                                                Create Process
+                                                                            </Button>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </AccordionContent>
+                                                        </AccordionItem>
+                                                    )}
+                                            </Accordion>
                                         </div>
-                                    </Tabs>
-                                </Card>
+                                    </ScrollArea>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -2735,12 +1731,11 @@ export default function JdBuilderPage() {
                                 if (!open) setCurrentStage("");
                             }
                         }}>
-                            <DialogContent className="w-[min(900px,95vw)] sm:max-w-3xl max-h-[90vh] overflow-hidden p-0 sm:p-2">
-                                <DialogHeader className="sr-only">
+                            <DialogContent className="w-[min(900px,95vw)] sm:max-w-3xl max-h-[90vh] overflow-hidden p-0 sm:p-2 flex flex-col">
+                                <DialogHeader className="sr-only flex-shrink-0">
                                     <DialogTitle>Job Description Analysis</DialogTitle>
                                 </DialogHeader>
-                                <div className="flex-1 overflow-hidden p-4">
-                                    {/* Show alert when Organization KB is not set up */}
+                                <div className="flex-1 overflow-hidden p-4 flex flex-col min-h-0">
                                     {!isLoadingOrgKB && !organizationKB && (
                                         <Alert className="mb-4">
                                             <AlertCircle className="h-4 w-4" />
@@ -2791,10 +1786,8 @@ export default function JdBuilderPage() {
                                             setAnalysisError(null);
 
                                             try {
-                                                // Resolve form data with org KB defaults
                                                 const resolvedData = resolveJDFormWithOrgKB(formData, organizationKB);
 
-                                                // Validate required fields
                                                 if (!resolvedData.businessName || !resolvedData.businessName.trim()) {
                                                     throw new Error("Company name is required");
                                                 }
@@ -2807,7 +1800,6 @@ export default function JdBuilderPage() {
                                                     throw new Error("At least one task is required");
                                                 }
 
-                                                // Convert resolved form data to API intake payload format
                                                 const intakePayload = resolvedJDFormToIntakePayload({
                                                     ...resolvedData,
                                                     tasks: tasksArray,
@@ -2820,13 +1812,10 @@ export default function JdBuilderPage() {
                                                         : null,
                                                 });
 
-                                                // Send JSON with S3 file URLs instead of FormData
                                                 const requestBody: any = {
                                                     intake_json: intakePayload,
                                                 };
 
-                                                // Handle SOP file upload (field id is 'sopFile')
-                                                // files.sopFile is an array of { url, name, key, type } objects from S3
                                                 if (files.sopFile && Array.isArray(files.sopFile) && files.sopFile.length > 0) {
                                                     const sopFile = files.sopFile[0];
                                                     console.log("SOP file data being sent:", {
@@ -2839,12 +1828,10 @@ export default function JdBuilderPage() {
                                                         type: sopFile.type,
                                                     });
 
-                                                    // Validate URL format
                                                     if (!sopFile.url || (!sopFile.url.startsWith("http://") && !sopFile.url.startsWith("https://"))) {
                                                         console.error("Invalid SOP file URL format:", sopFile.url);
                                                         throw new Error(`Invalid SOP file URL format. Expected HTTP/HTTPS URL, got: ${sopFile.url}`);
                                                     }
-
 
                                                     requestBody.sopFileUrl = sopFile.url;
                                                     requestBody.sopFileName = sopFile.name;
@@ -2883,14 +1870,12 @@ export default function JdBuilderPage() {
                                                             message = errorPayload.error;
                                                         }
                                                     } catch {
-                                                        // Ignore JSON parse errors
                                                     }
                                                     const error = new Error(message);
                                                     (error as any).userMessage = userMessage;
                                                     throw error;
                                                 }
 
-                                                // Handle streaming response
                                                 const reader = response.body?.getReader();
                                                 const decoder = new TextDecoder();
                                                 let buffer = '';
@@ -2921,39 +1906,32 @@ export default function JdBuilderPage() {
                                                                 } else if (parsed.type === 'result' && parsed.data) {
                                                                     finalData = parsed.data;
                                                                 } else if (parsed.type === 'error') {
-                                                                    // Store the error and break out of loops
                                                                     const error = new Error(parsed.error || parsed.details || 'Analysis failed');
                                                                     (error as any).userMessage = parsed.userMessage || parsed.error || parsed.details || 'Analysis failed';
                                                                     streamError = error;
-                                                                    break; // Break out of for loop
+                                                                    break;
                                                                 }
                                                             } catch (parseError) {
-                                                                // Only catch JSON parsing errors (SyntaxError), not API errors
                                                                 if (parseError instanceof SyntaxError) {
-                                                                    // This is a JSON parse error, log and continue
                                                                     console.error('Failed to parse stream chunk (JSON syntax error):', parseError);
                                                                     continue;
                                                                 } else {
-                                                                    // This is an API error, store it and break
                                                                     streamError = parseError as Error;
-                                                                    break; // Break out of for loop
+                                                                    break;
                                                                 }
                                                             }
                                                         }
 
-                                                        // If we got an error, break out of while loop
                                                         if (streamError) break;
                                                     }
                                                 } finally {
                                                     reader.releaseLock();
                                                 }
 
-                                                // If we got an error from the stream, throw it
                                                 if (streamError) {
                                                     throw streamError;
                                                 }
 
-                                                // Process any remaining buffer (only if we didn't get an error)
                                                 if (!streamError && buffer.trim()) {
                                                     try {
                                                         const parsed = JSON.parse(buffer);
@@ -2962,28 +1940,23 @@ export default function JdBuilderPage() {
                                                         } else if (parsed.type === 'error') {
                                                             const error = new Error(parsed.error || parsed.details || 'Analysis failed');
                                                             (error as any).userMessage = parsed.userMessage || parsed.error || parsed.details || 'Analysis failed';
-                                                            throw error; // This will be caught by outer catch
+                                                            throw error;
                                                         }
                                                     } catch (parseError) {
-                                                        // Only catch JSON parsing errors, not API errors
                                                         if (parseError instanceof SyntaxError) {
-                                                            // This is a JSON parse error, log and continue
                                                             console.error('Failed to parse final buffer (JSON syntax error):', parseError);
                                                         } else {
-                                                            // This is an API error (thrown from parsed.type === 'error'), re-throw it
                                                             throw parseError;
                                                         }
                                                     }
                                                 }
 
-                                                // Only throw "No data received" if we didn't get an error from the API and no data
                                                 if (!streamError && !finalData) {
                                                     throw new Error('No data received from analysis');
                                                 }
 
                                                 return finalData;
                                             } catch (error) {
-                                                // Set error state and stop processing
                                                 const errorMessage = error instanceof Error
                                                     ? ((error as any).userMessage || error.message)
                                                     : 'An unexpected error occurred';
@@ -2991,14 +1964,13 @@ export default function JdBuilderPage() {
                                                 setIsProcessing(false);
                                                 setCurrentStage("");
 
-                                                // Re-throw to prevent success handler from running
                                                 throw error;
                                             }
                                         }}
                                         secondaryButton={
                                             <Button
                                                 variant="outline"
-                                                className="w-full"
+                                                className="w-full !border-[var(--primary-dark)] !text-[var(--primary-dark)] hover:!bg-[var(--primary-dark)]/10 hover:!text-[var(--primary-dark)]"
                                                 onClick={() => intakeFormRef.current?.triggerClearForm()}
                                             >
                                                 Clear Form
@@ -3008,41 +1980,61 @@ export default function JdBuilderPage() {
                                 </div>
                             </DialogContent>
                         </Dialog>
-                        <Dialog open={isRefinementModalOpen} onOpenChange={setIsRefinementModalOpen}>
-                            <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-4 sm:p-6">
-                                <DialogHeader>
-                                    <DialogTitle>Refine Analysis</DialogTitle>
-                                    <DialogDescription>
-                                        Provide feedback on what you'd like to change in your analysis.
-                                    </DialogDescription>
-                                </DialogHeader>
-                                <div className="flex-1 overflow-hidden">
-                                    {savedAnalysisId && user ? (
-                                        <RefinementForm
-                                            analysisId={savedAnalysisId}
-                                            userId={user.id}
-                                            serviceType={analysisResult?.preview?.service_type || analysisResult?.full_package?.service_structure?.service_type}
-                                            onRefinementComplete={async (refinedPackage) => {
-                                                if (analysisResult) {
-                                                    setAnalysisResult({
-                                                        ...analysisResult,
-                                                        full_package: refinedPackage,
-                                                    });
-                                                }
+                        {analysisResult && (
+                            <ToolChatDialog
+                                toolId="role-builder"
+                                mode="both"
+                                open={isRefinementModalOpen}
+                                onOpenChange={setIsRefinementModalOpen}
+                                buttonLabel=""
+                                initialContext={{
+                                    existingAnalysis: analysisResult,
+                                    existingIntakeData: intakeData,
+                                }}
+                                showAnalysisBadge={true}
+                                analysisBadgeData={{
+                                    analysis: analysisResult,
+                                    businessName: intakeData?.businessName,
+                                }}
+                                onViewAnalysis={() => {
+                                    // Close the dialog first
+                                    setIsRefinementModalOpen(false);
+                                    // Wait for dialog to close, then scroll to analysis
+                                    setTimeout(() => {
+                                        const analysisElement = document.getElementById('analysis-display');
+                                        if (analysisElement) {
+                                            analysisElement.scrollIntoView({ 
+                                                behavior: 'smooth', 
+                                                block: 'start' 
+                                            });
+                                        } else {
+                                            // Fallback: scroll to top if element not found
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }
+                                    }, 100);
+                                }}
+                                onApplyAction={async (action: any) => {
+                                    try {
+                                        // Support both refinedAnalysis and analysis properties
+                                        const refinedAnalysis = action?.refinedAnalysis || action?.analysis;
+                                        
+                                        if (refinedAnalysis) {
+                                            // Update the analysis result with refined version
+                                            setAnalysisResult(refinedAnalysis);
+                                            
+                                            // Save the refined analysis
+                                            if (savedAnalysisId || intakeData) {
                                                 try {
-                                                    await fetch(`/api/jd/save`, {
+                                                    await fetch("/api/jd/save", {
                                                         method: "POST",
                                                         headers: {
                                                             "Content-Type": "application/json",
                                                         },
                                                         credentials: "include",
                                                         body: JSON.stringify({
-                                                            title: `${intakeData?.businessName || 'Analysis'} - ${analysisResult?.preview?.service_type || 'Job Description Analysis'}`,
+                                                            title: `${intakeData?.businessName || 'Analysis'} - ${refinedAnalysis?.preview?.service_type || refinedAnalysis?.full_package?.service_structure?.service_type || 'Job Description Analysis'}`,
                                                             intakeData,
-                                                            analysis: {
-                                                                ...analysisResult,
-                                                                full_package: refinedPackage,
-                                                            },
+                                                            analysis: refinedAnalysis,
                                                             isFinalized: false,
                                                             organizationId: kbMetadata?.organizationId ?? null,
                                                             usedKnowledgeBaseVersion: kbMetadata?.usedKnowledgeBaseVersion ?? null,
@@ -3050,23 +2042,244 @@ export default function JdBuilderPage() {
                                                             contributedInsights: kbMetadata?.contributedInsights ?? null,
                                                         }),
                                                     });
+                                                    
+                                                    toast.success("Analysis refined and saved", {
+                                                        description: action?.changeSummary?.summary || "Your changes have been applied.",
+                                                    });
                                                 } catch (error) {
-                                                    console.error("Error updating saved analysis:", error);
+                                                    console.error("Error saving refined analysis:", error);
+                                                    toast.error("Failed to save refined analysis");
                                                 }
+                                            }
+                                            
+                                            setIsRefinementModalOpen(false);
+                                        }
+                                    } catch (error) {
+                                        console.error("Error applying refinement:", error);
+                                        toast.error("Failed to apply refinement");
+                                    }
+                                }}
+                                parseAction={(raw: unknown) => {
+                                    // Parse the action to extract refined analysis
+                                    // Map refinedAnalysis to analysis so ToolChat can display it using AnalysisDisplay
+                                    if (typeof raw === 'object' && raw !== null) {
+                                        const action = raw as any;
+                                        if (action.refinedAnalysis) {
+                                            return {
+                                                ...action,
+                                                analysis: action.refinedAnalysis, // Map to analysis for display
+                                                refinedAnalysis: action.refinedAnalysis, // Keep original for onApplyAction
+                                            };
+                                        }
+                                    }
+                                    return raw;
+                                }}
+                            />
+                        )}
 
-                                                setIsRefinementModalOpen(false);
-                                            }}
-                                        />
-                                    ) : (
-                                        <div className="p-4 text-center text-muted-foreground">
-                                            <p className="text-base">Please save your analysis first before refining.</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </DialogContent>
-                        </Dialog>
+                        {/* Create Process Dialog - Process Builder */}
+                        {savedAnalysisId && analysisResult && (
+                            <ToolChatDialog
+                                toolId="process-builder"
+                                open={isCreateProcessDialogOpen}
+                                onOpenChange={setIsCreateProcessDialogOpen}
+                                buttonLabel=""
+                                initialContext={{
+                                    jobAnalysisId: savedAnalysisId,
+                                    linkedJobAnalysis: {
+                                        analysis: analysisResult,
+                                        intakeData: intakeData,
+                                        businessName: intakeData?.businessName,
+                                        serviceType: analysisResult?.preview?.service_type || analysisResult?.full_package?.service_structure?.service_type,
+                                        roleTitle: getPrimaryRoleTitle(),
+                                    },
+                                }}
+                                showAnalysisBadge={true}
+                                analysisBadgeData={{
+                                    analysis: analysisResult,
+                                    businessName: intakeData?.businessName,
+                                }}
+                                onViewAnalysis={() => {
+                                    setIsCreateProcessDialogOpen(false);
+                                    setTimeout(() => {
+                                        const analysisElement = document.getElementById('analysis-display');
+                                        if (analysisElement) {
+                                            analysisElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                        } else {
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }
+                                    }, 100);
+                                }}
+                                onApplyAction={async (action: any) => {
+                                    try {
+                                        const generatedSOP = action?.sop || action?.refinedSOP;
+                                        const formData = action?.formData;
+                                        
+                                        if (generatedSOP) {
+                                            // Store the generated SOP in sessionStorage to pass to process-builder page
+                                            try {
+                                                sessionStorage.setItem('pending-sop', JSON.stringify({
+                                                    sop: generatedSOP,
+                                                    formData: formData,
+                                                    fromJobAnalysis: true,
+                                                    jobAnalysisId: savedAnalysisId,
+                                                }));
+                                            } catch (e) {
+                                                console.warn("Failed to store SOP in sessionStorage:", e);
+                                            }
+                                            
+                                            // Navigate to process-builder page
+                                            router.push("/dashboard/process-builder");
+                                            toast.success("Process created successfully!", {
+                                                description: "Your SOP has been generated. You can view it on the Process Builder page.",
+                                            });
+                                            setIsCreateProcessDialogOpen(false);
+                                        }
+                                    } catch (error) {
+                                        console.error("Error applying process creation:", error);
+                                        toast.error("Failed to create process");
+                                    }
+                                }}
+                                parseAction={(raw: unknown) => {
+                                    // Parse the action to extract SOP
+                                    if (typeof raw === 'object' && raw !== null) {
+                                        const action = raw as any;
+                                        if (action.sop) {
+                                            return {
+                                                ...action,
+                                                sop: action.sop,
+                                            };
+                                        }
+                                    }
+                                    return raw;
+                                }}
+                            />
+                        )}
                     </>
                 )}
+
+                {/* Controlled Tool Chat Dialog */}
+                <Dialog open={isToolChatOpen} onOpenChange={setIsToolChatOpen}>
+                    <DialogContent className="w-[min(900px,95vw)] sm:max-w-3xl max-h-[90vh] overflow-hidden p-0 sm:p-2">
+                        <DialogHeader className="px-4 pt-4 pb-2">
+                            <DialogTitle>{getToolChatConfig("role-builder").title}</DialogTitle>
+                            <DialogDescription>
+                                {getToolChatConfig("role-builder").description ?? "Use chat to describe what you want to build."}
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="px-4 pb-4 h-[calc(90vh-140px)]">
+                            <ToolChat
+                                toolId="role-builder"
+                                mode="both"
+                                className="h-full"
+                                onApplyAction={async (action: any) => {
+                                    try {
+                                        const formData = action?.formData || {};
+                                        const analysis = action?.analysis || {};
+
+                                        const intakeData: IntakeFormData = {
+                                            businessName: formData.businessName || organizationKB?.businessName || "",
+                                            website: organizationKB?.website || "",
+                                            businessGoal: formData.businessGoal === "__ORG_DEFAULT__"
+                                                ? organizationKB?.primaryGoal || "Growth & Scale"
+                                                : formData.businessGoal || "Growth & Scale",
+                                            tasks: Array.isArray(formData.tasks) ? formData.tasks : [],
+                                            outcome90Day: formData.outcome90Day || "",
+                                            weeklyHours: formData.weeklyHours || organizationKB?.defaultWeeklyHours || "40",
+                                            timezone: organizationKB?.defaultTimeZone || "",
+                                            dailyOverlap: "",
+                                            clientFacing: formData.clientFacing || "Yes",
+                                            tools: formData.tools || "",
+                                            englishLevel: formData.englishLevel === "__ORG_DEFAULT__"
+                                                ? organizationKB?.defaultEnglishLevel || "Excellent"
+                                                : formData.englishLevel || "Excellent",
+                                            budgetBand: "",
+                                            requirements: Array.isArray(formData.requirements) ? formData.requirements : [],
+                                            existingSOPs: formData.existingSOPs || "No",
+                                            examplesURL: "",
+                                            reportingExpectations: formData.reportingExpectations || "",
+                                            managementStyle: formData.managementStyle === "__ORG_DEFAULT__"
+                                                ? organizationKB?.defaultManagementStyle || "Async"
+                                                : formData.managementStyle || "Async",
+                                            securityNeeds: formData.securityNeeds || "",
+                                            dealBreakers: formData.dealBreakers || "",
+                                            roleSplit: "",
+                                            niceToHaveSkills: formData.niceToHaveSkills || "",
+                                        };
+
+                                        // Populate the form with extracted data
+                                        if (intakeFormRef.current) {
+                                            intakeFormRef.current.setFormData(intakeData);
+                                        }
+
+                                        // Set analysis result directly to display on page
+                                        // This is similar to how SOPs are displayed in process-builder
+                                        if (analysis && Object.keys(analysis).length > 0) {
+                                            const result: AnalysisResult = {
+                                                preview: analysis.preview ?? {
+                                                    summary: {
+                                                        company_stage: "",
+                                                        outcome_90d: "",
+                                                        primary_bottleneck: "",
+                                                        role_recommendation: "",
+                                                        sop_status: {
+                                                            has_sops: false,
+                                                            pain_points: [],
+                                                            documentation_gaps: [],
+                                                            summary: "",
+                                                        },
+                                                        workflow_analysis: "",
+                                                    },
+                                                    primary_outcome: "",
+                                                    service_type: "",
+                                                    service_confidence: "",
+                                                    service_reasoning: "",
+                                                    confidence: "",
+                                                    key_risks: [],
+                                                    critical_questions: [],
+                                                },
+                                                full_package: analysis.full_package,
+                                                metadata: analysis.metadata,
+                                            };
+
+                                            setAnalysisResult(result);
+                                            setIntakeData(intakeData);
+                                            setAnalysisSource('chat'); // Mark as generated from chat
+
+                                            // Set KB metadata if available
+                                            const usedKnowledgeBaseVersion = analysis.knowledgeBase?.version ?? action?.kbDefaultsUsed?.length > 0 ? organizationKB?.version ?? null : null;
+                                            const knowledgeBaseSnapshot = analysis.knowledgeBase?.snapshot ?? null;
+                                            const organizationId = analysis.knowledgeBase?.organizationId ?? organizationKB?.organizationId ?? null;
+                                            const contributedInsights = analysis.extractedInsights ?? null;
+
+                                            setKbMetadata({
+                                                usedKnowledgeBaseVersion,
+                                                knowledgeBaseSnapshot,
+                                                organizationId,
+                                                contributedInsights,
+                                            });
+
+                                            // Clear any errors
+                                            setAnalysisError(null);
+                                            setIsProcessing(false);
+                                        }
+
+                                        setIsToolChatOpen(false);
+                                        toast.success("Analysis displayed on page", {
+                                            description: "Review the analysis below. You can continue chatting to make edits.",
+                                        });
+                                    } catch (error) {
+                                        console.error("Error applying chat action:", error);
+                                        toast.error("Failed to display analysis", {
+                                            description: error instanceof Error ? error.message : "An error occurred",
+                                        });
+                                    }
+                                }}
+                            />
+                        </div>
+                    </DialogContent>
+                </Dialog>
             </div>
         </>
     );

@@ -208,7 +208,7 @@ const RefinementForm: React.FC<RefinementFormProps> = ({
 
   return (
     <Card className="border-none shadow-none">
-      <CardContent className="space-y-6 ">
+      <CardContent className="space-y-4 ">
         <div className="space-y-1">
           <h2 className="text-lg font-semibold tracking-tight">
             What would you like to change?

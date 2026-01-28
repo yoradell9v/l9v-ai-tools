@@ -1,30 +1,21 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import AnalysisCard, { SavedAnalysis } from "@/components/ui/AnalysisCard";
-import RefinementForm from "@/components/forms/RefinementForm";
 import { FileText, AlertCircle, Plus, Loader2 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 
 export default function SavedPage() {
     const { user } = useUser();
+    const router = useRouter();
     const [savedItems, setSavedItems] = useState<SavedAnalysis[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
-    const [isRefinementModalOpen, setIsRefinementModalOpen] = useState(false);
-    const [selectedAnalysis, setSelectedAnalysis] = useState<SavedAnalysis | null>(null);
     const hasFetchedRef = useRef(false);
     const lastUserIdRef = useRef<string | undefined>(undefined);
 
@@ -81,37 +72,10 @@ export default function SavedPage() {
     }, [user?.id]);
 
     const handleEdit = (analysis: SavedAnalysis) => {
-        setSelectedAnalysis(analysis);
-        setIsRefinementModalOpen(true);
+        // Redirect to role-builder page with analysis ID and open refinement dialog
+        router.push(`/dashboard/role-builder?analysisId=${analysis.id}&refine=true`);
     };
 
-    const handleRefinementComplete = async (refinedPackage: any) => {
-        // Refresh the analyses list to show updated data
-        if (user?.id) {
-            try {
-                const res = await fetch(
-                    `/api/jd/saved?page=1&limit=50`,
-                    {
-                        method: "GET",
-                        cache: "no-store",
-                        headers: { "Content-Type": "application/json" },
-                        credentials: "include",
-                    }
-                );
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.success) {
-                        const analyses = (data?.data?.analyses ?? []) as SavedAnalysis[];
-                        setSavedItems(analyses);
-                    }
-                }
-            } catch (err) {
-                console.error("Error refreshing analyses:", err);
-            }
-        }
-        setIsRefinementModalOpen(false);
-        setSelectedAnalysis(null);
-    };
 
     if (!user || isLoading) {
         return (
@@ -120,7 +84,7 @@ export default function SavedPage() {
                     <SidebarTrigger />
                 </div>
                 <div className="transition-all duration-300 ease-in-out min-h-screen">
-                    <div className="max-w-7xl mx-auto py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
+                    <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
                         <div className="flex flex-col items-center justify-center py-16">
                             <Loader2 className="h-8 w-8 mb-3 animate-spin" />
                             <p className="text-base text-muted-foreground">Loading...</p>
@@ -167,7 +131,7 @@ export default function SavedPage() {
                     <SidebarTrigger />
                 </div>
                 <div className="transition-all duration-300 ease-in-out min-h-screen">
-                    <div className="max-w-7xl mx-auto py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
+                    <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
                         {/* Breadcrumb */}
                         <div className="flex items-center gap-2 mb-4 text-base text-muted-foreground">
                             <a
@@ -209,7 +173,7 @@ export default function SavedPage() {
                 <SidebarTrigger />
             </div>
             <div className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden overflow-x-hidden">
-                <div className="w-full p-4 md:p-8 pt-6 flex flex-col h-full">
+                <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col flex-1 min-h-0">
                     {/* Fixed Header */}
                     <div className="flex-shrink-0 pt-0">
                         {/* Breadcrumb */}
@@ -234,7 +198,7 @@ export default function SavedPage() {
                                     {savedItems.length} {savedItems.length === 1 ? "analysis" : "analyses"} from your organization
                                 </p>
                             </div>
-                            <Button asChild>
+                            <Button asChild className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
                                 <a href="/dashboard/role-builder">
                                     <Plus className="h-4 w-4" />
                                     <span>New Analysis</span>
@@ -245,52 +209,22 @@ export default function SavedPage() {
 
                     {/* Scrollable Analyses List */}
                     <div className="flex-1 overflow-y-auto overflow-x-hidden">
-                        <Card className="p-0">
-                            <CardContent className="p-2">
-                                <div className="space-y-3">
-                                    {savedItems.map((item) => (
-                                        <AnalysisCard
-                                            key={item.id}
-                                            savedAnalysis={item}
-                                            onDelete={(deletedId: string) =>
-                                                setSavedItems((prev) => prev.filter((i) => i.id !== deletedId))
-                                            }
-                                            onEdit={handleEdit}
-                                        />
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <div className="space-y-3">
+                            {savedItems.map((item) => (
+                                <AnalysisCard
+                                    key={item.id}
+                                    savedAnalysis={item}
+                                    onDelete={(deletedId: string) =>
+                                        setSavedItems((prev) => prev.filter((i) => i.id !== deletedId))
+                                    }
+                                    onEdit={handleEdit}
+                                />
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Refinement Dialog */}
-            {user && selectedAnalysis && (
-                <Dialog open={isRefinementModalOpen} onOpenChange={(open) => {
-                    if (!open) {
-                        setIsRefinementModalOpen(false);
-                        setSelectedAnalysis(null);
-                    }
-                }}>
-                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-4 sm:p-6">
-                        <DialogHeader>
-                            <DialogTitle>Refine Analysis</DialogTitle>
-                            <DialogDescription>
-                                Provide feedback on what you'd like to change in your analysis.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="flex-1 overflow-hidden">
-                            <RefinementForm
-                                analysisId={selectedAnalysis.id}
-                                userId={user.id}
-                                serviceType={selectedAnalysis.analysis?.preview?.service_type || selectedAnalysis.analysis?.full_package?.service_structure?.service_type}
-                                onRefinementComplete={handleRefinementComplete}
-                            />
-                        </div>
-                    </DialogContent>
-                </Dialog>
-            )}
         </>
     );
 }

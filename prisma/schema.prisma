@@ -469,6 +469,7 @@ model SOP {
   rootSOP            SOP?     @relation("SOPVersions", fields: [rootSOPId], references: [id], onDelete: Cascade)
   versions           SOP[]    @relation("SOPVersions")  // All versions of this SOP
   isCurrentVersion   Boolean  @default(true)  // Only latest version is true
+  isDraft            Boolean  @default(false) // true = draft (work in progress), false = published
   
   // Version metadata
   versionCreatedBy   String?  // userId who created this version
@@ -482,8 +483,10 @@ model SOP {
   @@index([createdAt])
   @@index([rootSOPId])  // For finding all versions
   @@index([isCurrentVersion])  // For filtering current versions
+  @@index([isDraft])  // For filtering drafts vs published
   @@index([rootSOPId, versionNumber])  // Composite for version queries
   @@index([rootSOPId, isCurrentVersion])  // Composite for finding current version
+  @@index([userOrganizationId, isDraft])  // Composite for filtering user's drafts/published
 }
 
 model EnhancementAnalysis {

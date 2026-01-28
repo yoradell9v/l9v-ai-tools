@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Slider as SliderComponent } from "@/components/ui/slider";
 import {
@@ -41,6 +40,7 @@ interface BaseIntakeFormProps {
 
 export interface BaseIntakeFormRef {
     triggerClearForm: () => void;
+    setFormData: (data: Record<string, any>) => void;
 }
 
 const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
@@ -77,6 +77,19 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
     useImperativeHandle(ref, () => ({
         triggerClearForm: () => {
             setShowClearModal(true);
+        },
+        setFormData: (data: Record<string, any>) => {
+            const mergedData = { ...config.defaultValues, ...data };
+            setFormData(mergedData);
+            onFormChange?.(mergedData);
+            // Also save to localStorage
+            if (userId) {
+                try {
+                    localStorage.setItem(`${config.storageKey}-${userId}`, JSON.stringify(mergedData));
+                } catch (error) {
+                    console.error('Failed to save form data:', error);
+                }
+            }
         },
     }));
 
@@ -306,7 +319,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                 headers: {
                     "Content-Type": file.type || "application/octet-stream",
                 },
-                credentials: "omit", 
+                credentials: "omit",
             });
 
             if (!uploadResponse.ok) {
@@ -482,7 +495,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                 return { ...prev, [fieldId]: newUrls };
             });
         }
-        
+
         setUploadingFiles((prev) => {
             const fieldUploading = { ...(prev[fieldId] || {}) };
             delete fieldUploading[index];
@@ -1043,7 +1056,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                             {field.label} {field.required && <span className="text-destructive">*</span>}
                         </Label>
                         {repeaterValue.map((item: any, index: number) => (
-                            <Card key={index} className="p-4">
+                            <div key={index} className="p-4">
                                 <div className="flex items-center justify-between mb-3">
                                     <Label className="text-xs font-medium">
                                         {index < repeaterMinItems ? `${field.label} ${index + 1}` : `Additional ${index - repeaterMinItems + 1}`}
@@ -1111,7 +1124,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                                         </div>
                                     ))}
                                 </div>
-                            </Card>
+                            </div>
                         ))}
                         {(!repeaterMaxItems || repeaterValue.length < repeaterMaxItems) && (
                             <Button
@@ -1140,9 +1153,9 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
 
     return (
         <>
-            <div className="flex flex-col max-h-[calc(100vh-12rem)]">
+            <div className="flex flex-col h-full min-h-0">
                 {/* Progress Bar */}
-                <div className="pb-4 border-b">
+                <div className="flex-shrink-0 pb-4 border-b">
                     {!hideTitleAndDescription && (config.title || config.description) && (
                         <div className="flex items-center justify-between ">
                             <div>
@@ -1152,7 +1165,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                                     </h1>
                                 )}
                                 {config.description && (
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-xs text-muted-foreground mb-2">
                                         {config.description}
                                     </p>
                                 )}
@@ -1160,7 +1173,15 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                         </div>
                     )}
                     <div className="flex items-center gap-2">
-                        <Progress value={progress} className="flex-1" />
+                        <div className="relative h-3 w-full rounded-full bg-muted overflow-hidden flex-1">
+                            <div
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{
+                                    width: `${progress}%`,
+                                    background: "linear-gradient(90deg, #f0b214 0%, #1374B4 100%)",
+                                }}
+                            />
+                        </div>
                         <span className="text-xs font-medium text-muted-foreground">
                             {progress}%
                         </span>
@@ -1168,25 +1189,25 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                 </div>
 
                 {/* Scrollable Form Content */}
-                <div className="flex-1 overflow-y-auto">
-                    <div className="space-y-4">
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                    <div className="space-y-6 pt-4 pr-4 pl-2">
                         {config.sections.map((section) => {
                             const isExpanded = expandedSections[section.id] ?? (section.defaultExpanded ?? true);
                             const isCollapsible = section.isCollapsible ?? false;
                             const isOptional = section.isOptional ?? false;
 
                             return (
-                                <Card key={section.id}>
-                                    <CardHeader
+                                <div key={section.id} className="space-y-3">
+                                    <div
                                         className={isCollapsible ? 'cursor-pointer' : ''}
                                         onClick={() => isCollapsible && toggleSection(section.id)}
                                     >
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between pb-2">
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2">
-                                                    <CardTitle className="text-lg">
+                                                    <h3 className="text-lg font-semibold">
                                                         {section.title}
-                                                    </CardTitle>
+                                                    </h3>
                                                     {isOptional && (
                                                         <Badge variant="secondary">Optional</Badge>
                                                     )}
@@ -1215,9 +1236,9 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                                                 </Button>
                                             )}
                                         </div>
-                                    </CardHeader>
+                                    </div>
                                     {isExpanded && (
-                                        <CardContent>
+                                        <div className="pt-2">
                                             <div className="space-y-3">
                                                 {section.fields.map((field) => {
                                                     // Handle conditional field display using showIf
@@ -1227,16 +1248,16 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                                                     return renderField(field);
                                                 })}
                                             </div>
-                                        </CardContent>
+                                        </div>
                                     )}
-                                </Card>
+                                </div>
                             );
                         })}
                     </div>
                 </div>
 
-                {/* Submit Button - Sticky at bottom */}
-                <div className="border-t pt-2 pb-2 sticky bottom-0 bg-background">
+                {/* Submit Button - Fixed at bottom */}
+                <div className="flex-shrink-0 border-t pt-2 pb-2 bg-background">
                     <div className="flex flex-col gap-2">
                         {submitError && (
                             <Alert variant="destructive">
@@ -1254,7 +1275,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                             disabled={isSubmitting || Object.values(uploadingFiles).some((fieldUploading) =>
                                 Object.values(fieldUploading).some((isUploading) => isUploading)
                             )}
-                            className="w-full"
+                            className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
                             size="lg"
                         >
                             {isSubmitting ? (
@@ -1273,7 +1294,7 @@ const BaseIntakeForm = forwardRef<BaseIntakeFormRef, BaseIntakeFormProps>(({
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="w-full"
+                                className="w-full !border-[var(--primary-dark)] !text-[var(--primary-dark)] hover:!bg-[var(--primary-dark)]/10 hover:!text-[var(--primary-dark)]"
                                 onClick={() => setShowClearModal(true)}
                             >
                                 Clear Form

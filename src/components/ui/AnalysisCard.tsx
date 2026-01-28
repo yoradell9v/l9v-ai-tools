@@ -336,7 +336,7 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
         label: string;
         value: React.ReactNode;
     }) => (
-        <Card className="p-3">
+        <div className="p-3">
             <div className="flex items-center gap-3">
                 <div className="p-1.5 rounded-lg flex-shrink-0 bg-muted">
                     <Icon size={16} className="text-primary" />
@@ -350,7 +350,7 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
                     </p>
                 </div>
             </div>
-        </Card>
+        </div>
     );
 
     return (
@@ -431,7 +431,7 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
                                                 onClick={() => onEdit(savedAnalysis)}
                                             >
                                                 <Edit className="h-4 w-4 mr-2" />
-                                                Edit analysis
+                                                Refine Role
                                             </DropdownMenuItem>
                                         )}
                                         <DropdownMenuItem
@@ -896,12 +896,12 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
                                                                 <div className="space-y-2">
                                                                     {riskManagement.monitoring_plan.quality_checks.map(
                                                                         (check: any, idx: number) => (
-                                                                            <Card key={`${check.checkpoint}-${idx}`} className="p-3">
+                                                                            <div key={`${check.checkpoint}-${idx}`} className="p-3">
                                                                                 <p className="text-sm font-medium mb-1">
                                                                                     {check.checkpoint}
                                                                                 </p>
                                                                                 {formatList(check.assess)}
-                                                                            </Card>
+                                                                            </div>
                                                                         )
                                                                     )}
                                                                 </div>
@@ -935,14 +935,14 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
                                                         )}
                                                     {validationReport.consistency_checks.tool_alignment?.recommendations?.length >
                                                         0 && (
-                                                            <Card className="p-3 border-blue-500 bg-blue-500/10">
+                                                            <div className="p-3 border border-blue-500 bg-blue-500/10 rounded-md">
                                                                 <p className="text-xs font-medium uppercase tracking-wide mb-1 text-blue-600 dark:text-blue-400">
                                                                     Tool Alignment
                                                                 </p>
                                                                 {formatList(
                                                                     validationReport.consistency_checks.tool_alignment.recommendations
                                                                 )}
-                                                            </Card>
+                                                            </div>
                                                         )}
                                                 </div>
                                             </AccordionContent>

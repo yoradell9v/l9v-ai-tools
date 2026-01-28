@@ -3,10 +3,13 @@
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { FileText, Plus, Loader2, CheckCircle2, Edit, Save, X, Sparkles, Download, History, AlertCircle, RotateCcw, Info } from "lucide-react";
+import { FileText, Plus, Loader2, CheckCircle2, Save, X, Download, History, AlertCircle, RotateCcw, Info, MoreVertical, ChevronDown, Copy } from "lucide-react";
+import { SparklesIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { ToolChat } from "@/components/chat/ToolChat";
+import { ToolChatDialog } from "@/components/chat/ToolChatDialog";
+import { getToolChatConfig } from "@/lib/tool-chat/registry";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -29,17 +32,25 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import BaseIntakeForm from "@/components/forms/BaseIntakeForm";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import BaseIntakeForm, { BaseIntakeFormRef } from "@/components/forms/BaseIntakeForm";
 import { sopGeneratorConfig } from "@/components/forms/configs/sopGeneratorConfig";
 import { useUser } from "@/context/UserContext";
 import { htmlToMarkdown } from "@/lib/extraction/html-to-markdown";
 import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from "@/lib/rate-limiting/rate-limit-client";
+import { copyToClipboard } from "@/lib/utils/copy-to-clipboard";
 
 interface GeneratedSOP {
   sopHtml: string;
   sopId: string | null;
   versionNumber?: number;
   isCurrentVersion?: boolean;
+  isDraft?: boolean; // true if generated from chat and not yet saved
   metadata: {
     title: string;
     generatedAt: string;
@@ -70,18 +81,14 @@ export default function SopPage() {
   const { user } = useUser();
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isToolChatOpen, setIsToolChatOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [generatedSOP, setGeneratedSOP] = useState<GeneratedSOP | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedSOPContent, setEditedSOPContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [reviewWithAI, setReviewWithAI] = useState(false);
-  const [isReviewing, setIsReviewing] = useState(false);
-  const [aiReviewSuggestions, setAiReviewSuggestions] = useState<any>(null);
-  const [showReviewResults, setShowReviewResults] = useState(false);
   const [isLoadingLatest, setIsLoadingLatest] = useState(false);
+  const [isRefinementModalOpen, setIsRefinementModalOpen] = useState(false);
   const [hasNoSavedSOPs, setHasNoSavedSOPs] = useState(false);
   const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -89,26 +96,52 @@ export default function SopPage() {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isRestoreDraftDialogOpen, setIsRestoreDraftDialogOpen] = useState(false);
+  const [pendingDraftData, setPendingDraftData] = useState<{ sop: GeneratedSOP; formData?: Record<string, any> } | null>(null);
   const hasAttemptedLoadRef = useRef(false);
   const lastLoadedUserIdRef = useRef<string | null>(null);
+  const sopFormRef = useRef<BaseIntakeFormRef>(null);
+  const draftFormDataRef = useRef<Record<string, any> | null>(null); // Store form data for draft saves
 
-  const saveSOPModifications = async (content: string) => {
+  // Save draft SOP (not published, isCurrentVersion: false)
+  const saveSOPAsDraft = async () => {
+    if (!generatedSOP) {
+      toast.error("No SOP to save");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      if (!generatedSOP?.sopId) {
-        throw new Error("SOP ID not found. Please regenerate the SOP.");
-      }
+      // Use stored form data from when "View on Page" was clicked, or fallback to minimal
+      const formData = draftFormDataRef.current || {};
+      const sopTitle = formData.sopTitle || generatedSOP.metadata.title || "SOP";
 
-      const response = await fetch("/api/sop/update", {
+      // Ensure all required fields are present
+      const saveFormData = {
+        sopTitle: sopTitle,
+        processOverview: formData.processOverview || "Generated from chat",
+        primaryRole: formData.primaryRole || "Process Performer",
+        mainSteps: formData.mainSteps || "See SOP content",
+        toolsUsed: formData.toolsUsed || "See SOP content",
+        frequency: formData.frequency || "As-needed",
+        trigger: formData.trigger || "Manual initiation",
+        successCriteria: formData.successCriteria || "Process completed successfully",
+        ...formData, // Include any other fields
+      };
+
+      // For drafts, we already have the HTML - just save it
+      // We'll use the generate endpoint but pass the existing HTML to skip regeneration
+      const response = await fetch("/api/sop/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         credentials: "include",
         body: JSON.stringify({
-          sopId: generatedSOP.sopId,
-          sopContent: content,
-          reviewWithAI: reviewWithAI,
+          ...saveFormData,
+          existingSOPHtml: generatedSOP.sopHtml, // Pass existing HTML to skip regeneration
+          saveAsDraft: true, // Flag to save as draft (isDraft: true)
+          sopId: generatedSOP.sopId || undefined, // If updating existing draft, pass the ID
         }),
       });
 
@@ -125,55 +158,52 @@ export default function SopPage() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "Failed to save SOP modifications");
+        throw new Error(result.message || "Failed to save SOP as draft");
       }
 
-      const responseContent = result.sop.content;
-      const htmlContent = typeof responseContent === "object"
-        ? (responseContent.html || result.sopHtml)
-        : result.sopHtml || "";
-
-      if (!htmlContent) {
+      if (!result.sopHtml) {
         throw new Error("No HTML content received from server");
       }
 
+      // Update state - mark as saved draft
       setGeneratedSOP({
         ...generatedSOP,
-        sopHtml: htmlContent,
-        sopId: result.sop.id,
-        versionNumber: result.sop.versionNumber || generatedSOP.versionNumber || 1,
-        isCurrentVersion: true,
+        sopHtml: result.sopHtml,
+        sopId: result.sopId || null,
+        versionNumber: result.metadata?.versionNumber,
+        isCurrentVersion: false, // Drafts are not current versions
+        isDraft: true, // Still a draft, just saved to DB
       });
-      setSelectedVersionId(result.sop.id);
 
-      if (result.sop.id) {
-        loadVersions(result.sop.id);
+      // Update localStorage draft with saved version
+      try {
+        localStorage.setItem('sop-draft', JSON.stringify({
+          sop: {
+            sopHtml: result.sopHtml,
+            sopId: result.sopId || null,
+            versionNumber: result.metadata?.versionNumber,
+            isCurrentVersion: false,
+            isDraft: true,
+            metadata: result.metadata,
+          },
+          formData: draftFormDataRef.current,
+        }));
+      } catch (e) {
+        console.warn("Failed to update localStorage draft:", e);
       }
 
-      setIsEditing(false);
-      setReviewWithAI(false);
-      setAiReviewSuggestions(null);
-      setShowReviewResults(false);
+      if (result.sopId) {
+        setSelectedVersionId(result.sopId);
+        loadVersions(result.sopId);
+      }
 
-      toast.success("SOP updated successfully!", {
-        description: `Your changes have been saved. The SOP is now at version ${result.sop.version}.`,
+      toast.success("SOP saved as draft", {
+        description: "Your SOP has been saved. You can publish it later or continue editing.",
       });
     } catch (error: any) {
-      console.error("Error saving SOP modifications:", error);
-
-      let errorMessage = "We couldn't save your changes. Please try again.";
-      if (error.message?.includes("not found")) {
-        errorMessage = "The SOP could not be found. Please refresh the page and try again.";
-      } else if (error.message?.includes("permission") || error.message?.includes("authorized")) {
-        errorMessage = "You don't have permission to edit this SOP. Please contact your administrator.";
-      } else if (error.message?.includes("network") || error.message?.includes("fetch")) {
-        errorMessage = "Connection issue. Please check your internet connection and try again.";
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
-      toast.error("Unable to save changes", {
-        description: errorMessage,
+      console.error("Error saving SOP as draft:", error);
+      toast.error("Failed to save draft", {
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
       });
       throw error;
     } finally {
@@ -181,9 +211,266 @@ export default function SopPage() {
     }
   };
 
+  // Save and publish SOP (isCurrentVersion: true)
+  const saveSOPAndPublish = async () => {
+    if (!generatedSOP) {
+      toast.error("No SOP to save");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Use stored form data from when "View on Page" was clicked, or fallback to minimal
+      const formData = draftFormDataRef.current || {};
+      const sopTitle = formData.sopTitle || generatedSOP.metadata.title || "SOP";
+
+      // Ensure all required fields are present
+      const saveFormData = {
+        sopTitle: sopTitle,
+        processOverview: formData.processOverview || "Generated from chat",
+        primaryRole: formData.primaryRole || "Process Performer",
+        mainSteps: formData.mainSteps || "See SOP content",
+        toolsUsed: formData.toolsUsed || "See SOP content",
+        frequency: formData.frequency || "As-needed",
+        trigger: formData.trigger || "Manual initiation",
+        successCriteria: formData.successCriteria || "Process completed successfully",
+        ...formData, // Include any other fields
+      };
+
+      // For publishing, we already have the HTML - just save it
+      const response = await fetch("/api/sop/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          ...saveFormData,
+          existingSOPHtml: generatedSOP.sopHtml, // Pass existing HTML to skip regeneration
+          saveAndPublish: true, // Publish (isDraft: false, isCurrentVersion: true)
+        }),
+      });
+
+      if (isRateLimitError(response)) {
+        const rateLimitError = await parseRateLimitError(response);
+        const errorMessage = getRateLimitErrorMessage(rateLimitError);
+        toast.error("Rate limit exceeded", {
+          description: errorMessage,
+          duration: 10000,
+        });
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to save and publish SOP");
+      }
+
+      if (!result.sopHtml) {
+        throw new Error("No HTML content received from server");
+      }
+
+      // Update state - mark as published
+      setGeneratedSOP({
+        ...generatedSOP,
+        sopHtml: result.sopHtml,
+        sopId: result.sopId || null,
+        versionNumber: result.metadata?.versionNumber || 1,
+        isCurrentVersion: true, // Published and current
+        isDraft: false, // Published, not a draft
+      });
+
+      // Clear localStorage draft (no longer needed as it's published)
+      try {
+        localStorage.removeItem('sop-draft');
+      } catch (e) {
+        console.warn("Failed to clear localStorage draft:", e);
+      }
+
+      // Load versions for the published SOP
+      if (result.sopId) {
+        await loadVersions(result.sopId);
+      }
+
+      if (result.sopId) {
+        setSelectedVersionId(result.sopId);
+        loadVersions(result.sopId);
+      }
+
+      toast.success("SOP saved and published", {
+        description: "Your SOP has been saved and is now the current version.",
+      });
+    } catch (error: any) {
+      console.error("Error saving and publishing SOP:", error);
+      toast.error("Failed to save SOP", {
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+      });
+      throw error;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+
+  // Auto-save draft to localStorage
+  useEffect(() => {
+    if (!generatedSOP?.isDraft) return;
+
+    const autoSaveInterval = setInterval(() => {
+      try {
+        localStorage.setItem('sop-draft', JSON.stringify({
+          sop: generatedSOP,
+          formData: draftFormDataRef.current,
+        }));
+      } catch (e) {
+        console.warn("Failed to auto-save draft to localStorage:", e);
+      }
+    }, 30000); // Auto-save every 30 seconds
+
+    return () => clearInterval(autoSaveInterval);
+  }, [generatedSOP]);
+
+  // Beforeunload warning for unsaved drafts
+  useEffect(() => {
+    if (!generatedSOP?.isDraft) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "You have an unsaved draft. Are you sure you want to leave?";
+      return e.returnValue;
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [generatedSOP?.isDraft]);
+
+  // Check for pending SOP from role-builder (created from job analysis)
+  // This must run BEFORE loadLatestSOP to prevent overwriting
+  // Run this effect FIRST, before any other SOP loading logic
+  useEffect(() => {
+    if (!user) return;
+
+    // Check for pending SOP immediately on mount or user change
+    try {
+      const pendingSOP = sessionStorage.getItem('pending-sop');
+      if (pendingSOP) {
+        const parsed = JSON.parse(pendingSOP);
+        if (parsed.sop) {
+          // Set the flag FIRST to prevent loadLatestSOP from running
+          hasAttemptedLoadRef.current = true;
+
+          const pendingSOPData = {
+            sopHtml: parsed.sop.sopHtml || "",
+            sopId: null,
+            isDraft: true,
+            metadata: parsed.sop.metadata || {
+              title: parsed.formData?.sopTitle || "SOP",
+              generatedAt: new Date().toISOString(),
+              tokens: { prompt: 0, completion: 0, total: 0 },
+              organizationProfileUsed: false,
+            },
+          };
+
+          setGeneratedSOP(pendingSOPData);
+
+          if (parsed.formData) {
+            draftFormDataRef.current = parsed.formData;
+          }
+
+          // Save to localStorage for consistency
+          try {
+            localStorage.setItem('sop-draft', JSON.stringify({
+              sop: pendingSOPData,
+              formData: parsed.formData,
+            }));
+          } catch (e) {
+            console.warn("Failed to save draft to localStorage:", e);
+          }
+
+          sessionStorage.removeItem('pending-sop');
+
+          toast.success("SOP created from job analysis", {
+            description: "Your process has been generated. You can review and save it.",
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to load pending SOP from sessionStorage:", e);
+    }
+  }, [user]); // Only depend on user, not generatedSOP, to run first
+
+  // Restore draft from localStorage on mount
+  // This runs AFTER pending SOP check, so pending SOPs take priority
+  useEffect(() => {
+    if (!user || generatedSOP) return; // Don't restore if we already have a SOP
+
+    // Don't restore if there's a pending SOP in sessionStorage (it will be handled by the pending SOP effect)
+    try {
+      const pendingSOP = sessionStorage.getItem('pending-sop');
+      if (pendingSOP) {
+        // Pending SOP exists, don't restore draft
+        return;
+      }
+    } catch (e) {
+      // Ignore errors
+    }
+
+    try {
+      const savedDraft = localStorage.getItem('sop-draft');
+      if (savedDraft) {
+        const parsed = JSON.parse(savedDraft);
+        if (parsed.sop && parsed.sop.isDraft) {
+          // Store draft data and show dialog
+          setPendingDraftData({
+            sop: parsed.sop,
+            formData: parsed.formData,
+          });
+          setIsRestoreDraftDialogOpen(true);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to restore draft from localStorage:", e);
+    }
+  }, [user, generatedSOP]);
+
   useEffect(() => {
     const loadLatestSOP = async () => {
+      // Don't load if we already have a SOP (including drafts)
       if (!user || generatedSOP || isLoadingLatest) return;
+
+      // Check if there's a pending SOP first - if so, don't load latest
+      // This check is critical to prevent overwriting pending SOPs
+      try {
+        const pendingSOP = sessionStorage.getItem('pending-sop');
+        if (pendingSOP) {
+          // Pending SOP exists, let the other effect handle it
+          // Set flag to prevent this from running again
+          hasAttemptedLoadRef.current = true;
+          return;
+        }
+      } catch (e) {
+        // Ignore errors checking sessionStorage
+      }
+
+      // Check if there's a draft in localStorage - if so, don't load latest
+      try {
+        const savedDraft = localStorage.getItem('sop-draft');
+        if (savedDraft) {
+          const parsed = JSON.parse(savedDraft);
+          if (parsed.sop && parsed.sop.isDraft) {
+            // Draft exists, don't overwrite it with latest saved SOP
+            hasAttemptedLoadRef.current = true;
+            return;
+          }
+        }
+      } catch (e) {
+        // Ignore errors checking localStorage
+      }
+
+      // Check if flag is set (meaning pending SOP was loaded)
+      if (hasAttemptedLoadRef.current) return;
+
       const currentUserId = user.id;
       if (lastLoadedUserIdRef.current !== currentUserId) {
         hasAttemptedLoadRef.current = false;
@@ -233,6 +520,7 @@ export default function SopPage() {
             sopId: latestSOP.id,
             versionNumber: latestSOP.versionNumber || 1,
             isCurrentVersion: true,
+            isDraft: false, // Explicitly set to false for saved SOPs
             metadata: {
               title: latestSOP.title,
               generatedAt: latestSOP.createdAt || new Date().toISOString(),
@@ -373,6 +661,7 @@ export default function SopPage() {
             sopId: versionSOP.id,
             versionNumber: versionSOP.versionNumber || 1,
             isCurrentVersion: versionSOP.isCurrentVersion ?? true,
+            isDraft: false, // Versions are always saved, not drafts
             metadata: {
               title: versionSOP.title,
               generatedAt: versionSOP.createdAt || new Date().toISOString(),
@@ -521,14 +810,14 @@ export default function SopPage() {
 
   return (
     <>
-      <div className="w-full max-w-screen overflow-x-hidden">
-        <div className="flex items-center gap-2 p-4 border-b">
+      <div className="w-full max-w-screen overflow-x-hidden h-screen flex flex-col">
+        <div className="flex items-center gap-2 p-4 border-b flex-shrink-0">
           <SidebarTrigger />
         </div>
         <div
-          className="transition-all duration-300 ease-in-out h-screen flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full"
+          className="transition-all duration-300 ease-in-out flex-1 min-h-0 flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full"
         >
-          <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col h-full">
+          <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col flex-1 min-h-0">
             <div className="flex-shrink-0 p-2">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
                 <div className="space-y-1">
@@ -540,15 +829,31 @@ export default function SopPage() {
                   </p>
                 </div>
                 <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-4 mt-1 md:mt-0">
-                  <Button
-                    onClick={() => setIsModalOpen(true)}
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Generate SOP</span>
-                  </Button>
+                  {!isProcessing && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
+                          <Plus className="h-4 w-4" />
+                          <span>Generate SOP</span>
+                          <ChevronDown className="h-4 w-4 ml-2" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setIsModalOpen(true)}>
+                          <FileText className="h-4 w-4 mr-2" />
+                          Fill Out Form
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setIsToolChatOpen(true)}>
+                          <SparklesIcon className="h-4 w-4 mr-2" />
+                          Generate with AI
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                   <Button
                     variant="outline"
                     onClick={() => router.push("/dashboard/process-builder/history")}
+                    className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10"
                   >
                     <History className="h-4 w-4" />
                     History
@@ -558,7 +863,7 @@ export default function SopPage() {
               <Separator />
             </div>
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden">
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
 
               {isLoadingLatest && !generatedSOP && !isProcessing && (
                 <Card>
@@ -630,16 +935,36 @@ export default function SopPage() {
               )}
 
               {generatedSOP && !isProcessing && (
-                <Card className="overflow-hidden">
-                  <CardHeader className="space-y-4">
+                <div className="flex flex-col h-full overflow-hidden">
+                  {/* Draft Banner */}
+                  {generatedSOP.isDraft && (
+                    <div className="flex-shrink-0 p-4 pb-0">
+                      <Alert className="border-amber-500/50 bg-amber-500/10">
+                        <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                        <AlertTitle className="text-amber-900 dark:text-amber-100">Draft (Not Saved)</AlertTitle>
+                        <AlertDescription className="text-amber-800 dark:text-amber-200">
+                          This SOP was generated from chat and hasn't been saved yet. Save it to keep it permanently.
+                        </AlertDescription>
+                      </Alert>
+                    </div>
+                  )}
+
+                  <div className="flex-shrink-0 space-y-4 p-6 pb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b sticky top-0 z-10">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex-1 space-y-3">
                         <div className="flex items-start gap-3">
                           <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 shrink-0" />
                           <div className="flex-1 space-y-2">
-                            <CardTitle className="text-xl sm:text-2xl">
-                              {generatedSOP.metadata.title}
-                            </CardTitle>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h2 className="text-xl sm:text-2xl font-semibold">
+                                {generatedSOP.metadata.title}
+                              </h2>
+                              {generatedSOP.isDraft && (
+                                <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400">
+                                  Draft
+                                </Badge>
+                              )}
+                            </div>
                             <div className="flex flex-wrap items-center gap-2 text-base text-muted-foreground">
                               <span>Generated on {new Date(generatedSOP.metadata.generatedAt).toLocaleString()}</span>
                               {generatedSOP.metadata.organizationProfileUsed && (
@@ -655,394 +980,182 @@ export default function SopPage() {
                           </div>
                         </div>
 
-                        <Separator />
-
-                        <div className="space-y-3">
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                            <Label htmlFor="version-select" className="text-base font-medium shrink-0">
-                              Version:
-                            </Label>
-                            {isLoadingVersions ? (
-                              <div className="flex items-center gap-2 text-base text-muted-foreground">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                <span>Loading versions...</span>
-                              </div>
-                            ) : versions.length > 0 ? (
-                              <div className="flex items-center gap-2 flex-1">
-                                <Select
-                                  value={selectedVersionId || generatedSOP.sopId || ""}
-                                  onValueChange={(value) => {
-                                    setSelectedVersionId(value);
-                                    loadVersion(value);
-                                  }}
-                                  disabled={isLoadingVersions}
-                                >
-                                  <SelectTrigger id="version-select" className="w-full sm:w-[280px]">
-                                    <SelectValue placeholder="Select version" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {versions.map((version) => (
-                                      <SelectItem key={version.id} value={version.id}>
-                                        <div className="flex items-center gap-2">
-                                          <span className="font-medium">Version {version.versionNumber}</span>
-                                          {version.isCurrentVersion && (
-                                            <Badge variant="secondary" className="text-xs">
-                                              Current
-                                            </Badge>
-                                          )}
-                                          <span className="text-muted-foreground text-xs">
-                                            • {new Date(version.versionCreatedAt).toLocaleDateString()}
-                                          </span>
-                                        </div>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                {generatedSOP.versionNumber && (
-                                  <Badge variant={generatedSOP.isCurrentVersion ? "default" : "outline"}>
-                                    {generatedSOP.isCurrentVersion ? "Current" : `v${generatedSOP.versionNumber}`}
-                                  </Badge>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <span className="text-base text-muted-foreground">
-                                  Version {generatedSOP.versionNumber || 1}
-                                </span>
-                                {generatedSOP.isCurrentVersion && (
-                                  <Badge variant="secondary">Current</Badge>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {generatedSOP.sopId && !generatedSOP.isCurrentVersion && versions.length > 0 && (
-                            <div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => restoreVersion(generatedSOP.sopId!)}
-                                disabled={isRestoring}
-                              >
-                                {isRestoring ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Restoring...
-                                  </>
-                                ) : (
-                                  <>
-                                    <RotateCcw className="h-4 w-4 mr-2" />
-                                    Make this version current
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
-                        {!isEditing ? (
-                          <>
-                            <Button
-                              variant="outline"
-                              onClick={() => setIsPreviewDialogOpen(true)}
-                              className="w-full sm:w-auto"
-                            >
-                              <Download className="h-4 w-4 mr-2" />
-                              <span className="hidden sm:inline">Download PDF</span>
-                              <span className="sm:hidden">PDF</span>
-                            </Button>
-                            <Button
-                              variant="outline"
-                              onClick={() => {
-                                const markdown = htmlToMarkdown(generatedSOP.sopHtml);
-                                setIsEditing(true);
-                                setEditedSOPContent(markdown);
-                              }}
-                              className="w-full sm:w-auto"
-                            >
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit SOP
-                            </Button>
-                          </>
-                        ) : (
-                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-                            <Button
-                              variant="outline"
-                              onClick={() => {
-                                setIsEditing(false);
-                                setEditedSOPContent("");
-                                setReviewWithAI(false);
-                                setAiReviewSuggestions(null);
-                                setShowReviewResults(false);
-                              }}
-                              disabled={isSubmitting || isReviewing}
-                              className="w-full sm:w-auto"
-                            >
-                              <X className="h-4 w-4 mr-2" />
-                              Cancel
-                            </Button>
+                        {/* Save Buttons for Drafts */}
+                        {generatedSOP.isDraft && (
+                          <div className="flex flex-wrap gap-3 pt-2">
                             <Button
                               onClick={async () => {
-                                if (reviewWithAI) {
-                                  setIsReviewing(true);
-                                  try {
-                                    const response = await fetch("/api/sop/review", {
-                                      method: "POST",
-                                      headers: {
-                                        "Content-Type": "application/json",
-                                      },
-                                      credentials: "include",
-                                      body: JSON.stringify({
-                                        sopContent: editedSOPContent,
-                                      }),
-                                    });
-
-                                    if (isRateLimitError(response)) {
-                                      const rateLimitError = await parseRateLimitError(response);
-                                      const errorMessage = getRateLimitErrorMessage(rateLimitError);
-                                      toast.error("Rate limit exceeded", {
-                                        description: errorMessage,
-                                        duration: 10000,
-                                      });
-                                      setIsReviewing(false);
-                                      return;
-                                    }
-
-                                    if (response.ok) {
-                                      const result = await response.json();
-                                      if (result.suggestions && result.suggestions.length > 0) {
-                                        setAiReviewSuggestions(result);
-                                        setShowReviewResults(true);
-                                        toast.info("AI review complete", {
-                                          description: `Found ${result.suggestions.length} suggestion(s). Review them below.`,
-                                        });
-                                      } else {
-                                        await saveSOPModifications(editedSOPContent);
-                                      }
-                                    } else {
-                                      throw new Error("AI review failed");
-                                    }
-                                  } catch (error: any) {
-                                    console.error("Error during AI review:", error);
-                                    toast.warning("AI review unavailable", {
-                                      description: "Proceeding with save. You can still submit your changes.",
-                                    });
-                                    await saveSOPModifications(editedSOPContent);
-                                  } finally {
-                                    setIsReviewing(false);
-                                  }
-                                } else {
-                                  await saveSOPModifications(editedSOPContent);
-                                }
+                                await saveSOPAsDraft();
                               }}
-                              disabled={isSubmitting || isReviewing || !editedSOPContent.trim()}
-                              className="w-full sm:w-auto"
+                              variant="outline"
+                              disabled={isSubmitting}
+                              className="border-amber-500 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
                             >
-                              {isReviewing ? (
+                              {isSubmitting ? (
                                 <>
                                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Reviewing...
+                                  Saving...
                                 </>
                               ) : (
                                 <>
                                   <Save className="h-4 w-4 mr-2" />
-                                  {isSubmitting ? "Saving..." : "Submit Modifications"}
+                                  Save as Draft
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              onClick={async () => {
+                                await saveSOPAndPublish();
+                              }}
+                              disabled={isSubmitting}
+                              className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                            >
+                              {isSubmitting ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Publishing...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                                  Save & Publish
                                 </>
                               )}
                             </Button>
                           </div>
                         )}
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="w-full max-w-full overflow-x-hidden">
-                    {isEditing ? (
-                      <div className="space-y-6 w-full max-w-full">
-                        {/* AI Review Suggestions */}
-                        {showReviewResults && aiReviewSuggestions && (
-                          <Card className="border-primary/20 bg-muted/30">
-                            <CardHeader className="pb-3">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <Sparkles className="h-5 w-5 text-primary" />
-                                  <CardTitle className="text-lg">AI Review Suggestions</CardTitle>
-                                  <Badge variant="secondary">
-                                    {aiReviewSuggestions.suggestions?.length || 0}
-                                  </Badge>
+
+                        <Separator />
+
+                        {/* Version selector - only show for saved SOPs, not drafts */}
+                        {!generatedSOP.isDraft && (
+                          <div className="space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                              <Label htmlFor="version-select" className="text-base font-medium shrink-0">
+                                Version:
+                              </Label>
+                              {isLoadingVersions ? (
+                                <div className="flex items-center gap-2 text-base text-muted-foreground">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  <span>Loading versions...</span>
                                 </div>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    setShowReviewResults(false);
-                                    setAiReviewSuggestions(null);
-                                  }}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                              <ScrollArea className="h-[400px] pr-4">
-                                <div className="space-y-3">
-                                  {aiReviewSuggestions.suggestions?.map((suggestion: any, index: number) => (
-                                    <Card key={index} className="bg-background">
-                                      <CardContent className="p-4 space-y-3">
-                                        <div className="flex items-start justify-between gap-2">
+                              ) : versions.length > 0 ? (
+                                <div className="flex items-center gap-2 flex-1">
+                                  <Select
+                                    value={selectedVersionId || generatedSOP.sopId || ""}
+                                    onValueChange={(value) => {
+                                      setSelectedVersionId(value);
+                                      loadVersion(value);
+                                    }}
+                                    disabled={isLoadingVersions}
+                                  >
+                                    <SelectTrigger id="version-select" className="w-full sm:w-[280px]">
+                                      <SelectValue placeholder="Select version" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {versions.map((version) => (
+                                        <SelectItem key={version.id} value={version.id}>
                                           <div className="flex items-center gap-2">
-                                            <Badge variant="outline" className="text-xs">
-                                              {suggestion.type || "Suggestion"}
-                                            </Badge>
+                                            <span className="font-medium">Version {version.versionNumber}</span>
+                                            {version.isCurrentVersion && (
+                                              <Badge variant="secondary" className="text-xs">
+                                                Current
+                                              </Badge>
+                                            )}
+                                            <span className="text-muted-foreground text-xs">
+                                              • {new Date(version.versionCreatedAt).toLocaleDateString()}
+                                            </span>
                                           </div>
-                                          <div className="flex gap-2">
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() => {
-                                                const updatedContent = editedSOPContent.replace(
-                                                  suggestion.original,
-                                                  suggestion.suggested
-                                                );
-                                                setEditedSOPContent(updatedContent);
-                                                const updatedSuggestions = {
-                                                  ...aiReviewSuggestions,
-                                                  suggestions: aiReviewSuggestions.suggestions.filter((_: any, i: number) => i !== index),
-                                                };
-                                                if (updatedSuggestions.suggestions.length === 0) {
-                                                  setShowReviewResults(false);
-                                                  setAiReviewSuggestions(null);
-                                                } else {
-                                                  setAiReviewSuggestions(updatedSuggestions);
-                                                }
-                                                toast.success("Suggestion applied");
-                                              }}
-                                            >
-                                              Accept
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => {
-                                                const updatedSuggestions = {
-                                                  ...aiReviewSuggestions,
-                                                  suggestions: aiReviewSuggestions.suggestions.filter((_: any, i: number) => i !== index),
-                                                };
-                                                if (updatedSuggestions.suggestions.length === 0) {
-                                                  setShowReviewResults(false);
-                                                  setAiReviewSuggestions(null);
-                                                } else {
-                                                  setAiReviewSuggestions(updatedSuggestions);
-                                                }
-                                              }}
-                                            >
-                                              Dismiss
-                                            </Button>
-                                          </div>
-                                        </div>
-                                        <div className="space-y-2 text-base">
-                                          <div>
-                                            <span className="text-muted-foreground font-medium">Original: </span>
-                                            <span className="line-through text-muted-foreground">{suggestion.original}</span>
-                                          </div>
-                                          <div>
-                                            <span className="text-muted-foreground font-medium">Suggested: </span>
-                                            <span className="text-foreground">{suggestion.suggested}</span>
-                                          </div>
-                                          {suggestion.reason && (
-                                            <p className="text-xs text-muted-foreground mt-2 italic">{suggestion.reason}</p>
-                                          )}
-                                        </div>
-                                      </CardContent>
-                                    </Card>
-                                  ))}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  {generatedSOP.versionNumber && (
+                                    <Badge variant={generatedSOP.isCurrentVersion ? "default" : "outline"}>
+                                      {generatedSOP.isCurrentVersion ? "Current" : `v${generatedSOP.versionNumber}`}
+                                    </Badge>
+                                  )}
                                 </div>
-                              </ScrollArea>
-                              <Separator />
-                              <div className="flex items-center justify-between">
-                                <p className="text-base text-muted-foreground">
-                                  {aiReviewSuggestions.suggestions?.length || 0} suggestion(s) remaining
-                                </p>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-base text-muted-foreground">
+                                    Version {generatedSOP.versionNumber || 1}
+                                  </span>
+                                  {generatedSOP.isCurrentVersion && (
+                                    <Badge variant="secondary">Current</Badge>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {generatedSOP.sopId && !generatedSOP.isCurrentVersion && versions.length > 0 && (
+                              <div>
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={async () => {
-                                    let updatedContent = editedSOPContent;
-                                    aiReviewSuggestions.suggestions.forEach((suggestion: any) => {
-                                      updatedContent = updatedContent.replace(
-                                        suggestion.original,
-                                        suggestion.suggested
-                                      );
-                                    });
-                                    setEditedSOPContent(updatedContent);
-                                    setShowReviewResults(false);
-                                    setAiReviewSuggestions(null);
-                                    toast.success("All suggestions applied");
-                                  }}
+                                  onClick={() => restoreVersion(generatedSOP.sopId!)}
+                                  disabled={isRestoring}
                                 >
-                                  Accept All
+                                  {isRestoring ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                      Restoring...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <RotateCcw className="h-4 w-4 mr-2" />
+                                      Make this version current
+                                    </>
+                                  )}
                                 </Button>
                               </div>
-                            </CardContent>
-                          </Card>
+                            )}
+                          </div>
                         )}
-
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="sop-edit" className="text-base font-medium">
-                              Edit SOP Content
-                            </Label>
-                            <Textarea
-                              id="sop-edit"
-                              value={editedSOPContent}
-                              onChange={(e) => setEditedSOPContent(e.target.value)}
-                              className="min-h-[600px] font-mono text-base w-full max-w-full resize-y break-words whitespace-pre-wrap"
-                              placeholder="Edit your SOP content here..."
-                              style={{
-                                wordWrap: 'break-word',
-                                overflowWrap: 'break-word',
-                                overflowX: 'hidden',
-                                maxWidth: '100%'
-                              }}
-                            />
-                          </div>
-
-                          <div className="flex items-start space-x-3 p-4 border rounded-lg bg-muted/30">
-                            <input
-                              type="checkbox"
-                              id="review-with-ai"
-                              checked={reviewWithAI}
-                              onChange={(e) => setReviewWithAI(e.target.checked)}
-                              className="h-4 w-4 mt-0.5 rounded border-input text-primary focus:ring-primary focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                              disabled={isSubmitting || isReviewing}
-                            />
-                            <div className="flex-1 space-y-1">
-                              <Label
-                                htmlFor="review-with-ai"
-                                className="text-base font-medium cursor-pointer flex items-center gap-2"
-                              >
-                                <Sparkles className="h-4 w-4 text-primary" />
-                                Review with AI before submitting
-                              </Label>
-                              <p className="text-xs text-muted-foreground">
-                                AI will review your changes for grammar, clarity, and consistency before saving.
-                              </p>
-                            </div>
-                          </div>
-
-                          <Alert>
-                            <Info className="h-4 w-4" />
-                            <AlertDescription>
-                              <strong>Tip:</strong> You can edit the markdown content directly. {reviewWithAI ? "AI review is enabled and will check your changes before saving." : "Changes will be saved when you click 'Submit Modifications'."}
-                            </AlertDescription>
-                          </Alert>
-                        </div>
                       </div>
-                    ) : (
-                      <>
-                        <style dangerouslySetInnerHTML={{
-                          __html: `
+
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="icon" className="w-full sm:w-auto border-[var(--accent-strong)] text-[var(--accent-strong)] hover:bg-[var(--accent-strong)]/10">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={async () => {
+                              if (generatedSOP?.sopHtml) {
+                                const markdown = htmlToMarkdown(generatedSOP.sopHtml);
+                                const success = await copyToClipboard(
+                                  markdown,
+                                  () => toast.success("SOP content copied to clipboard"),
+                                  (error: Error) => toast.error("Failed to copy", { description: error.message })
+                                );
+                              } else {
+                                toast.error("No SOP content to copy");
+                              }
+                            }}>
+                              <Copy className="h-4 w-4 mr-2" />
+                              Copy to Clipboard
+                            </DropdownMenuItem>
+                            <Separator />
+                            <DropdownMenuItem onClick={() => setIsPreviewDialogOpen(true)}>
+                              <Download className="h-4 w-4 mr-2" />
+                              Download PDF
+                            </DropdownMenuItem>
+                            <Separator />
+                            <DropdownMenuItem onClick={() => setIsRefinementModalOpen(true)}>
+                              <SparklesIcon className="h-4 w-4 mr-2" />
+                              Refine SOP
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  </div>
+                  <ScrollArea className="flex-1 min-h-0">
+                    <div id="sop-display" className="p-6 pt-4 w-full max-w-full overflow-x-hidden">
+                      <style dangerouslySetInnerHTML={{
+                        __html: `
                         .sop-content-display h1 {
                           font-size: 2rem;
                           font-weight: 700;
@@ -1165,39 +1278,38 @@ export default function SopPage() {
                           text-decoration: none;
                         }
                       `}} />
-                        {generatedSOP.sopHtml && generatedSOP.sopHtml.trim().length > 0 ? (
-                          <ScrollArea className="h-[calc(100vh-400px)] w-full">
-                            <div
-                              className="sop-content-display w-full max-w-full pr-4"
-                              style={{
-                                wordWrap: 'break-word',
-                                overflowWrap: 'break-word',
-                                overflowX: 'hidden',
-                                maxWidth: '100%'
-                              }}
-                              dangerouslySetInnerHTML={{ __html: generatedSOP.sopHtml }}
-                            />
-                          </ScrollArea>
-                        ) : (
-                          <Alert variant="destructive">
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertTitle>Content Unavailable</AlertTitle>
-                            <AlertDescription className="space-y-3">
-                              <p>HTML content not available. Please regenerate the SOP.</p>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setIsModalOpen(true)}
-                              >
-                                Regenerate SOP
-                              </Button>
-                            </AlertDescription>
-                          </Alert>
-                        )}
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
+                      {generatedSOP.sopHtml && generatedSOP.sopHtml.trim().length > 0 ? (
+                        <div className="w-full">
+                          <div
+                            className="sop-content-display w-full max-w-full pr-4"
+                            style={{
+                              wordWrap: 'break-word',
+                              overflowWrap: 'break-word',
+                              overflowX: 'hidden',
+                              maxWidth: '100%'
+                            }}
+                            dangerouslySetInnerHTML={{ __html: generatedSOP.sopHtml }}
+                          />
+                        </div>
+                      ) : (
+                        <Alert variant="destructive">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertTitle>Content Unavailable</AlertTitle>
+                          <AlertDescription className="space-y-3">
+                            <p>HTML content not available. Please regenerate the SOP.</p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setIsModalOpen(true)}
+                            >
+                              Regenerate SOP
+                            </Button>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
               )}
 
               {!generatedSOP && !isProcessing && !error && !isLoadingLatest && hasNoSavedSOPs && (
@@ -1232,16 +1344,17 @@ export default function SopPage() {
 
       {user && (
         <Dialog open={isModalOpen} onOpenChange={(open) => !isProcessing && setIsModalOpen(open)}>
-          <DialogContent className="w-[min(900px,95vw)] sm:max-w-3xl max-h-[90vh] overflow-hidden p-0 sm:p-2">
+          <DialogContent className="w-[min(900px,95vw)] sm:max-w-3xl max-h-[90vh] overflow-hidden p-0 sm:p-2 flex flex-col">
 
-            <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogHeader className="px-4 pt-4 pb-2 flex-shrink-0">
               <DialogTitle >Generate SOP</DialogTitle>
               <DialogDescription>
                 Fill out the details below and the AI will generate a clear, detailed SOP for your process.
               </DialogDescription>
             </DialogHeader>
-            <div className="px-4 pb-4">
+            <div className="px-4 pb-4 flex flex-col flex-1 min-h-0 overflow-hidden">
               <BaseIntakeForm
+                ref={sopFormRef}
                 userId={user.id}
                 config={sopGeneratorConfig}
                 onClose={() => {
@@ -1290,14 +1403,39 @@ export default function SopPage() {
                       throw new Error("No HTML content received from server");
                     }
 
+                    // Form-generated SOPs are now drafts until user saves
                     setGeneratedSOP({
                       sopHtml: result.sopHtml,
-                      sopId: result.sopId || null,
-                      versionNumber: result.metadata?.versionNumber || 1,
-                      isCurrentVersion: true,
+                      sopId: result.sopId || null, // Will be null if not saved
+                      versionNumber: result.metadata?.versionNumber,
+                      isCurrentVersion: false,
+                      isDraft: result.isDraft !== undefined ? result.isDraft : true, // Default to draft if not saved
                       metadata: result.metadata,
                     });
-                    setSelectedVersionId(result.sopId);
+
+                    // Store form data for saving later
+                    draftFormDataRef.current = formData;
+
+                    // Save to localStorage for auto-recovery
+                    try {
+                      localStorage.setItem('sop-draft', JSON.stringify({
+                        sop: {
+                          sopHtml: result.sopHtml,
+                          sopId: result.sopId || null,
+                          versionNumber: result.metadata?.versionNumber,
+                          isCurrentVersion: false,
+                          isDraft: true,
+                          metadata: result.metadata,
+                        },
+                        formData: formData,
+                      }));
+                    } catch (e) {
+                      console.warn("Failed to save draft to localStorage:", e);
+                    }
+
+                    if (result.sopId) {
+                      setSelectedVersionId(result.sopId);
+                    }
 
                     if (result.sopId) {
                       loadVersions(result.sopId);
@@ -1305,7 +1443,7 @@ export default function SopPage() {
 
                     setIsProcessing(false);
                     toast.success("SOP generated successfully!", {
-                      description: `Your Standard Operating Procedure "${result.metadata.title}" is ready to review and use.`,
+                      description: `Your Standard Operating Procedure "${result.metadata.title}" is ready. Review it below and save when ready.`,
                     });
 
                     return {
@@ -1391,6 +1529,243 @@ export default function SopPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Controlled Tool Chat Dialog */}
+      <Dialog open={isToolChatOpen} onOpenChange={setIsToolChatOpen}>
+        <DialogContent className="w-[min(900px,95vw)] sm:max-w-3xl max-h-[90vh] overflow-hidden p-0 sm:p-2">
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogTitle>{getToolChatConfig("process-builder").title}</DialogTitle>
+            <DialogDescription>
+              {getToolChatConfig("process-builder").description ?? "Use chat to describe what you want to build."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-4 pb-4 h-[calc(90vh-140px)]">
+            <ToolChat
+              toolId="process-builder"
+              mode="both"
+              className="h-full"
+              onApplyAction={async (action: any) => {
+                try {
+                  const formData = action?.formData || {};
+                  const sop = action?.sop;
+
+                  // Populate the form with extracted data
+                  if (sopFormRef.current) {
+                    sopFormRef.current.setFormData(formData);
+                  }
+
+                  // Store form data for later use when saving
+                  draftFormDataRef.current = formData;
+
+                  // If SOP was generated, set it as a draft (not saved yet)
+                  if (sop?.sopHtml) {
+                    const draftSOP: GeneratedSOP = {
+                      sopHtml: sop.sopHtml,
+                      sopId: null, // Will be set when saved
+                      versionNumber: 1,
+                      isCurrentVersion: false,
+                      isDraft: true, // Mark as draft from chat
+                      metadata: {
+                        title: formData.sopTitle || sop.metadata?.title || "SOP",
+                        generatedAt: new Date().toISOString(),
+                        tokens: sop.metadata?.tokens || {
+                          prompt: 0,
+                          completion: 0,
+                          total: 0,
+                        },
+                        organizationProfileUsed: (action?.kbDefaultsUsed?.length || 0) > 0,
+                      },
+                    };
+
+                    setGeneratedSOP(draftSOP);
+
+                    // Set flag to prevent loadLatestSOP from overwriting this draft
+                    hasAttemptedLoadRef.current = true;
+
+                    // Save to localStorage for auto-recovery
+                    try {
+                      localStorage.setItem('sop-draft', JSON.stringify({
+                        sop: draftSOP,
+                        formData: formData,
+                      }));
+                    } catch (e) {
+                      console.warn("Failed to save draft to localStorage:", e);
+                    }
+                  }
+
+                  setIsToolChatOpen(false);
+
+                  if (sop?.sopHtml) {
+                    toast.success("SOP generated and displayed on page", {
+                      description: "Review the SOP below. You can continue chatting to make edits, or save it when ready.",
+                    });
+                  } else {
+                    toast.success("Form populated", {
+                      description: "The process details have been extracted and filled in. Review and click 'Generate SOP' when ready.",
+                    });
+                  }
+                } catch (error) {
+                  console.error("Error applying chat action:", error);
+                  toast.error("Failed to apply process details", {
+                    description: error instanceof Error ? error.message : "An error occurred",
+                  });
+                }
+              }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Refinement Dialog */}
+      {generatedSOP && (
+        <ToolChatDialog
+          toolId="process-builder"
+          mode="both"
+          open={isRefinementModalOpen}
+          onOpenChange={setIsRefinementModalOpen}
+          buttonLabel=""
+          initialContext={{
+            existingSOP: {
+              sopHtml: generatedSOP.sopHtml,
+              sopMarkdown: htmlToMarkdown(generatedSOP.sopHtml),
+              metadata: generatedSOP.metadata,
+            },
+            existingFormData: draftFormDataRef.current || {},
+          }}
+          showSOPBadge={true}
+          sopBadgeData={{
+            sop: {
+              sopHtml: generatedSOP.sopHtml,
+              metadata: generatedSOP.metadata,
+            },
+          }}
+          onViewSOP={() => {
+            setIsRefinementModalOpen(false);
+            setTimeout(() => {
+              const sopElement = document.getElementById('sop-display');
+              if (sopElement) {
+                sopElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              } else {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+            }, 100);
+          }}
+          onApplyAction={async (action: any) => {
+            try {
+              // Support both refinedSOP and sop properties
+              const refinedSOP = action?.refinedSOP || action?.sop;
+              const formData = action?.formData || draftFormDataRef.current || {};
+
+              if (refinedSOP) {
+                // Create a new draft from the refined SOP (don't auto-save or increment version)
+                // Preserve the original draft status - if base was draft, refined is draft
+                // If base was published, refined becomes a new draft
+                const refinedDraft: GeneratedSOP = {
+                  sopHtml: refinedSOP.sopHtml || generatedSOP.sopHtml,
+                  sopId: null, // Will be set when saved (don't auto-save)
+                  versionNumber: undefined, // Drafts don't have version numbers
+                  isCurrentVersion: false, // Drafts are not current versions
+                  isDraft: true, // Always create as draft, regardless of base SOP status
+                  metadata: refinedSOP.metadata || generatedSOP.metadata,
+                };
+
+                setGeneratedSOP(refinedDraft);
+
+                // Store form data for saving later
+                draftFormDataRef.current = formData;
+
+                // Save to localStorage for auto-recovery
+                try {
+                  localStorage.setItem('sop-draft', JSON.stringify({
+                    sop: refinedDraft,
+                    formData: formData,
+                  }));
+                } catch (e) {
+                  console.warn("Failed to save draft to localStorage:", e);
+                }
+
+                toast.success("SOP refined", {
+                  description: "Review the refined SOP below. You can save it as a draft or publish it.",
+                });
+
+                setIsRefinementModalOpen(false);
+              }
+            } catch (error) {
+              console.error("Error applying refinement:", error);
+              toast.error("Failed to apply refinement");
+            }
+          }}
+          parseAction={(raw: unknown) => {
+            // Parse the action to extract refined SOP
+            // Map refinedSOP to sop so ToolChat can display it using SOPDisplay
+            if (typeof raw === 'object' && raw !== null) {
+              const action = raw as any;
+              if (action.refinedSOP) {
+                return {
+                  ...action,
+                  sop: action.refinedSOP, // Map to sop for display
+                  refinedSOP: action.refinedSOP, // Keep original for onApplyAction
+                };
+              }
+            }
+            return raw;
+          }}
+        />
+      )}
+
+      {/* Restore Draft Dialog */}
+      <Dialog open={isRestoreDraftDialogOpen} onOpenChange={setIsRestoreDraftDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Restore Draft?</DialogTitle>
+            <DialogDescription>
+              You have an unsaved draft from a previous session. Would you like to restore it?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                // User chose not to restore, clear it
+                if (pendingDraftData) {
+                  try {
+                    localStorage.removeItem('sop-draft');
+                  } catch (e) {
+                    console.warn("Failed to clear draft from localStorage:", e);
+                  }
+                }
+                setPendingDraftData(null);
+                setIsRestoreDraftDialogOpen(false);
+              }}
+            >
+              Discard
+            </Button>
+            <Button
+              onClick={() => {
+                if (pendingDraftData) {
+                  setGeneratedSOP(pendingDraftData.sop);
+                  if (pendingDraftData.formData) {
+                    draftFormDataRef.current = pendingDraftData.formData;
+                    if (sopFormRef.current) {
+                      sopFormRef.current.setFormData(pendingDraftData.formData);
+                    }
+                  }
+                  hasAttemptedLoadRef.current = true; // Prevent loadLatestSOP from running
+                  toast.info("Draft restored", {
+                    description: "Your previous draft has been restored. You can continue editing or save it.",
+                  });
+                }
+                setPendingDraftData(null);
+                setIsRestoreDraftDialogOpen(false);
+              }}
+              className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+            >
+              Restore
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

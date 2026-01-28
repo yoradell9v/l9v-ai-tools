@@ -1,7 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Building2, X, UserPlus, Mail, Trash2, MoreVertical, PowerOff, CheckCircle2 } from "lucide-react";
+import {
+    PlusIcon,
+    BuildingOffice2Icon,
+    XMarkIcon,
+    UserPlusIcon,
+    EnvelopeIcon,
+    TrashIcon,
+    EllipsisVerticalIcon,
+    PowerIcon,
+    CheckCircleIcon,
+    ArrowPathIcon
+} from "@heroicons/react/24/outline";
 import { useUser } from "@/context/UserContext";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -109,6 +120,8 @@ export default function TenantsPage() {
     const [isSendingInvitation, setIsSendingInvitation] = useState(false);
     const [inviteError, setInviteError] = useState<string | null>(null);
     const [cancellingInviteId, setCancellingInviteId] = useState<string | null>(null);
+    const [inviteToCancel, setInviteToCancel] = useState<PendingInvite | null>(null);
+    const [showCancelInviteModal, setShowCancelInviteModal] = useState(false);
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [tenantToDeactivate, setTenantToDeactivate] = useState<Tenant | null>(null);
     const [showDeactivateModal, setShowDeactivateModal] = useState(false);
@@ -393,12 +406,18 @@ export default function TenantsPage() {
         }
     };
 
-    const handleCancelInvite = async (inviteId: string) => {
-        if (!selectedTenant) return;
+    const handleCancelInvite = (invite: PendingInvite) => {
+        setInviteToCancel(invite);
+        setShowCancelInviteModal(true);
+    };
 
-        setCancellingInviteId(inviteId);
+    const confirmCancelInvite = async () => {
+        if (!selectedTenant || !inviteToCancel) return;
+
+        setCancellingInviteId(inviteToCancel.id);
+        setShowCancelInviteModal(false);
         try {
-            const response = await fetch(`/api/invite?id=${inviteId}`, {
+            const response = await fetch(`/api/invite?id=${inviteToCancel.id}`, {
                 method: "DELETE",
                 credentials: "include",
             });
@@ -419,8 +438,12 @@ export default function TenantsPage() {
             await fetchTenantDetails(selectedTenant.id);
         } catch (error) {
             console.error("Error cancelling invitation:", error);
+            toast.error("Failed to cancel invitation", {
+                description: "An error occurred while cancelling the invitation.",
+            });
         } finally {
             setCancellingInviteId(null);
+            setInviteToCancel(null);
         }
     };
 
@@ -580,7 +603,7 @@ export default function TenantsPage() {
                 </div>
                 <div className="flex items-center justify-between">
                     <Button onClick={() => setIsModalOpen(true)}>
-                        <Plus className="h-4 w-4 mr-2" />
+                        <PlusIcon className="h-4 w-4 mr-2" />
                         Add Tenant
                     </Button>
                 </div>
@@ -608,7 +631,7 @@ export default function TenantsPage() {
                                             return (
                                                 <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
                                                     <div className="p-4 rounded-xl mb-4 bg-muted">
-                                                        <Building2 className="h-10 w-10 text-muted-foreground" />
+                                                        <BuildingOffice2Icon className="h-10 w-10 text-muted-foreground" />
                                                     </div>
                                                     <h3 className="text-lg font-semibold mb-1">No current organization detected</h3>
                                                     <p className="text-base text-muted-foreground mb-4 max-w-sm">
@@ -643,7 +666,7 @@ export default function TenantsPage() {
                                                     <h3 className="text-base font-medium mb-3">Members</h3>
                                                     {currentTenantDetails.collaborators.length === 0 ? (
                                                         <div className="py-6 text-center rounded-lg border border-dashed">
-                                                            <p className="text-xs text-muted-foreground">
+                                                            <p className="text-base text-muted-foreground">
                                                                 No members found in this organization.
                                                             </p>
                                                         </div>
@@ -654,23 +677,25 @@ export default function TenantsPage() {
                                                                 {currentTenantDetails.collaborators.map((collaborator) => (
                                                                     <div
                                                                         key={collaborator.id}
-                                                                        className="rounded-lg border px-3 py-2 text-xs space-y-1"
+                                                                        className="rounded-lg border px-3 py-2 space-y-1"
                                                                     >
                                                                         <div className="flex items-center justify-between gap-2">
-                                                                            <div className="font-medium truncate">
+                                                                            <div className="font-medium truncate text-base">
                                                                                 {collaborator.firstname} {collaborator.lastname}
                                                                             </div>
                                                                             <Badge
-                                                                                variant={collaborator.role === "ADMIN" ? "default" : "secondary"}
-                                                                                className="shrink-0"
+                                                                                className={`shrink-0 ${collaborator.role === "ADMIN"
+                                                                                    ? "bg-[var(--primary-dark)] text-white"
+                                                                                    : "border-[var(--primary-dark)] text-[var(--primary-dark)] bg-transparent"
+                                                                                    }`}
                                                                             >
                                                                                 {collaborator.role}
                                                                             </Badge>
                                                                         </div>
-                                                                        <div className="text-muted-foreground truncate" title={collaborator.email}>
+                                                                        <div className="text-base text-muted-foreground truncate" title={collaborator.email}>
                                                                             {collaborator.email}
                                                                         </div>
-                                                                        <div className="text-[11px] text-muted-foreground">
+                                                                        <div className="text-xs text-muted-foreground">
                                                                             Joined{" "}
                                                                             {new Date(collaborator.joinedAt).toLocaleDateString("en-US", {
                                                                                 month: "short",
@@ -703,7 +728,13 @@ export default function TenantsPage() {
                                                                                     {collaborator.email}
                                                                                 </TableCell>
                                                                                 <TableCell>
-                                                                                    <Badge variant={collaborator.role === "ADMIN" ? "default" : "secondary"}>
+                                                                                    <Badge
+                                                                                        className={
+                                                                                            collaborator.role === "ADMIN"
+                                                                                                ? "bg-[var(--primary-dark)] text-white"
+                                                                                                : "border-[var(--primary-dark)] text-[var(--primary-dark)] bg-transparent"
+                                                                                        }
+                                                                                    >
                                                                                         {collaborator.role}
                                                                                     </Badge>
                                                                                 </TableCell>
@@ -736,7 +767,7 @@ export default function TenantsPage() {
                                         return (
                                             <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
                                                 <div className="p-4 rounded-xl mb-4 bg-muted">
-                                                    <Building2 className="h-10 w-10 text-muted-foreground" />
+                                                    <BuildingOffice2Icon className="h-10 w-10 text-muted-foreground" />
                                                 </div>
                                                 <h3 className="text-lg font-semibold mb-1">
                                                     {activeTab === "active" ? "No active tenants" : "No inactive tenants"}
@@ -748,7 +779,7 @@ export default function TenantsPage() {
                                                 </p>
                                                 {activeTab === "active" && (
                                                     <Button onClick={() => setIsModalOpen(true)}>
-                                                        <Plus className="h-4 w-4 mr-2" />
+                                                        <PlusIcon className="h-4 w-4 mr-2" />
                                                         Add Tenant
                                                     </Button>
                                                 )}
@@ -771,7 +802,7 @@ export default function TenantsPage() {
                                                             <div className="flex items-start justify-between gap-3">
                                                                 <div className="flex items-start gap-3 flex-1 min-w-0">
                                                                     <div className="p-2.5 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors shrink-0">
-                                                                        <Building2 className="h-5 w-5 text-primary" />
+                                                                        <BuildingOffice2Icon className="h-5 w-5 text-primary" />
                                                                     </div>
                                                                     <div className="flex-1 min-w-0 space-y-1">
                                                                         <div className="flex items-start gap-2">
@@ -795,7 +826,7 @@ export default function TenantsPage() {
                                                                                 size="icon"
                                                                                 className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                                                                             >
-                                                                                <MoreVertical className="h-4 w-4" />
+                                                                                <EllipsisVerticalIcon className="h-4 w-4" />
                                                                             </Button>
                                                                         </DropdownMenuTrigger>
                                                                         <DropdownMenuContent align="end">
@@ -808,7 +839,7 @@ export default function TenantsPage() {
                                                                                     }}
                                                                                     className="text-destructive"
                                                                                 >
-                                                                                    <PowerOff className="h-4 w-4 mr-2" />
+                                                                                    <PowerIcon className="h-4 w-4 mr-2" />
                                                                                     Deactivate
                                                                                 </DropdownMenuItem>
                                                                             ) : (
@@ -819,7 +850,7 @@ export default function TenantsPage() {
                                                                                         setShowActivateModal(true);
                                                                                     }}
                                                                                 >
-                                                                                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                                                                                    <CheckCircleIcon className="h-4 w-4 mr-2" />
                                                                                     Activate
                                                                                 </DropdownMenuItem>
                                                                             )}
@@ -888,11 +919,27 @@ export default function TenantsPage() {
                             </div>
                         </div>
                         <DialogFooter>
-                            <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
+                            <Button
+                                variant="outline"
+                                onClick={handleClose}
+                                disabled={isSubmitting}
+                                className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-transparent"
+                            >
                                 Cancel
                             </Button>
-                            <Button onClick={handleSubmit} disabled={isSubmitting}>
-                                {isSubmitting ? "Creating..." : "Create Tenant"}
+                            <Button
+                                onClick={handleSubmit}
+                                disabled={isSubmitting}
+                                className="bg-[var(--primary-dark)] text-white hover:bg-[var(--primary-dark)]/90"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <ArrowPathIcon className="h-4 w-4 mr-2 animate-spin" />
+                                        Creating...
+                                    </>
+                                ) : (
+                                    "Create Organization"
+                                )}
                             </Button>
                         </DialogFooter>
                     </DialogContent>
@@ -1003,12 +1050,40 @@ export default function TenantsPage() {
                     </AlertDialogContent>
                 </AlertDialog>
 
+                <AlertDialog open={showCancelInviteModal} onOpenChange={(open) => {
+                    if (cancellingInviteId !== inviteToCancel?.id) {
+                        setShowCancelInviteModal(open);
+                        if (!open) setInviteToCancel(null);
+                    }
+                }}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Cancel Invitation</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                {inviteToCancel
+                                    ? `Are you sure you want to cancel the invitation sent to "${inviteToCancel.email}"? This action cannot be undone.`
+                                    : ""}
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel disabled={cancellingInviteId === inviteToCancel?.id}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={confirmCancelInvite}
+                                disabled={cancellingInviteId === inviteToCancel?.id}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                                {cancellingInviteId === inviteToCancel?.id ? "Cancelling..." : "Cancel Invitation"}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
                 <Sheet open={isPanelOpen} onOpenChange={handleClosePanel}>
                     <SheetContent className="w-full sm:max-w-md flex flex-col p-0 h-full overflow-hidden">
                         <SheetHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-start gap-3">
                                 <div className="p-2 rounded-lg bg-muted">
-                                    <Building2 className="h-5 w-5" />
+                                    <BuildingOffice2Icon className="h-5 w-5" />
                                 </div>
                                 <div>
                                     <SheetTitle className="text-2xl">Tenant Details</SheetTitle>
@@ -1019,8 +1094,8 @@ export default function TenantsPage() {
                             </div>
                         </SheetHeader>
                         <div className="flex-1 min-h-0 overflow-hidden">
-                            <ScrollArea className="h-full px-6">
-                                <div className="pr-6">
+                            <ScrollArea className="h-full">
+                                <div className="px-6">
                                     {isLoadingTenantDetails ? (
                                         <div className="flex items-center justify-center py-12">
                                             <Skeleton className="h-8 w-8 rounded-full" />
@@ -1088,48 +1163,54 @@ export default function TenantsPage() {
 
                                             <div>
                                                 <div className="flex items-center gap-2 mb-3">
-                                                    <Mail className="h-4 w-4" />
+                                                    <EnvelopeIcon className="h-4 w-4" />
                                                     <h4 className="text-base font-medium">Pending Invites</h4>
                                                     {selectedTenant.pendingInvites && selectedTenant.pendingInvites.length > 0 && (
-                                                        <Badge>{selectedTenant.pendingInvites.length}</Badge>
+                                                        <Badge className="bg-[var(--primary-dark)] text-white">{selectedTenant.pendingInvites.length}</Badge>
                                                     )}
                                                 </div>
                                                 {!selectedTenant.pendingInvites || selectedTenant.pendingInvites.length === 0 ? (
                                                     <div className="py-6 text-center rounded-lg border border-dashed">
-                                                        <p className="text-xs text-muted-foreground">No pending invites</p>
+                                                        <p className="text-base text-muted-foreground">No pending invites</p>
                                                     </div>
                                                 ) : (
                                                     <div className="space-y-2">
                                                         {selectedTenant.pendingInvites.map((invite) => (
-                                                            <Card key={invite.id}>
-                                                                <CardContent className="p-3">
-                                                                    <div className="flex items-center justify-between gap-2">
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <p className="font-medium text-xs mb-0.5 truncate" title={invite.email}>
-                                                                                {invite.email}
-                                                                            </p>
-                                                                            <p className="text-xs text-muted-foreground">
-                                                                                {new Date(invite.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • Expires {new Date(invite.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                                                            </p>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                                                                            <Badge variant={invite.role === "ADMIN" ? "default" : "secondary"}>
+                                                            <Card key={invite.id} className="overflow-hidden w-full max-w-full">
+                                                                <CardContent className="px-3">
+                                                                    <div className="space-y-2">
+                                                                        <p className="font-medium text-base truncate" title={invite.email}>
+                                                                            {invite.email}
+                                                                        </p>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Badge
+                                                                                className={
+                                                                                    invite.role === "ADMIN"
+                                                                                        ? "bg-[var(--primary-dark)] text-white"
+                                                                                        : "border-[var(--primary-dark)] text-[var(--primary-dark)] bg-transparent"
+                                                                                }
+                                                                            >
                                                                                 {invite.role}
                                                                             </Badge>
-                                                                            <Button
-                                                                                variant="ghost"
-                                                                                size="icon"
-                                                                                className="h-6 w-6"
-                                                                                onClick={() => handleCancelInvite(invite.id)}
-                                                                                disabled={cancellingInviteId === invite.id}
-                                                                            >
-                                                                                {cancellingInviteId === invite.id ? (
-                                                                                    <Skeleton className="h-3.5 w-3.5 rounded-full" />
-                                                                                ) : (
-                                                                                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                                                                                )}
-                                                                            </Button>
+                                                                            {cancellingInviteId === invite.id ? (
+                                                                                <Badge className="bg-destructive text-white flex items-center gap-1.5">
+                                                                                    <ArrowPathIcon className="h-3.5 w-3.5 animate-spin" />
+                                                                                    Cancelling...
+                                                                                </Badge>
+                                                                            ) : (
+                                                                                <Badge
+                                                                                    className="bg-destructive text-white flex items-center gap-1.5 cursor-pointer hover:bg-destructive/90"
+                                                                                    onClick={() => handleCancelInvite(invite)}
+                                                                                >
+                                                                                    <XMarkIcon className="h-3.5 w-3.5" />
+                                                                                    Cancel Invite
+                                                                                </Badge>
+                                                                            )}
                                                                         </div>
+                                                                        <Separator className="my-1" />
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            {new Date(invite.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • Expires {new Date(invite.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                                        </p>
                                                                     </div>
                                                                 </CardContent>
                                                             </Card>
@@ -1141,27 +1222,27 @@ export default function TenantsPage() {
 
                                             <div>
                                                 <div className="flex items-center gap-2 mb-3">
-                                                    <UserPlus className="h-4 w-4" />
+                                                    <UserPlusIcon className="h-4 w-4" />
                                                     <h4 className="text-base font-medium">Collaborators</h4>
                                                     {selectedTenant.collaborators && selectedTenant.collaborators.length > 0 && (
-                                                        <Badge>{selectedTenant.collaborators.length}</Badge>
+                                                        <Badge className="bg-[var(--primary-dark)] text-white">{selectedTenant.collaborators.length}</Badge>
                                                     )}
                                                 </div>
                                                 {selectedTenant.collaborators.length === 0 ? (
                                                     <div className="py-6 text-center rounded-lg border border-dashed">
-                                                        <p className="text-xs text-muted-foreground">No collaborators yet</p>
+                                                        <p className="text-base text-muted-foreground">No collaborators yet</p>
                                                     </div>
                                                 ) : (
                                                     <div className="space-y-2">
                                                         {selectedTenant.collaborators.map((collaborator) => (
-                                                            <Card key={collaborator.id} className={collaborator.deactivatedAt ? "opacity-60" : ""}>
-                                                                <CardContent className="p-3">
-                                                                    <div className="flex items-center justify-between gap-2">
+                                                            <Card key={collaborator.id} className={`overflow-hidden w-full max-w-full ${collaborator.deactivatedAt ? "opacity-60" : ""}`}>
+                                                                <CardContent className="py-0 px-3">
+                                                                    <div className="flex items-center justify-between gap-2 w-full">
                                                                         <div className="flex-1 min-w-0">
-                                                                            <p className="font-medium text-xs mb-0.5">
+                                                                            <p className="font-medium text-base mb-0.5 truncate">
                                                                                 {collaborator.firstname} {collaborator.lastname}
                                                                             </p>
-                                                                            <p className="text-xs truncate text-muted-foreground" title={collaborator.email}>
+                                                                            <p className="text-base truncate text-muted-foreground" title={collaborator.email}>
                                                                                 {collaborator.email}
                                                                             </p>
                                                                             <p className="text-xs mt-0.5 text-muted-foreground">
@@ -1171,15 +1252,21 @@ export default function TenantsPage() {
                                                                                 }
                                                                             </p>
                                                                         </div>
-                                                                        <div className="flex items-center gap-2 flex-shrink-0">
-                                                                            <Badge variant={collaborator.role === "ADMIN" ? "default" : "secondary"}>
+                                                                        <div className="flex items-center gap-2 shrink-0">
+                                                                            <Badge
+                                                                                className={
+                                                                                    collaborator.role === "ADMIN"
+                                                                                        ? "bg-[var(--primary-dark)] text-white"
+                                                                                        : "border-[var(--primary-dark)] text-[var(--primary-dark)] bg-transparent"
+                                                                                }
+                                                                            >
                                                                                 {collaborator.role}
                                                                             </Badge>
                                                                             {isSuperAdmin && (
                                                                                 <DropdownMenu>
                                                                                     <DropdownMenuTrigger asChild>
                                                                                         <Button variant="ghost" size="icon" className="h-6 w-6">
-                                                                                            <MoreVertical className="h-3.5 w-3.5" />
+                                                                                            <EllipsisVerticalIcon className="h-3.5 w-3.5" />
                                                                                         </Button>
                                                                                     </DropdownMenuTrigger>
                                                                                     <DropdownMenuContent align="end">
@@ -1191,7 +1278,7 @@ export default function TenantsPage() {
                                                                                                 }}
                                                                                                 className="text-destructive"
                                                                                             >
-                                                                                                <PowerOff className="h-4 w-4 mr-2" />
+                                                                                                <PowerIcon className="h-4 w-4 mr-2" />
                                                                                                 Deactivate
                                                                                             </DropdownMenuItem>
                                                                                         ) : (
@@ -1201,7 +1288,7 @@ export default function TenantsPage() {
                                                                                                     setShowActivateCollaboratorModal(true);
                                                                                                 }}
                                                                                             >
-                                                                                                <CheckCircle2 className="h-4 w-4 mr-2" />
+                                                                                                <CheckCircleIcon className="h-4 w-4 mr-2" />
                                                                                                 Activate
                                                                                             </DropdownMenuItem>
                                                                                         )}

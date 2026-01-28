@@ -76,12 +76,10 @@ export async function GET(request: Request) {
 
     const groupBySOP = searchParams.get("groupBySOP") === "true";
     const sortBy = searchParams.get("sortBy") || "recent";
-
-    const where: any = {
-      userOrganizationId: {
-        in: userOrganizationIds,
-      },
-    };
+    
+    // Filter by draft status if provided
+    const filterDraft = searchParams.get("isDraft");
+    const isDraftFilter = filterDraft === "true" ? true : filterDraft === "false" ? false : undefined;
 
     let hasVersionFields = false;
     try {
@@ -104,8 +102,15 @@ export async function GET(request: Request) {
         in: userOrganizationIds,
       },
     };
+    
+    // Add draft filter if provided
+    if (isDraftFilter !== undefined) {
+      whereClause.isDraft = isDraftFilter;
+    }
 
-    if (hasVersionFields && !includeAllVersions && !groupBySOP) {
+    // Only filter by isCurrentVersion if we're not filtering by draft and want current versions
+    // (drafts don't have isCurrentVersion, published do)
+    if (hasVersionFields && !includeAllVersions && !groupBySOP && isDraftFilter !== true) {
       whereClause.isCurrentVersion = true;
     }
 
@@ -141,6 +146,24 @@ export async function GET(request: Request) {
       baseSelect.rootSOPId = true;
       baseSelect.isCurrentVersion = true;
       baseSelect.versionCreatedAt = true;
+    }
+    
+    // Always include isDraft field (check if column exists)
+    let hasDraftField = false;
+    try {
+      const draftResult = await prisma.$queryRaw<Array<{ column_name: string }>>`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'SOP' AND column_name = 'isDraft'
+        LIMIT 1
+      `;
+      hasDraftField = draftResult.length > 0;
+    } catch (e: any) {
+      hasDraftField = false;
+    }
+    
+    if (hasDraftField) {
+      baseSelect.isDraft = true;
     }
     let sops: any[];
     let total: number;
@@ -204,13 +227,17 @@ export async function GET(request: Request) {
 
     const sopsWithVersions =
       hasVersionFields && sops[0]?.versionNumber !== undefined
-        ? sops
+        ? sops.map((sop: any) => ({
+            ...sop,
+            isDraft: hasDraftField ? (sop.isDraft ?? false) : false,
+          }))
         : sops.map((sop: any) => ({
             ...sop,
             versionNumber: sop.versionNumber ?? 1,
             rootSOPId: sop.rootSOPId ?? sop.id,
             isCurrentVersion: sop.isCurrentVersion ?? true,
             versionCreatedAt: sop.versionCreatedAt ?? sop.createdAt,
+            isDraft: hasDraftField ? (sop.isDraft ?? false) : false,
           }));
 
     if (groupBySOP) {

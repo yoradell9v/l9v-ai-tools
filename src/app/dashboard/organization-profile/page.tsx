@@ -1,11 +1,13 @@
 "use client";
 
+import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Building2, Loader2, Users, Calendar, AlertCircle, Globe, Briefcase, Database, DollarSign, User, Target, Brain, BarChart3, Info } from "lucide-react";
-import { LightBulbIcon, PencilIcon, DocumentTextIcon, BoltIcon, SparklesIcon, CheckCircleIcon, CheckBadgeIcon, ArrowTrendingUpIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
+import { Building2, Loader2, Users, Calendar, AlertCircle, Globe, Briefcase, Database, DollarSign, User, Target, Brain, BarChart3, Info, ChevronRight, Clock, CheckCircle2, Plus, Rocket, FileText, Zap, ChevronDown, MessageSquareText } from "lucide-react";
+import { LightBulbIcon, PencilIcon, DocumentTextIcon, BoltIcon, SparklesIcon, CheckCircleIcon, CheckBadgeIcon, ArrowTrendingUpIcon, InformationCircleIcon, ArrowUpOnSquareStackIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
+import { ToolChatDialog } from "@/components/chat/ToolChatDialog";
 import {
     Card,
     CardContent,
@@ -16,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
     Dialog,
     DialogContent,
@@ -29,6 +32,12 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import BaseIntakeForm from "@/components/forms/BaseIntakeForm";
 import { organizationKnowledgeBaseConfig } from "@/components/forms/configs/organizationKnowledgeBaseConfig";
@@ -255,6 +264,8 @@ export default function OrganizationProfilePage() {
     const [isSaving, setIsSaving] = useState(false);
     const [documents, setDocuments] = useState<Document[]>([]);
     const [allDocuments, setAllDocuments] = useState<Document[]>([]);
+    const [isDocumentUploadOpen, setIsDocumentUploadOpen] = useState(false);
+    const [isToolChatOpen, setIsToolChatOpen] = useState(false);
     const previousCompletionState = useRef<boolean | null>(null);
 
     useEffect(() => {
@@ -512,6 +523,120 @@ export default function OrganizationProfilePage() {
         }
     };
 
+    // Helper functions for new design
+    const getStatusBadge = (score: number) => {
+        if (score >= 80) return { label: "Ready to Use", color: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20" };
+        if (score >= 30) return { label: "In Progress", color: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20" };
+        return { label: "Getting Started", color: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20" };
+    };
+
+    const getPrimaryCTA = (score: number) => {
+        if (score < 30) return { label: "Complete Setup", action: () => setIsEditing(true) };
+        if (score < 70) return { label: "Continue Setup", action: () => setIsEditing(true) };
+        return { label: "Optimize Quality", action: () => analyzeQuality() };
+    };
+
+    const getCombinedToolScore = (tool: { score: number; qualityReadiness?: { score: number } }) => {
+        if (tool.qualityReadiness) {
+            return Math.round((tool.score + tool.qualityReadiness.score) / 2);
+        }
+        return tool.score;
+    };
+
+    const getToolStatus = (score: number) => {
+        if (score >= 80) return "Ready";
+        if (score >= 60) return "Almost Ready";
+        return "Needs Work";
+    };
+
+    const estimateTimeToReady = (missingFields: string[]) => {
+        const avgTimePerField = 2; // minutes
+        return Math.max(2, missingFields.length * avgTimePerField);
+    };
+
+    const handleFixField = (fieldName: string) => {
+        setIsEditing(true);
+        // TODO: Scroll to field in form when dialog opens
+        // This would require form ref or field ID mapping
+    };
+
+    // New helper functions for redesigned UI
+    const getCompletionTier = (score: number) => {
+        if (score >= 80) return { label: "Optimized", color: "text-green-600 dark:text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/20" };
+        if (score >= 50) return { label: "Building", color: "text-amber-600 dark:text-amber-400", bgColor: "bg-amber-500/10", borderColor: "border-amber-500/20" };
+        return { label: "Getting Started", color: "text-blue-600 dark:text-blue-400", bgColor: "bg-blue-500/10", borderColor: "border-blue-500/20" };
+    };
+
+    const getNextMilestone = (completionAnalysis: CompletionAnalysis | null) => {
+        if (!completionAnalysis) return null;
+        
+        // Find the next tool that can be unlocked
+        const tools = [
+            { name: "Job Descriptions", tool: completionAnalysis.toolReadiness.jobDescriptionBuilder, route: "/dashboard/role-builder" },
+            { name: "Process Builder", tool: completionAnalysis.toolReadiness.sopGenerator, route: "/dashboard/process-builder" },
+            { name: "Business Brain", tool: completionAnalysis.toolReadiness.businessBrain, route: "/dashboard/ai-business-brain" },
+        ];
+
+        const notReadyTools = tools.filter(({ tool }) => !tool.ready && tool.missingFields.length > 0);
+        if (notReadyTools.length === 0) return null;
+
+        // Sort by missing fields count (fewest first)
+        notReadyTools.sort((a, b) => a.tool.missingFields.length - b.tool.missingFields.length);
+        const nextTool = notReadyTools[0];
+        const combinedScore = getCombinedToolScore(nextTool.tool);
+        const fieldsNeeded = nextTool.tool.missingFields.length;
+        const progress = combinedScore;
+
+        return {
+            toolName: nextTool.name,
+            fieldsNeeded,
+            progress,
+            message: `${fieldsNeeded} field${fieldsNeeded > 1 ? 's' : ''} to unlock ${nextTool.name}`,
+        };
+    };
+
+    const getQuickWins = (completionAnalysis: CompletionAnalysis | null, qualityAnalysis: QualityAnalysis | null) => {
+        if (!completionAnalysis) return [];
+        
+        const allRecs = [
+            ...completionAnalysis.recommendations.map(rec => ({ ...rec, type: 'completion' as const })),
+            ...(qualityAnalysis?.topRecommendations || []).map(rec => ({ ...rec, type: 'quality' as const }))
+        ];
+
+        return allRecs
+            .filter(rec => {
+                const isCompletionRec = rec.type === 'completion';
+                const fields = isCompletionRec ? (rec as any).fields : ((rec as any).field ? [(rec as any).field] : []);
+                const timeEstimate = estimateTimeToReady(fields);
+                return timeEstimate <= 5; // Quick wins are 5 minutes or less
+            })
+            .slice(0, 2) // Top 2 quick wins
+            .map(rec => {
+                const isCompletionRec = rec.type === 'completion';
+                const fields = isCompletionRec ? (rec as any).fields : ((rec as any).field ? [(rec as any).field] : []);
+                const timeEstimate = estimateTimeToReady(fields);
+                return { ...rec, timeEstimate, fields };
+            });
+    };
+
+    const getToolUnlockInfo = (tool: { score: number; missingFields: string[]; qualityReadiness?: { score: number } }) => {
+        const combinedScore = getCombinedToolScore(tool);
+        if (combinedScore >= 80) return { unlocked: true, message: "Ready to use" };
+        if (combinedScore >= 60) {
+            const fieldsNeeded = tool.missingFields.length;
+            return { unlocked: false, message: `Add ${fieldsNeeded} field${fieldsNeeded > 1 ? 's' : ''} → unlock Basic generation` };
+        }
+        const fieldsNeeded = tool.missingFields.length;
+        return { unlocked: false, message: `${fieldsNeeded} field${fieldsNeeded > 1 ? 's' : ''} needed to get started` };
+    };
+
+    const getTierVisual = (score: number) => {
+        if (score >= 80) return "🟢🟢🟢"; // Excellent
+        if (score >= 60) return "🟡🟡⚪"; // Good
+        if (score >= 30) return "🟡⚪⚪"; // Basic
+        return "⚪⚪⚪"; // Getting Started
+    };
+
     if (isLoading) {
         return (
             <>
@@ -551,636 +676,637 @@ export default function OrganizationProfilePage() {
             </div>
             <div className="min-h-screen">
                 <div className="py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 space-y-6">
-                    <div className="flex flex-col gap-4">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <h1 className="text-2xl font-semibold mb-2">Organization Knowledge Base</h1>
-
-                            </div>
-                            {!isEditing && (
-                                <Button onClick={() => setIsEditing(true)} size="lg" className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
-                                    <PencilIcon className="h-5 w-5 mr-2" />
-                                    {profile ? "Edit Knowledge Base" : "Setup Knowledge Base"}
-                                </Button>
-                            )}
+                    {/* Header */}
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h1 className="text-2xl font-semibold mb-2">Organization Knowledge Base</h1>
                         </div>
-
-
                     </div>
 
-                    {/* Overall Completion Score Card */}
-                    {profile && completionAnalysis && (
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <CardTitle className="text-lg flex items-center gap-2">
-                                            Overall Knowledge Base Score
-                                            {completionAnalysis.overallScore >= 80 && (
-                                                <SparklesIcon className="h-4 w-4 text-[color:var(--accent-strong)] animate-pulse" />
-                                            )}
-                                        </CardTitle>
-                                        <CardDescription>
-                                            Completion and quality scores across all tiers and tools
-                                        </CardDescription>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <div className="text-right">
-                                            <div className="text-2xl font-bold">
-                                                {completionAnalysis.overallScore}%
-                                            </div>
-                                            <Badge variant="outline" className="text-xs mt-1 border-[var(--primary-dark)] text-[var(--primary-dark)]">
-                                                Completion
-                                            </Badge>
-                                        </div>
-                                        {qualityAnalysis && (
-                                            <>
-                                                <Separator orientation="vertical" className="h-12" />
-                                                <div className="text-right">
-                                                    <div className="text-2xl font-bold text-[color:var(--accent-strong)]">
-                                                        {qualityAnalysis.overallScore}%
-                                                    </div>
-                                                    <Badge variant="outline" className="text-xs mt-1">
-                                                        Quality
-                                                    </Badge>
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between text-base">
-                                        <span className="text-muted-foreground">Completion</span>
-                                        <span className="font-medium">{completionAnalysis.overallScore}%</span>
-                                    </div>
-                                    <Progress
-                                        value={completionAnalysis.overallScore}
-                                        className="h-2 [&>div]:bg-[var(--primary-dark)]"
-                                    />
-                                    {qualityAnalysis && (
-                                        <>
-                                            <div className="flex items-center justify-between text-base">
-                                                <span className="text-muted-foreground">Quality</span>
-                                                <span className="font-medium">{qualityAnalysis.overallScore}%</span>
-                                            </div>
-                                            <Progress
-                                                value={qualityAnalysis.overallScore}
-                                                className="h-2 [&>div]:bg-[color:var(--accent-strong)]"
-                                            />
-                                        </>
-                                    )}
-                                </div>
-
-                                {!qualityAnalysis && (
-                                    <div className="space-y-2 p-4 rounded-lg border">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="text-base font-medium">Quality Analysis</p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    Get AI-powered quality scores for your knowledge base
-                                                </p>
-                                            </div>
-                                            <Button
-                                                onClick={analyzeQuality}
-                                                disabled={isAnalyzingQuality}
-                                                size="lg"
-                                                className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
-                                            >
-                                                {isAnalyzingQuality ? (
-                                                    <>
-                                                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                                                        Analyzing...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <SparklesIcon className="h-5 w-5 mr-2" />
-                                                        Analyze Quality
-                                                    </>
-                                                )}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {qualityAnalysis && (
-                                    <div className="space-y-2 p-4 rounded-lg border">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="text-base font-medium">Last Analyzed</p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {formatRelativeTime(qualityAnalysis.analyzedAt)}
-                                                </p>
-                                            </div>
-                                            <Button
-                                                onClick={analyzeQuality}
-                                                disabled={isAnalyzingQuality}
-                                                size="lg"
-                                                className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
-                                            >
-                                                {isAnalyzingQuality ? (
-                                                    <>
-                                                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                                                        Analyzing...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <SparklesIcon className="h-5 w-5 mr-2" />
-                                                        Re-analyze
-                                                    </>
-                                                )}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <Separator />
-
-                                <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-2">
-                                    {profile.lastEditedByUser && profile.lastEditedAt && (
-                                        <>
-                                            <span>Last updated {formatRelativeTime(profile.lastEditedAt)} by {profile.lastEditedByUser.firstname} {profile.lastEditedByUser.lastname}</span>
-                                        </>
-                                    )}
-                                    {profile.contributorsCount > 0 && (
-                                        <>
-                                            {profile.lastEditedByUser && profile.lastEditedAt && <span>•</span>}
-                                            <span>{profile.contributorsCount} {profile.contributorsCount === 1 ? "contributor" : "contributors"}</span>
-                                        </>
-                                    )}
-                                    {profile.createdAt && (
-                                        <>
-                                            {(profile.lastEditedByUser || profile.contributorsCount > 0) && <span>•</span>}
-                                            <span>Created {formatDate(profile.createdAt)}</span>
-                                        </>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    {/* Document Upload Section */}
-                    {profile && (
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <h2 className="text-lg font-semibold">Documents</h2>
-                                    <p className="text-sm text-muted-foreground">
-                                        {allDocuments.length > 0
-                                            ? `${allDocuments.length} document${allDocuments.length === 1 ? '' : 's'} uploaded`
-                                            : "Upload documents to enhance your knowledge base"}
-                                    </p>
-                                </div>
-                                {allDocuments.length > 0 && (
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => router.push("/dashboard/organization-profile/documents")}
-                                        className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white"
-                                    >
-                                        View All Documents
-                                    </Button>
-                                )}
+                    {/* Empty State - Enhanced */}
+                    {!profile && (
+                        <div className="py-16 space-y-8">
+                            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                                <Rocket className="h-12 w-12 text-[color:var(--accent-strong)] animate-pulse" />
                             </div>
-                            <DocumentUploader
-                                documents={documents}
-                                onDocumentsChange={(updatedDocs) => {
-                                    setDocuments(updatedDocs);
-                                    // Update all documents list
-                                    const completedDocs = allDocuments.filter(
-                                        (doc) => doc.extractionStatus !== "PENDING" && doc.extractionStatus !== "PROCESSING"
-                                    );
-                                    const activeDocs = updatedDocs.filter(
-                                        (doc) => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING"
-                                    );
-                                    setAllDocuments([...completedDocs, ...activeDocs]);
-                                }}
-                                onDocumentComplete={(completedDoc: Document) => {
-                                    // Remove from active documents list
-                                    setDocuments((prev) => prev.filter((doc) => doc.id !== completedDoc.id));
-                                    // Add to all documents if not already there
-                                    setAllDocuments((prev) => {
-                                        const exists = prev.find((d) => d.id === completedDoc.id);
-                                        if (exists) {
-                                            return prev.map((d) => d.id === completedDoc.id ? completedDoc : d);
-                                        }
-                                        return [...prev, completedDoc];
-                                    });
-
-                                    // Show success toast when document processing completes
-                                    if (completedDoc.extractionStatus === "COMPLETED") {
-                                        toast.success(`"${completedDoc.name}" processed successfully!`, {
-                                            description: completedDoc.insights && completedDoc.insights.length > 0
-                                                ? `${completedDoc.insights.length} insight${completedDoc.insights.length > 1 ? 's' : ''} extracted. Document moved to Documents page.`
-                                                : "Content extracted and added to your knowledge base. Document moved to Documents page.",
-                                            duration: 6000,
-                                        });
-                                    } else if (completedDoc.extractionStatus === "FAILED") {
-                                        toast.error(`"${completedDoc.name}" processing failed`, {
-                                            description: completedDoc.extractionError || "An error occurred during processing. You can view it in the Documents page.",
-                                            duration: 6000,
-                                        });
-                                    }
-                                }}
-                            />
+                            <div className="space-y-4 text-center max-w-2xl mx-auto">
+                                <h1 className="text-3xl font-bold">Build Your AI Knowledge Base</h1>
+                                <p className="text-lg text-muted-foreground">
+                                    Create a single source of truth that powers all your AI tools. The more complete it is, the smarter your results become.
+                                </p>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+                                    <div className="p-4 rounded-lg border bg-card">
+                                        <Briefcase className="h-6 w-6 mb-2 text-primary" />
+                                        <p className="font-semibold text-sm">Job Descriptions</p>
+                                        <p className="text-xs text-muted-foreground mt-1">Generate role-specific job descriptions</p>
+                                    </div>
+                                    <div className="p-4 rounded-lg border bg-card">
+                                        <FileText className="h-6 w-6 mb-2 text-primary" />
+                                        <p className="font-semibold text-sm">SOPs</p>
+                                        <p className="text-xs text-muted-foreground mt-1">Create standard operating procedures</p>
+                                    </div>
+                                    <div className="p-4 rounded-lg border bg-card">
+                                        <Brain className="h-6 w-6 mb-2 text-primary" />
+                                        <p className="font-semibold text-sm">Business Brain</p>
+                                        <p className="text-xs text-muted-foreground mt-1">AI-powered business conversations</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                                <Button onClick={() => setIsEditing(true)} size="lg" className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
+                                    <Rocket className="h-5 w-5 mr-2" />
+                                    Quick Start (5 min)
+                                </Button>
+                                <Button onClick={() => setIsEditing(true)} size="lg" variant="outline">
+                                    Complete Setup (15 min)
+                                </Button>
+                                <ToolChatDialog
+                                    toolId="organization-profile"
+                                    buttonLabel="Tell AI"
+                                    buttonSize="lg"
+                                    buttonVariant="outline"
+                                    className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white"
+                                    icon={SparklesIcon}
+                                />
+                            </div>
                         </div>
                     )}
 
-                    {/* Tool Readiness Card */}
-                    {profile && completionAnalysis && (
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-start justify-between">
-                                    <div>
-                                        <CardTitle className="text-lg flex items-center gap-2">
-                                            <BoltIcon className="h-5 w-5" />
-                                            Tool Readiness
-                                        </CardTitle>
-                                        <CardDescription>
-                                            How ready your knowledge base is for each tool
-                                        </CardDescription>
-                                    </div>
+                    {/* Alert Banner - Document Processing */}
+                    {profile && documents.some(doc => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING") && (
+                        <Alert className="border-blue-500/20 bg-blue-500/5">
+                            <FileText className="h-4 w-4" />
+                            <AlertTitle>Documents Processing</AlertTitle>
+                            <AlertDescription>
+                                {documents.filter(doc => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING").length} document{documents.filter(doc => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING").length > 1 ? 's' : ''} being processed. Fields will auto-fill when complete.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
+                    {/* Status Banner - Hero Section Replacement */}
+                    {profile && completionAnalysis && (() => {
+                        const tier = getCompletionTier(completionAnalysis.overallScore);
+                        const nextMilestone = getNextMilestone(completionAnalysis);
+                        const cta = getPrimaryCTA(completionAnalysis.overallScore);
+                        
+                        return (
+                            <div className="relative p-6 rounded-lg border bg-gradient-to-br from-background to-muted/20">
+                                {/* Health Score Badge - Top Right */}
+                                <div className="absolute top-4 right-4">
                                     <TooltipProvider>
                                         <Tooltip>
-                                            <TooltipTrigger>
-                                                <InformationCircleIcon className="h-4 w-4 text-muted-foreground mt-1" />
+                                            <TooltipTrigger asChild>
+                                                <div className="relative w-32 h-32">
+                                                    <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 100 100">
+                                                        <defs>
+                                                            <linearGradient id="healthGradientCompact" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                                <stop offset="0%" stopColor="#f0b214" />
+                                                                <stop offset="100%" stopColor="#1374B4" />
+                                                            </linearGradient>
+                                                        </defs>
+                                                        <circle
+                                                            cx="50"
+                                                            cy="50"
+                                                            r="45"
+                                                            stroke="currentColor"
+                                                            strokeWidth="8"
+                                                            fill="none"
+                                                            className="text-muted"
+                                                        />
+                                                        <circle
+                                                            cx="50"
+                                                            cy="50"
+                                                            r="45"
+                                                            stroke="url(#healthGradientCompact)"
+                                                            strokeWidth="8"
+                                                            fill="none"
+                                                            strokeDasharray={`${2 * Math.PI * 45}`}
+                                                            strokeDashoffset={`${2 * Math.PI * 45 * (1 - completionAnalysis.overallScore / 100)}`}
+                                                            className="transition-all duration-500"
+                                                            strokeLinecap="round"
+                                                        />
+                                                    </svg>
+                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                        <span className="text-2xl font-bold">{completionAnalysis.overallScore}%</span>
+                                                    </div>
+                                                </div>
                                             </TooltipTrigger>
-                                            <TooltipContent className="max-w-sm">
-                                                <p className="text-xs mb-2"><strong>Basic Readiness:</strong> Based on field completion. Shows if you have the minimum required fields filled.</p>
-                                                <p className="text-xs"><strong>Quality Readiness:</strong> Combined completion + quality score. Shows how well your filled fields will work for AI tools. Requires quality analysis.</p>
+                                            <TooltipContent>
+                                                <p>Knowledge Base Health: {completionAnalysis.overallScore}%</p>
                                             </TooltipContent>
                                         </Tooltip>
                                     </TooltipProvider>
                                 </div>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {/* Job Description Builder */}
-                                    <div className="space-y-2 p-4 rounded-lg border">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <DocumentTextIcon className="h-4 w-4" />
-                                                <span className="font-medium text-base">Job Descriptions</span>
-                                            </div>
-                                            {completionAnalysis.toolReadiness.jobDescriptionBuilder.ready && (
-                                                <CheckCircleIcon className="h-4 w-4 text-[color:var(--accent-strong)]" />
-                                            )}
-                                        </div>
-                                        <div className="space-y-2">
-                                            {/* Basic Readiness */}
-                                            <div className="space-y-1">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-xs text-muted-foreground">Basic Readiness</span>
-                                                    <span className="text-base font-bold text-[color:var(--text-primary)]">
-                                                        {completionAnalysis.toolReadiness.jobDescriptionBuilder.score}%
-                                                    </span>
-                                                </div>
-                                                <Progress
-                                                    value={completionAnalysis.toolReadiness.jobDescriptionBuilder.score}
-                                                    className="h-2 [&>div]:bg-[var(--primary-dark)]"
-                                                />
-                                                <Badge
-                                                    variant={getQualityBadgeVariant(completionAnalysis.toolReadiness.jobDescriptionBuilder.quality) as any}
-                                                    className="text-xs"
-                                                >
-                                                    {completionAnalysis.toolReadiness.jobDescriptionBuilder.quality}
-                                                </Badge>
-                                            </div>
 
-                                            {/* Quality Readiness (if available) */}
-                                            {completionAnalysis.toolReadiness.jobDescriptionBuilder.qualityReadiness && (
-                                                <>
-                                                    <Separator />
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                                                Quality Readiness
-                                                                <TooltipProvider>
-                                                                    <Tooltip>
-                                                                        <TooltipTrigger>
-                                                                            <InformationCircleIcon className="h-3 w-3" />
-                                                                        </TooltipTrigger>
-                                                                        <TooltipContent>
-                                                                            <p className="text-xs">Combined completion + quality score</p>
-                                                                        </TooltipContent>
-                                                                    </Tooltip>
-                                                                </TooltipProvider>
-                                                            </span>
-                                                            <span className="text-base font-bold text-[color:var(--text-primary)]">
-                                                                {completionAnalysis.toolReadiness.jobDescriptionBuilder.qualityReadiness.score}%
-                                                            </span>
-                                                        </div>
-                                                        <Progress
-                                                            value={completionAnalysis.toolReadiness.jobDescriptionBuilder.qualityReadiness.score}
-                                                            className="h-2 [&>div]:bg-[color:var(--accent-strong)]"
-                                                        />
-                                                        <Badge
-                                                            variant={getQualityBadgeVariant(completionAnalysis.toolReadiness.jobDescriptionBuilder.qualityReadiness.quality) as any}
-                                                            className="text-xs"
-                                                        >
-                                                            {completionAnalysis.toolReadiness.jobDescriptionBuilder.qualityReadiness.quality}
-                                                        </Badge>
-                                                        {completionAnalysis.toolReadiness.jobDescriptionBuilder.qualityReadiness.blockers && completionAnalysis.toolReadiness.jobDescriptionBuilder.qualityReadiness.blockers.length > 0 && (
-                                                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                                                                Quality blockers: {completionAnalysis.toolReadiness.jobDescriptionBuilder.qualityReadiness.blockers.slice(0, 2).join(", ")}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                        {completionAnalysis.toolReadiness.jobDescriptionBuilder.missingFields.length > 0 && (
-                                            <div className="mt-2">
-                                                <p className="text-xs text-muted-foreground mb-1">Missing:</p>
-                                                <ul className="text-xs text-muted-foreground space-y-0.5">
-                                                    {completionAnalysis.toolReadiness.jobDescriptionBuilder.missingFields.slice(0, 2).map((field, idx) => (
-                                                        <li key={idx}>• {field}</li>
-                                                    ))}
-                                                    {completionAnalysis.toolReadiness.jobDescriptionBuilder.missingFields.length > 2 && (
-                                                        <li className="text-xs">+{completionAnalysis.toolReadiness.jobDescriptionBuilder.missingFields.length - 2} more</li>
-                                                    )}
-                                                </ul>
-                                            </div>
+                                <div className="space-y-4 pr-20">
+                                    {/* Completion Tier */}
+                                    <div className="flex items-center gap-3">
+                                        <Badge className={`${tier.bgColor} ${tier.color} ${tier.borderColor} border`}>
+                                            {tier.label}
+                                        </Badge>
+                                        {qualityAnalysis && (
+                                            <span className="text-sm text-muted-foreground">
+                                                Quality: <span className="font-medium text-[color:var(--accent-strong)]">{qualityAnalysis.overallScore}%</span>
+                                            </span>
                                         )}
                                     </div>
 
-                                    {/* SOP Generator */}
-                                    <div className="space-y-2 p-4 rounded-lg border">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <DocumentTextIcon className="h-4 w-4" />
-                                                <span className="font-medium text-base">Process Builder</span>
-                                            </div>
-                                            {completionAnalysis.toolReadiness.sopGenerator.ready && (
-                                                <CheckCircleIcon className="h-4 w-4 text-[color:var(--accent-strong)]" />
-                                            )}
-                                        </div>
+                                    {/* Next Milestone */}
+                                    {nextMilestone ? (
                                         <div className="space-y-2">
-                                            {/* Basic Readiness */}
-                                            <div className="space-y-1">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-xs text-muted-foreground">Basic Readiness</span>
-                                                    <span className="text-base font-bold text-[color:var(--text-primary)]">
-                                                        {completionAnalysis.toolReadiness.sopGenerator.score}%
-                                                    </span>
-                                                </div>
-                                                <Progress
-                                                    value={completionAnalysis.toolReadiness.sopGenerator.score}
-                                                    className="h-2 [&>div]:bg-[var(--primary-dark)]"
-                                                />
-                                                <Badge
-                                                    variant={getQualityBadgeVariant(completionAnalysis.toolReadiness.sopGenerator.quality) as any}
-                                                    className="text-xs"
-                                                >
-                                                    {completionAnalysis.toolReadiness.sopGenerator.quality}
-                                                </Badge>
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-base font-medium">{nextMilestone.message}</p>
+                                                <span className="text-sm font-semibold text-muted-foreground">{nextMilestone.progress}%</span>
                                             </div>
-
-                                            {/* Quality Readiness (if available) */}
-                                            {completionAnalysis.toolReadiness.sopGenerator.qualityReadiness && (
-                                                <>
-                                                    <Separator />
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                                                Quality Readiness
-                                                                <TooltipProvider>
-                                                                    <Tooltip>
-                                                                        <TooltipTrigger>
-                                                                            <InformationCircleIcon className="h-3 w-3" />
-                                                                        </TooltipTrigger>
-                                                                        <TooltipContent>
-                                                                            <p className="text-xs">Combined completion + quality score</p>
-                                                                        </TooltipContent>
-                                                                    </Tooltip>
-                                                                </TooltipProvider>
-                                                            </span>
-                                                            <span className="text-base font-bold text-[color:var(--text-primary)]">
-                                                                {completionAnalysis.toolReadiness.sopGenerator.qualityReadiness.score}%
-                                                            </span>
-                                                        </div>
-                                                        <Progress
-                                                            value={completionAnalysis.toolReadiness.sopGenerator.qualityReadiness.score}
-                                                            className="h-2 [&>div]:bg-[color:var(--accent-strong)]"
-                                                        />
-                                                        <Badge
-                                                            variant={getQualityBadgeVariant(completionAnalysis.toolReadiness.sopGenerator.qualityReadiness.quality) as any}
-                                                            className="text-xs"
-                                                        >
-                                                            {completionAnalysis.toolReadiness.sopGenerator.qualityReadiness.quality}
-                                                        </Badge>
-                                                        {completionAnalysis.toolReadiness.sopGenerator.qualityReadiness.blockers && completionAnalysis.toolReadiness.sopGenerator.qualityReadiness.blockers.length > 0 && (
-                                                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                                                                Quality blockers: {completionAnalysis.toolReadiness.sopGenerator.qualityReadiness.blockers.slice(0, 2).join(", ")}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </>
-                                            )}
+                                            <Progress value={nextMilestone.progress} className="h-2" />
                                         </div>
-                                        {completionAnalysis.toolReadiness.sopGenerator.missingFields.length > 0 && (
-                                            <div className="mt-2">
-                                                <p className="text-xs text-muted-foreground mb-1">Missing:</p>
-                                                <ul className="text-xs text-muted-foreground space-y-0.5">
-                                                    {completionAnalysis.toolReadiness.sopGenerator.missingFields.slice(0, 2).map((field, idx) => (
-                                                        <li key={idx}>• {field}</li>
-                                                    ))}
-                                                    {completionAnalysis.toolReadiness.sopGenerator.missingFields.length > 2 && (
-                                                        <li className="text-xs">+{completionAnalysis.toolReadiness.sopGenerator.missingFields.length - 2} more</li>
-                                                    )}
-                                                </ul>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Business Brain */}
-                                    <div className="space-y-2 p-4 rounded-lg border">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <Brain className="h-4 w-4" />
-                                                <span className="font-medium text-base">Business Brain</span>
-                                            </div>
-                                            {completionAnalysis.toolReadiness.businessBrain.ready && (
-                                                <CheckCircleIcon className="h-4 w-4 text-[color:var(--accent-strong)]" />
-                                            )}
-                                        </div>
+                                    ) : (
                                         <div className="space-y-2">
-                                            {/* Basic Readiness */}
-                                            <div className="space-y-1">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-xs text-muted-foreground">Basic Readiness</span>
-                                                    <span className="text-base font-bold text-[color:var(--text-primary)]">
-                                                        {completionAnalysis.toolReadiness.businessBrain.score}%
-                                                    </span>
-                                                </div>
-                                                <Progress
-                                                    value={completionAnalysis.toolReadiness.businessBrain.score}
-                                                    className="h-2 [&>div]:bg-[var(--primary-dark)]"
-                                                />
-                                                <Badge
-                                                    variant={getQualityBadgeVariant(completionAnalysis.toolReadiness.businessBrain.quality) as any}
-                                                    className="text-xs"
-                                                >
-                                                    {completionAnalysis.toolReadiness.businessBrain.quality}
-                                                </Badge>
-                                            </div>
-
-                                            {/* Quality Readiness (if available) */}
-                                            {completionAnalysis.toolReadiness.businessBrain.qualityReadiness && (
-                                                <>
-                                                    <Separator />
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                                                Quality Readiness
-                                                                <TooltipProvider>
-                                                                    <Tooltip>
-                                                                        <TooltipTrigger>
-                                                                            <InformationCircleIcon className="h-3 w-3" />
-                                                                        </TooltipTrigger>
-                                                                        <TooltipContent>
-                                                                            <p className="text-xs">Combined completion + quality score</p>
-                                                                        </TooltipContent>
-                                                                    </Tooltip>
-                                                                </TooltipProvider>
-                                                            </span>
-                                                            <span className="text-base font-bold text-[color:var(--text-primary)]">
-                                                                {completionAnalysis.toolReadiness.businessBrain.qualityReadiness.score}%
-                                                            </span>
-                                                        </div>
-                                                        <Progress
-                                                            value={completionAnalysis.toolReadiness.businessBrain.qualityReadiness.score}
-                                                            className="h-2 [&>div]:bg-[color:var(--accent-strong)]"
-                                                        />
-                                                        <Badge
-                                                            variant={getQualityBadgeVariant(completionAnalysis.toolReadiness.businessBrain.qualityReadiness.quality) as any}
-                                                            className="text-xs"
-                                                        >
-                                                            {completionAnalysis.toolReadiness.businessBrain.qualityReadiness.quality}
-                                                        </Badge>
-                                                        {completionAnalysis.toolReadiness.businessBrain.qualityReadiness.blockers && completionAnalysis.toolReadiness.businessBrain.qualityReadiness.blockers.length > 0 && (
-                                                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                                                                Quality blockers: {completionAnalysis.toolReadiness.businessBrain.qualityReadiness.blockers.slice(0, 2).join(", ")}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </>
-                                            )}
+                                            <p className="text-2xl font-semibold">All tools unlocked! 🎉</p>
+                                            <p className="text-sm text-muted-foreground">Your knowledge base is ready to power all AI tools.</p>
                                         </div>
-                                        {completionAnalysis.toolReadiness.businessBrain.missingFields.length > 0 && (
-                                            <div className="mt-2">
-                                                <p className="text-xs text-muted-foreground mb-1">Missing:</p>
-                                                <ul className="text-xs text-muted-foreground space-y-0.5">
-                                                    {completionAnalysis.toolReadiness.businessBrain.missingFields.slice(0, 2).map((field, idx) => (
-                                                        <li key={idx}>• {field}</li>
-                                                    ))}
-                                                    {completionAnalysis.toolReadiness.businessBrain.missingFields.length > 2 && (
-                                                        <li className="text-xs">+{completionAnalysis.toolReadiness.businessBrain.missingFields.length - 2} more</li>
-                                                    )}
-                                                </ul>
-                                            </div>
-                                        )}
+                                    )}
+
+                                    {/* Primary CTA */}
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <Button
+                                            onClick={cta.action}
+                                            size="lg"
+                                            variant="outline"
+                                            className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white"
+                                        >
+                                            {cta.label}
+                                        </Button>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button
+                                                    size="lg"
+                                                    className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                >
+                                                    <SparklesIcon className="h-4 w-4 mr-2" />
+                                                    Improve with AI
+                                                    <ChevronDown className="h-4 w-4 ml-2" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onClick={() => setIsToolChatOpen(true)}>
+                                                    <MessageSquareText className="h-4 w-4 mr-2" />
+                                                    Chat with AI
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => setIsDocumentUploadOpen(true)}>
+                                                    <ArrowUpOnSquareStackIcon className="h-4 w-4 mr-2" />
+                                                    Upload Documents
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                        <ToolChatDialog
+                                            toolId="organization-profile"
+                                            open={isToolChatOpen}
+                                            onOpenChange={setIsToolChatOpen}
+                                        />
                                     </div>
                                 </div>
-                            </CardContent>
-                        </Card>
-                    )}
+                            </div>
+                        );
+                    })()}
 
-                    {/* Recommendations Card */}
-                    {profile && completionAnalysis && completionAnalysis.recommendations.length > 0 && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <ArrowTrendingUpIcon className="h-5 w-5" />
-                                    Recommendations
-                                </CardTitle>
-                                <CardDescription>
-                                    Suggestions to improve your knowledge base
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-3">
-                                    {completionAnalysis.recommendations.map((rec, idx) => (
-                                        <div key={idx} className="space-y-2 p-4 rounded-lg border">
-                                            <div className="flex items-start gap-2">
-                                                <CheckBadgeIcon className={`h-4 w-4 mt-0.5 flex-shrink-0 ${rec.priority === 'high' ? 'text-red-500' :
-                                                    rec.priority === 'medium' ? 'text-amber-500' :
-                                                        'text-[color:var(--accent-strong)]'
-                                                    }`} />
-                                                <div className="flex-1">
-                                                    <p className="text-base font-medium">{rec.message}</p>
-                                                    {rec.benefit && (
-                                                        <p className="text-xs text-muted-foreground mt-1">{rec.benefit}</p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    {/* Quality Recommendations Card */}
-                    {profile && qualityAnalysis && qualityAnalysis.topRecommendations.length > 0 && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <SparklesIcon className="h-5 w-5" />
-                                    Quality Improvement Recommendations
-                                </CardTitle>
-                                <CardDescription>
-                                    AI-powered suggestions to improve the quality and specificity of your knowledge base
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-3">
-                                    {qualityAnalysis.topRecommendations.map((rec, idx) => (
-                                        <div key={idx} className="space-y-2 p-4 rounded-lg border">
-                                            <div className="flex items-start gap-2">
-                                                <SparklesIcon className={`h-4 w-4 mt-0.5 flex-shrink-0 ${rec.priority === 'high' ? 'text-red-500' :
-                                                    rec.priority === 'medium' ? 'text-amber-500' :
-                                                        'text-[color:var(--accent-strong)]'
-                                                    }`} />
-                                                <div className="flex-1">
-                                                    <p className="text-base font-medium">{rec.message}</p>
-                                                    {rec.impact && (
-                                                        <p className="text-xs text-muted-foreground mt-1">{rec.impact}</p>
-                                                    )}
-                                                    {rec.field && (
-                                                        <Badge variant="outline" className="text-xs mt-2 border-[var(--primary-dark)] text-[var(--primary-dark)]">
-                                                            {rec.field}
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    {/* Empty State */}
-                    {!profile && (
-                        <Card className="text-center">
-                            <CardContent className="py-12 space-y-4">
-                                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--accent-strong)]/20">
-                                    <LightBulbIcon className="h-6 w-6 text-[color:var(--accent-strong)]" />
-                                </div>
-                                <div className="space-y-2">
-                                    <h3 className="text-lg font-semibold">No Knowledge Base Setup Yet</h3>
-                                    <p className="text-base text-muted-foreground max-w-sm mx-auto">
-                                        Setup your organization's knowledge base to get started. This information will be used to pre-fill forms across the platform.
+                    {/* Quick Wins Section */}
+                    {profile && completionAnalysis && (() => {
+                        const quickWins = getQuickWins(completionAnalysis, qualityAnalysis);
+                        if (quickWins.length === 0) return null;
+                        
+                        return (
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <Zap className="h-5 w-5 text-amber-500" />
+                                        <h2 className="text-2xl font-semibold">Quick Wins</h2>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">
+                                        Complete these in under 5 minutes to unlock immediate value
                                     </p>
                                 </div>
-                                <Button onClick={() => setIsEditing(true)} size="lg" className="inline-flex items-center gap-2 bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
-                                    <PencilIcon className="h-5 w-5" />
-                                    Setup Knowledge Base
-                                </Button>
-                            </CardContent>
-                        </Card>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {quickWins.map((rec, idx) => {
+                                        const isCompletionRec = rec.type === 'completion';
+                                        const fields = rec.fields || [];
+                                        const fieldCount = fields.length;
+                                        const description = isCompletionRec ? (rec as any).benefit : (rec as any).impact;
+                                        return (
+                                            <div key={idx} className="p-4 rounded-lg border bg-card hover:shadow-md transition-shadow">
+                                                <div className="flex items-start justify-between gap-3 mb-3">
+                                                    <div className="flex-1">
+                                                        <p className="font-semibold mb-1">{rec.message}</p>
+                                                        {description && (
+                                                            <p className="text-sm text-muted-foreground">{description}</p>
+                                                        )}
+                                                    </div>
+                                                    <Badge
+                                                        variant={rec.priority === 'high' ? 'destructive' : rec.priority === 'medium' ? 'default' : 'secondary'}
+                                                        className="text-xs flex-shrink-0"
+                                                    >
+                                                        {rec.priority === 'high' ? 'High' : rec.priority === 'medium' ? 'Medium' : 'Low'}
+                                                    </Badge>
+                                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                                        <div className="flex items-center gap-1">
+                                                            <Clock className="h-3 w-3" />
+                                                            <span>~{rec.timeEstimate} min</span>
+                                                        </div>
+                                                        {fieldCount > 0 && (
+                                                            <span>{fieldCount} field{fieldCount > 1 ? 's' : ''}</span>
+                                                        )}
+                                                    </div>
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            if (fieldCount > 0) {
+                                                                handleFixField(fields[0]);
+                                                            } else {
+                                                                setIsEditing(true);
+                                                            }
+                                                        }}
+                                                        className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                    >
+                                                        Complete This
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+
+                    {/* Completion Chips - Tier Status */}
+                    {profile && completionAnalysis && (
+                        <div className="space-y-4">
+                            <div>
+                                <h2 className="text-2xl font-semibold mb-1">Completion Status</h2>
+                                <p className="text-sm text-muted-foreground">
+                                    Track your progress across knowledge base tiers
+                                </p>
+                            </div>
+                            <div className="flex flex-wrap gap-3">
+                                {[
+                                    { name: "Basic Info", fields: completionAnalysis.tierStatus.tier1Essential, icon: User, tooltip: "Essential business information" },
+                                    { name: "Business Details", fields: completionAnalysis.tierStatus.tier2Context, icon: Briefcase, tooltip: "Context and operational details" },
+                                    { name: "Brand Voice", fields: completionAnalysis.tierStatus.tier3Intelligence, icon: SparklesIcon, tooltip: "Brand personality and voice" },
+                                    { name: "Quality Check", complete: !!qualityAnalysis, icon: CheckCircle2, tooltip: "Quality analysis and optimization" },
+                                ].map((step) => {
+                                    const isComplete = step.complete || (step.fields && step.fields.complete);
+                                    const IconComponent = step.icon;
+                                    const progress = step.fields ? step.fields.percentage : (step.complete ? 100 : 0);
+                                    
+                                    return (
+                                        <TooltipProvider key={step.name}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <button
+                                                        onClick={() => {
+                                                            if (step.name !== "Quality Check") {
+                                                                setIsEditing(true);
+                                                            } else if (!qualityAnalysis) {
+                                                                analyzeQuality();
+                                                            }
+                                                        }}
+                                                        className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${
+                                                            isComplete
+                                                                ? step.name === "Brand Voice"
+                                                                    ? "bg-[color:var(--accent-strong)]/10 border-[color:var(--accent-strong)] text-[color:var(--accent-strong)] hover:bg-[color:var(--accent-strong)]/20"
+                                                                    : "bg-[var(--primary-dark)]/10 border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/20"
+                                                                : progress > 0
+                                                                    ? step.name === "Brand Voice"
+                                                                        ? "bg-[color:var(--accent-strong)]/10 border-[color:var(--accent-strong)] text-[color:var(--accent-strong)] hover:bg-[color:var(--accent-strong)]/20"
+                                                                        : "bg-[var(--primary-dark)]/10 border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/20"
+                                                                    : "bg-muted border-muted-foreground/30 text-muted-foreground hover:bg-muted/80"
+                                                        }`}
+                                                    >
+                                                        {isComplete ? (
+                                                            <CheckCircle2 className="h-4 w-4" />
+                                                        ) : (
+                                                            <IconComponent className="h-4 w-4" />
+                                                        )}
+                                                        <span className="text-sm font-medium">{step.name}</span>
+                                                        {step.fields && !step.fields.complete && (
+                                                            <span className="text-xs">({step.fields.filledFields}/{step.fields.totalFields})</span>
+                                                        )}
+                                                    </button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    <p>{step.tooltip}</p>
+                                                    {step.fields && !step.fields.complete && (
+                                                        <p className="text-xs mt-1">{step.fields.totalFields - step.fields.filledFields} fields remaining</p>
+                                                    )}
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     )}
+
+                    {/* Tool Readiness - Enhanced */}
+                    {profile && completionAnalysis && (
+                        <div className="space-y-4">
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <BoltIcon className="h-5 w-5" />
+                                    <h2 className="text-2xl font-semibold">Tool Readiness</h2>
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                    How ready your knowledge base is for each tool
+                                </p>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {(() => {
+                                    const tools = [
+                                        {
+                                            name: "Job Descriptions",
+                                            icon: DocumentTextIcon,
+                                            tool: completionAnalysis.toolReadiness.jobDescriptionBuilder,
+                                            route: "/dashboard/role-builder",
+                                        },
+                                        {
+                                            name: "Process Builder",
+                                            icon: DocumentTextIcon,
+                                            tool: completionAnalysis.toolReadiness.sopGenerator,
+                                            route: "/dashboard/process-builder",
+                                        },
+                                        {
+                                            name: "Business Brain",
+                                            icon: Brain,
+                                            tool: completionAnalysis.toolReadiness.businessBrain,
+                                            route: "/dashboard/ai-business-brain",
+                                        },
+                                    ];
+                                    
+                                    // Sort by combined score (highest first)
+                                    const sortedTools = [...tools].sort((a, b) => {
+                                        const scoreA = getCombinedToolScore(a.tool);
+                                        const scoreB = getCombinedToolScore(b.tool);
+                                        return scoreB - scoreA;
+                                    });
+                                    
+                                    return sortedTools.map(({ name, icon: Icon, tool, route }) => {
+                                        const combinedScore = getCombinedToolScore(tool);
+                                        const status = getToolStatus(combinedScore);
+                                        const timeToReady = tool.missingFields.length > 0 ? estimateTimeToReady(tool.missingFields) : 0;
+                                        const unlockInfo = getToolUnlockInfo(tool);
+                                        
+                                        return (
+                                            <div 
+                                                key={name} 
+                                                className="p-6 rounded-lg border border-border/50 bg-card space-y-4 transition-all hover:shadow-md"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <Icon className="h-5 w-5" />
+                                                        <span className="font-semibold">{name}</span>
+                                                    </div>
+                                                    {tool.ready && (
+                                                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                                    )}
+                                                </div>
+
+                                                {/* Circular/Donut Progress Graph */}
+                                                <div className="flex flex-col items-center justify-center space-y-2">
+                                                    <div className="relative w-24 h-24">
+                                                        <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
+                                                            <defs>
+                                                                <linearGradient id={`toolGradient-${name.replace(/\s+/g, '-')}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                                                                    <stop offset="0%" stopColor="#f0b214" />
+                                                                    <stop offset="100%" stopColor="#1374B4" />
+                                                                </linearGradient>
+                                                            </defs>
+                                                            <circle
+                                                                cx="50"
+                                                                cy="50"
+                                                                r="45"
+                                                                stroke="currentColor"
+                                                                strokeWidth="8"
+                                                                fill="none"
+                                                                className="text-muted"
+                                                            />
+                                                            <circle
+                                                                cx="50"
+                                                                cy="50"
+                                                                r="45"
+                                                                stroke={`url(#toolGradient-${name.replace(/\s+/g, '-')})`}
+                                                                strokeWidth="8"
+                                                                fill="none"
+                                                                strokeDasharray={`${2 * Math.PI * 45}`}
+                                                                strokeDashoffset={`${2 * Math.PI * 45 * (1 - combinedScore / 100)}`}
+                                                                className="transition-all duration-500"
+                                                                strokeLinecap="round"
+                                                            />
+                                                        </svg>
+                                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                            <span className="text-xl font-bold">{combinedScore}%</span>
+                                                            <span className="text-xs text-muted-foreground">Ready</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center justify-between w-full">
+                                                        <Badge
+                                                            variant={
+                                                                status === "Ready" ? "default" :
+                                                                    status === "Almost Ready" ? "secondary" :
+                                                                        "outline"
+                                                            }
+                                                            className="text-xs"
+                                                        >
+                                                            {status}
+                                                        </Badge>
+                                                        <span className="text-xs text-muted-foreground text-right">{unlockInfo.message}</span>
+                                                    </div>
+                                                </div>
+
+                                                {tool.missingFields.length > 0 && (
+                                                    <div className="text-xs text-muted-foreground text-center">
+                                                        {tool.missingFields.length} field{tool.missingFields.length > 1 ? 's' : ''} missing
+                                                    </div>
+                                                )}
+
+                                                <Button
+                                                    onClick={() => {
+                                                        if (tool.ready) {
+                                                            router.push(route);
+                                                        } else {
+                                                            setIsEditing(true);
+                                                        }
+                                                    }}
+                                                    className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                    size="sm"
+                                                >
+                                                    {tool.ready ? (
+                                                        <>
+                                                            Launch {name}
+                                                            <ChevronRight className="h-4 w-4 ml-1" />
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            Complete {tool.missingFields.length} Field{tool.missingFields.length > 1 ? 's' : ''}
+                                                            {timeToReady > 0 && (
+                                                                <span className="ml-1 text-xs">(~{timeToReady} min)</span>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </Button>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        </div>
+                    )}
+
+
+                    {/* All Tasks - Collapsible */}
+                    {profile && completionAnalysis && (() => {
+                        const allRecs = [
+                            ...completionAnalysis.recommendations.map(rec => ({ ...rec, type: 'completion' as const })),
+                            ...(qualityAnalysis?.topRecommendations || []).map(rec => ({ ...rec, type: 'quality' as const }))
+                        ];
+                        const quickWins = getQuickWins(completionAnalysis, qualityAnalysis);
+                        const remainingTasks = allRecs.filter(rec => {
+                            const isCompletionRec = rec.type === 'completion';
+                            const fields = isCompletionRec ? (rec as any).fields : ((rec as any).field ? [(rec as any).field] : []);
+                            const timeEstimate = estimateTimeToReady(fields);
+                            return !quickWins.some(qw => qw.message === rec.message);
+                        });
+                        
+                        if (remainingTasks.length === 0) return null;
+                        
+                        return (
+                            <Accordion type="single" collapsible className="w-full">
+                                <AccordionItem value="all-tasks" className="border-none">
+                                    <AccordionTrigger className="hover:no-underline">
+                                        <div className="flex items-center gap-2">
+                                            <ArrowTrendingUpIcon className="h-5 w-5" />
+                                            <h2 className="text-2xl font-semibold">All Tasks</h2>
+                                            <Badge variant="outline" className="ml-2">
+                                                {remainingTasks.length}
+                                            </Badge>
+                                        </div>
+                                    </AccordionTrigger>
+                                    <AccordionContent>
+                                        <div className="space-y-2 pt-4">
+                                            {remainingTasks.map((rec, idx) => {
+                                                const isCompletionRec = rec.type === 'completion';
+                                                const fields = isCompletionRec ? (rec as any).fields : ((rec as any).field ? [(rec as any).field] : []);
+                                                const fieldCount = fields.length;
+                                                const timeEstimate = fieldCount > 0 ? estimateTimeToReady(fields) : 3;
+                                                const description = isCompletionRec ? (rec as any).benefit : (rec as any).impact;
+                                                return (
+                                                    <div key={idx} className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                                                        <div className="mt-0.5">
+                                                            <div className="w-5 h-5 rounded border-2 border-muted-foreground/30 flex items-center justify-center">
+                                                                {/* Checkbox */}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex-1 space-y-1">
+                                                            <p className="text-sm font-medium">{rec.message}</p>
+                                                            {description && (
+                                                                <p className="text-xs text-muted-foreground">{description}</p>
+                                                            )}
+                                                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                                                <Badge
+                                                                    variant={rec.priority === 'high' ? 'destructive' : rec.priority === 'medium' ? 'default' : 'secondary'}
+                                                                    className="text-xs"
+                                                                >
+                                                                    {rec.priority === 'high' ? 'High' : rec.priority === 'medium' ? 'Medium' : 'Low'}
+                                                                </Badge>
+                                                                <div className="flex items-center gap-1">
+                                                                    <Clock className="h-3 w-3" />
+                                                                    <span>~{timeEstimate} min</span>
+                                                                </div>
+                                                                {fieldCount > 0 && (
+                                                                    <span>{fieldCount} field{fieldCount > 1 ? 's' : ''}</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                if (fieldCount > 0) {
+                                                                    handleFixField(fields[0]);
+                                                                } else {
+                                                                    setIsEditing(true);
+                                                                }
+                                                            }}
+                                                        >
+                                                            Fix
+                                                        </Button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            </Accordion>
+                        );
+                    })()}
+
+                    {/* Document Upload Dialog */}
+                    <Dialog open={isDocumentUploadOpen} onOpenChange={setIsDocumentUploadOpen}>
+                        <DialogContent className="w-[min(600px,95vw)] sm:max-w-2xl max-h-[90vh] overflow-hidden p-0 sm:p-2 flex flex-col">
+                            <DialogHeader className="px-4 pt-4 pb-2 flex-shrink-0">
+                                <DialogTitle>
+                                    Upload Documents
+                                </DialogTitle>
+                                <DialogDescription>
+                                    Upload documents to automatically extract and fill knowledge base fields. Upload 1 document → auto-fill 12+ fields in seconds.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="px-4 pb-4 flex flex-col flex-1 min-h-0 overflow-auto">
+                                <DocumentUploader
+                                    hideCard={true}
+                                    hideHeader={true}
+                                    documents={documents}
+                                    onDocumentsChange={(updatedDocs) => {
+                                        setDocuments(updatedDocs);
+                                        const completedDocs = allDocuments.filter(
+                                            (doc) => doc.extractionStatus !== "PENDING" && doc.extractionStatus !== "PROCESSING"
+                                        );
+                                        const activeDocs = updatedDocs.filter(
+                                            (doc) => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING"
+                                        );
+                                        setAllDocuments([...completedDocs, ...activeDocs]);
+                                    }}
+                                    onDocumentComplete={(completedDoc: Document) => {
+                                        setDocuments((prev) => prev.filter((doc) => doc.id !== completedDoc.id));
+                                        setAllDocuments((prev) => {
+                                            const exists = prev.find((d) => d.id === completedDoc.id);
+                                            if (exists) {
+                                                return prev.map((d) => d.id === completedDoc.id ? completedDoc : d);
+                                            }
+                                            return [...prev, completedDoc];
+                                        });
+
+                                        if (completedDoc.extractionStatus === "COMPLETED") {
+                                            toast.success(`"${completedDoc.name}" processed successfully!`, {
+                                                description: completedDoc.insights && completedDoc.insights.length > 0
+                                                    ? `${completedDoc.insights.length} insight${completedDoc.insights.length > 1 ? 's' : ''} extracted.`
+                                                    : "Content extracted and added to your knowledge base.",
+                                                duration: 6000,
+                                            });
+                                        } else if (completedDoc.extractionStatus === "FAILED") {
+                                            toast.error(`"${completedDoc.name}" processing failed`, {
+                                                description: completedDoc.extractionError || "An error occurred during processing.",
+                                                duration: 6000,
+                                            });
+                                        }
+                                    }}
+                                />
+                            </div>
+                        </DialogContent>
+                    </Dialog>
+
 
                     {/* Edit Form Dialog */}
                     {user && (
@@ -1189,8 +1315,8 @@ export default function OrganizationProfilePage() {
                                 setIsEditing(open);
                             }
                         }}>
-                            <DialogContent className="w-[min(900px,95vw)] sm:max-w-3xl max-h-[90vh] overflow-hidden p-0 sm:p-2">
-                                <DialogHeader className="px-4 pt-4 pb-2">
+                            <DialogContent className="w-[min(900px,95vw)] sm:max-w-3xl max-h-[90vh] overflow-hidden p-0 sm:p-2 flex flex-col">
+                                <DialogHeader className="px-4 pt-4 pb-2 flex-shrink-0">
                                     <DialogTitle>
                                         {profile ? "Update Knowledge Base" : "Setup Knowledge Base"}
                                     </DialogTitle>
@@ -1199,7 +1325,7 @@ export default function OrganizationProfilePage() {
 
                                     </DialogDescription>
                                 </DialogHeader>
-                                <div className="px-4 pb-4 overflow-y-auto max-h-[calc(90vh-120px)]">
+                                <div className="px-4 pb-4 flex flex-col flex-1 min-h-0 overflow-hidden">
                                     <BaseIntakeForm
                                         userId={user.id}
                                         config={organizationKnowledgeBaseConfig}

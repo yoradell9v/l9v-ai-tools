@@ -12,6 +12,8 @@ interface DocumentUploaderProps {
     documents: Document[];
     onDocumentsChange: (documents: Document[]) => void;
     onDocumentComplete?: (document: Document) => void;
+    hideHeader?: boolean;
+    hideCard?: boolean;
 }
 
 const ALLOWED_EXTENSIONS = [".pdf", ".doc", ".docx", ".txt"];
@@ -23,7 +25,7 @@ const ALLOWED_MIME_TYPES = [
 ];
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-export default function DocumentUploader({ documents, onDocumentsChange, onDocumentComplete }: DocumentUploaderProps) {
+export default function DocumentUploader({ documents, onDocumentsChange, onDocumentComplete, hideHeader = false, hideCard = false }: DocumentUploaderProps) {
     const [files, setFiles] = useState<File[]>([]);
     const [uploadingFiles, setUploadingFiles] = useState<Record<number, boolean>>({});
     const [fileUploadErrors, setFileUploadErrors] = useState<Record<number, string>>({});
@@ -370,22 +372,8 @@ export default function DocumentUploader({ documents, onDocumentsChange, onDocum
 
     const hasUploading = Object.values(uploadingFiles).some((uploading) => uploading);
 
-    return (
-        <Card>
-            <CardHeader>
-                <div className="flex items-start justify-between">
-                    <div>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                            <FileText className="h-5 w-5" />
-                            Document Upload
-                        </CardTitle>
-                        <CardDescription>
-                            Upload business documents to enhance your knowledge base. Documents will be processed automatically.
-                        </CardDescription>
-                    </div>
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+    const content = (
+        <div className="space-y-4">
                 <div
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
@@ -498,6 +486,32 @@ export default function DocumentUploader({ documents, onDocumentsChange, onDocum
                         </p>
                     </div>
                 )}
+        </div>
+    );
+
+    if (hideCard) {
+        return content;
+    }
+
+    return (
+        <Card>
+            {!hideHeader && (
+                <CardHeader>
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <FileText className="h-5 w-5" />
+                                Document Upload
+                            </CardTitle>
+                            <CardDescription>
+                                Upload business documents to enhance your knowledge base. Documents will be processed automatically.
+                            </CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+            )}
+            <CardContent className="space-y-4">
+                {content}
             </CardContent>
         </Card>
     );
