@@ -424,7 +424,7 @@ export default function AIBusinessBrainPage() {
                                                 <p className="text-base font-semibold text-[color:var(--text-primary)] mb-1">
                                                     Your Knowledge Base powers everything
                                                 </p>
-                                                <p className="text-xs text-[color:var(--text-secondary)] leading-relaxed">
+                                                <p className="text-base text-[color:var(--text-secondary)] leading-relaxed">
                                                     This single source of truth feeds all your tools—Job Descriptions, SOPs, Business Brain conversations, and more. The more complete it is, the smarter your results become.
                                                 </p>
                                             </div>
@@ -550,11 +550,11 @@ export default function AIBusinessBrainPage() {
                                             >
                                                 <div className="flex items-center gap-2 mb-1">
                                                     <cmd.icon size={16} className="text-[var(--primary)]" />
-                                                    <span className="text-xs font-medium text-[var(--text-primary)]">
+                                                    <span className="text-base font-medium text-[var(--text-primary)]">
                                                         {cmd.command}
                                                     </span>
                                                 </div>
-                                                <p className="text-xs text-[var(--text-secondary)]">
+                                                <p className="text-base text-[var(--text-secondary)]">
                                                     {cmd.description}
                                                 </p>
                                             </button>
@@ -685,7 +685,7 @@ export default function AIBusinessBrainPage() {
                                                                 if (inline) {
                                                                     return (
                                                                         <code
-                                                                            className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono break-words"
+                                                                            className="rounded bg-muted px-1.5 py-0.5 text-base font-mono break-words"
                                                                             style={{
                                                                                 wordWrap: 'break-word',
                                                                                 overflowWrap: 'break-word',
@@ -698,7 +698,7 @@ export default function AIBusinessBrainPage() {
                                                                 }
                                                                 return (
                                                                     <code
-                                                                        className="block rounded bg-muted p-3 text-xs font-mono whitespace-pre-wrap break-words overflow-x-auto"
+                                                                        className="block rounded bg-muted p-3 text-base font-mono whitespace-pre-wrap break-words overflow-x-auto"
                                                                         style={{
                                                                             wordWrap: 'break-word',
                                                                             overflowWrap: 'break-word',
@@ -712,7 +712,7 @@ export default function AIBusinessBrainPage() {
                                                             },
                                                             pre: ({ node, ...props }: any) => (
                                                                 <pre
-                                                                    className="block rounded bg-muted p-3 text-xs font-mono whitespace-pre-wrap break-words overflow-x-auto"
+                                                                    className="block rounded bg-muted p-3 text-base font-mono whitespace-pre-wrap break-words overflow-x-auto"
                                                                     style={{
                                                                         wordWrap: 'break-word',
                                                                         overflowWrap: 'break-word',
@@ -780,7 +780,7 @@ export default function AIBusinessBrainPage() {
                                                         <div className="text-base font-medium text-[var(--text-primary)]">
                                                             {cmd.command}
                                                         </div>
-                                                        <div className="text-xs text-[var(--text-secondary)]">
+                                                        <div className="text-base text-[var(--text-secondary)]">
                                                             {cmd.description}
                                                         </div>
                                                     </div>
@@ -882,11 +882,11 @@ export default function AIBusinessBrainPage() {
                                         <p className="text-base font-medium text-[var(--text-primary)] truncate">
                                             {conv.title || "Untitled conversation"}
                                         </p>
-                                        <p className="text-xs text-[var(--text-secondary)]">
+                                        <p className="text-base text-[var(--text-secondary)]">
                                             {formatShortDate(conv.lastMessageAt)}
                                         </p>
                                     </div>
-                                    <div className="ml-3 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                                    <div className="ml-3 flex items-center gap-2 text-base text-[var(--text-secondary)]">
                                         <History size={14} />
                                         <span>{conv.messageCount}</span>
                                     </div>
@@ -897,7 +897,7 @@ export default function AIBusinessBrainPage() {
                 </div>
 
                 {isConversationLoading && (
-                    <div className="absolute inset-x-0 bottom-0 p-2 text-center text-xs text-[var(--text-secondary)] bg-[var(--card-bg)] border-t border-[var(--border-color)]">
+                    <div className="absolute inset-x-0 bottom-0 p-2 text-center text-base text-[var(--text-secondary)] bg-[var(--card-bg)] border-t border-[var(--border-color)]">
                         Loading conversation...
                     </div>
                 )}

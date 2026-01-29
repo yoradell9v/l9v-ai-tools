@@ -8,6 +8,7 @@ import {
     Clock,
     Download,
     Edit,
+    Eye,
     FileText,
     HelpCircle,
     ShieldAlert,
@@ -18,7 +19,7 @@ import {
     MoreVertical,
 } from 'lucide-react';
 import { Button } from './button';
-import { Card, CardContent, CardHeader, CardTitle } from './card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './card';
 import { Badge } from './badge';
 import {
     Accordion,
@@ -106,6 +107,9 @@ interface AnalysisCardProps {
     savedAnalysis: SavedAnalysis;
     onDelete?: (id: string) => void;
     onEdit?: (analysis: SavedAnalysis) => void;
+    variant?: 'default' | 'compact';
+    onPreview?: (analysis: SavedAnalysis) => void;
+    previewMode?: boolean;
 }
 
 interface PrimaryRoleSnapshot {
@@ -122,7 +126,7 @@ interface PrimaryRoleSnapshot {
     overlap_requirements?: string;
 }
 
-const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) => {
+const AnalysisCard = ({ savedAnalysis, onDelete, onEdit, variant = 'default', onPreview, previewMode = false }: AnalysisCardProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -130,7 +134,6 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
     const [isDownloading, setIsDownloading] = useState(false);
 
     const { analysis } = savedAnalysis;
-    console.log('Saved Analysis:', savedAnalysis);
     const preview = analysis?.preview ?? {};
     const fullPackage = analysis?.full_package ?? {};
     const summary =
@@ -353,6 +356,271 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
         </div>
     );
 
+    if (previewMode) {
+        const expandedBlock = (
+            <div className="space-y-3 border-t pt-4">
+                <div className="flex flex-col gap-2">
+                    <StatCard icon={Sparkles} label="Service Type" value={preview.service_type ?? metadata?.service_type ?? 'Unspecified'} />
+                    <StatCard icon={CheckCircle2} label="Confidence" value={preview.service_confidence ?? metadata?.quality_scores?.overall_confidence ?? '—'} />
+                    <StatCard icon={Target} label="Hours/Week" value={preview.core_va_hours ?? primaryRole?.hours_per_week ?? savedAnalysis.intakeData.weeklyHours ?? '—'} />
+                </div>
+                <Accordion type="multiple" className="w-full">
+                    {(savedAnalysis.intakeData.businessName || savedAnalysis.intakeData.companyName) && (
+                        <AccordionItem value="intake">
+                            <AccordionTrigger className="text-sm">
+                                <div className="flex items-center gap-2">
+                                    <Briefcase size={16} className="text-primary" />
+                                    Intake Snapshot
+                                </div>
+                            </AccordionTrigger>
+                            <AccordionContent>
+                                <div className="space-y-3 pt-2">
+                                    <div className="grid gap-3 md:grid-cols-2">
+                                        <div>
+                                            <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">Company</p>
+                                            <p className="text-sm font-medium">{savedAnalysis.intakeData.businessName || savedAnalysis.intakeData.companyName}</p>
+                                            {savedAnalysis.intakeData.website && (
+                                                <a href={savedAnalysis.intakeData.website} target="_blank" rel="noreferrer" className="text-xs underline text-primary break-all">{savedAnalysis.intakeData.website}</a>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">Goal</p>
+                                            <p className="text-sm">{savedAnalysis.intakeData.businessGoal || '—'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid gap-3 md:grid-cols-2">
+                                        <div>
+                                            <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">Top Tasks</p>
+                                            {formatList(savedAnalysis.intakeData.tasks?.slice(0, 3), 'No tasks captured')}
+                                        </div>
+                                        <div>
+                                            <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">Requirements</p>
+                                            {formatList(savedAnalysis.intakeData.requirements?.filter(Boolean).slice(0, 3), 'No requirements captured')}
+                                        </div>
+                                    </div>
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+                    )}
+                    {(summary?.company_stage || summary?.primary_bottleneck || summary?.workflow_analysis) && (
+                        <AccordionItem value="summary">
+                            <AccordionTrigger className="text-sm">
+                                <div className="flex items-center gap-2">
+                                    <FileText size={16} className="text-primary" />
+                                    What You Told Us
+                                </div>
+                            </AccordionTrigger>
+                            <AccordionContent>
+                                <div className="space-y-3 pt-2">
+                                    <div className="grid gap-3 md:grid-cols-2">
+                                        <div>
+                                            <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">Company Stage</p>
+                                            <p className="text-sm">{summary?.company_stage ?? '—'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">Primary Bottleneck</p>
+                                            <p className="text-sm">{summary?.primary_bottleneck ?? '—'}</p>
+                                        </div>
+                                    </div>
+                                    {summary?.workflow_analysis && (
+                                        <div>
+                                            <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">Workflow Analysis</p>
+                                            <p className="text-sm leading-relaxed">{summary.workflow_analysis}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+                    )}
+                    <AccordionItem value="recommendation">
+                        <AccordionTrigger className="text-sm">
+                            <div className="flex items-center gap-2">
+                                <Sparkles size={16} className="text-primary" />
+                                Recommendation Snapshot
+                            </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                            <div className="space-y-3 pt-2">
+                                {preview.primary_outcome && (
+                                    <Card className="p-3 border-primary">
+                                        <div className="flex gap-2">
+                                            <Target size={16} className="mt-0.5 flex-shrink-0 text-primary" />
+                                            <div>
+                                                <p className="text-xs uppercase tracking-wide mb-1 text-primary">Primary Outcome</p>
+                                                <p className="text-sm leading-relaxed">{preview.primary_outcome}</p>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                )}
+                                {preview.service_reasoning && (
+                                    <div>
+                                        <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">Why this service</p>
+                                        <p className="text-sm leading-relaxed">{preview.service_reasoning}</p>
+                                    </div>
+                                )}
+                                {keyRisks.length > 0 && (
+                                    <div>
+                                        <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">Key Risks</p>
+                                        {formatList(keyRisks)}
+                                    </div>
+                                )}
+                                {questionsForYou.length > 0 && (
+                                    <div>
+                                        <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">Open Questions</p>
+                                        {formatList(questionsForYou.map((q: any) => typeof q === 'string' ? q : q.question))}
+                                    </div>
+                                )}
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+                    {primaryRole && (
+                        <AccordionItem value="role">
+                            <AccordionTrigger className="text-sm">
+                                <div className="flex items-center gap-2">
+                                    <FileText size={16} className="text-primary" />
+                                    Core Role Overview
+                                </div>
+                            </AccordionTrigger>
+                            <AccordionContent>
+                                <div className="space-y-3 pt-2">
+                                    <div className="flex flex-wrap gap-2">
+                                        <Badge variant="outline">{primaryRole.title}</Badge>
+                                        <Badge variant="outline">{primaryRole.hours_per_week || '—'} hrs/week</Badge>
+                                        {primaryRole.client_facing !== undefined && (
+                                            <Badge variant="outline">{primaryRole.client_facing ? 'Client facing' : 'Internal'}</Badge>
+                                        )}
+                                    </div>
+                                    {primaryRole.purpose && <p className="text-sm leading-relaxed">{primaryRole.purpose}</p>}
+                                    {primaryRole.responsibilities.length > 0 && (
+                                        <div>
+                                            <p className="text-xs uppercase tracking-wide mb-1 text-muted-foreground">Responsibilities</p>
+                                            {formatList(primaryRole.responsibilities.slice(0, 5))}
+                                        </div>
+                                    )}
+                                    {primaryRole.skills.length > 0 && (
+                                        <div>
+                                            <p className="text-xs uppercase tracking-wide mb-2 text-muted-foreground">Skills</p>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {primaryRole.skills.slice(0, 8).map((skill, idx) => (
+                                                    <Badge key={`${skill}-${idx}`} variant="secondary">{skill}</Badge>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+                    )}
+                </Accordion>
+            </div>
+        );
+        return (
+            <div className="p-4 overflow-auto max-h-[70vh]">
+                {expandedBlock}
+            </div>
+        );
+    }
+
+    if (variant === 'compact') {
+        const serviceType = preview.service_type ?? metadata?.service_type ?? '—';
+        const confidence = preview.service_confidence ?? metadata?.quality_scores?.overall_confidence ?? '—';
+        return (
+            <>
+                <Card className="group transition-all duration-200 hover:shadow-lg hover:border-primary/50">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                                <CardTitle className="text-lg mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+                                    {savedAnalysis.title}
+                                </CardTitle>
+                                <CardDescription className="text-xs space-y-1">
+                                    <div className="flex items-center gap-1.5">
+                                        <Calendar className="h-3 w-3" />
+                                        <span>{formatDate(savedAnalysis.createdAt)}</span>
+                                    </div>
+                                    {savedAnalysis.createdBy && (
+                                        <div className="flex items-center gap-1.5">
+                                            <span>{savedAnalysis.createdBy.firstname} {savedAnalysis.createdBy.lastname}</span>
+                                        </div>
+                                    )}
+                                </CardDescription>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Actions">
+                                            <MoreVertical className="h-4 w-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-40">
+                                        {onPreview && (
+                                            <DropdownMenuItem onClick={() => onPreview(savedAnalysis)}>
+                                                <Eye className="h-4 w-4 mr-2" />
+                                                Preview
+                                            </DropdownMenuItem>
+                                        )}
+                                        {onEdit && (
+                                            <DropdownMenuItem onClick={() => onEdit(savedAnalysis)}>
+                                                <Edit className="h-4 w-4 mr-2" />
+                                                Refine Role
+                                            </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem onClick={() => setIsDownloadModalOpen(true)}>
+                                            <Download className="h-4 w-4 mr-2" />
+                                            Download PDF
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => setIsDeleteModalOpen(true)} className="text-destructive">
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            Delete
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-center gap-2 flex-wrap text-xs">
+                            <Badge variant="secondary">{serviceType}</Badge>
+                            {confidence && <span className="text-muted-foreground">Confidence: {confidence}</span>}
+                            {savedAnalysis.isFinalized && <Badge variant="default">Finalized</Badge>}
+                            {savedAnalysis.refinementCount ? (
+                                <Badge variant="outline">{savedAnalysis.refinementCount} Refinement{savedAnalysis.refinementCount !== 1 ? 's' : ''}</Badge>
+                            ) : null}
+                        </div>
+                    </CardContent>
+                </Card>
+                <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Download Analysis</AlertDialogTitle>
+                            <AlertDialogDescription>Download this full analysis as a PDF?</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDownloadConfirm} disabled={isDownloading}>
+                                {isDownloading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /><span>Downloading...</span></> : 'Download'}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+                <AlertDialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Analysis</AlertDialogTitle>
+                            <AlertDialogDescription>This action cannot be undone. Delete this analysis?</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteConfirm} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                {isDeleting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /><span>Deleting...</span></> : 'Delete'}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </>
+        );
+    }
+
     return (
         <>
             <Card className="transition-all duration-150 group hover:shadow-sm p-2 w-full max-w-full overflow-hidden">
@@ -426,6 +694,12 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit }: AnalysisCardProps) =>
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-40">
+                                        {onPreview && (
+                                            <DropdownMenuItem onClick={() => onPreview(savedAnalysis)}>
+                                                <Eye className="h-4 w-4 mr-2" />
+                                                Preview
+                                            </DropdownMenuItem>
+                                        )}
                                         {onEdit && (
                                             <DropdownMenuItem
                                                 onClick={() => onEdit(savedAnalysis)}

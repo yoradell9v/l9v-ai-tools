@@ -30,7 +30,6 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { checkOnboardingStatus, type OnboardingStatus } from "@/lib/knowledge-base/organization-knowledge-base";
-import { ToolChatDialog } from "@/components/chat/ToolChatDialog";
 
 interface DashboardStats {
     // SUPERADMIN stats
@@ -84,6 +83,14 @@ export default function DashboardPage() {
         };
     } | null>(null);
     const [sopsCreatedToday, setSopsCreatedToday] = useState<number>(0);
+    const [kbBannerDismissed, setKbBannerDismissed] = useState<boolean>(() => {
+        if (typeof window === "undefined") return false;
+        try {
+            return localStorage.getItem("dashboard-kb-banner-dismissed") === "true";
+        } catch {
+            return false;
+        }
+    });
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -328,16 +335,22 @@ export default function DashboardPage() {
         const kbCompletion = getKBCompletion();
         const isComplete = isKBComplete();
 
-        if (!isComplete && kbCompletion < 100) {
+        if (!isComplete && kbCompletion < 100 && !kbBannerDismissed) {
             const timeEstimate = estimateTimeToComplete(kbCompletion);
             const remainingFields = onboardingStatus?.completionStatus?.missingFields?.length || 0;
 
+            const handleSkipBanner = () => {
+                setKbBannerDismissed(true);
+                try {
+                    localStorage.setItem("dashboard-kb-banner-dismissed", "true");
+                } catch {}
+            };
+
             return (
-                <Card className="border-2 border-[color:var(--accent-strong)]/30 bg-gradient-to-r from-[color:var(--accent-strong)]/10 to-[color:var(--accent-strong)]/5">
+                <Card className="py-2 px-4">
                     <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3 flex-1">
-                                <Brain className="h-5 w-5 text-[color:var(--accent-strong)] flex-shrink-0" />
                                 <div className="flex-1 min-w-0">
                                     <h2 className="text-lg font-semibold mb-1">Complete Your Knowledge Base</h2>
                                     <p className="text-base text-muted-foreground">
@@ -353,16 +366,11 @@ export default function DashboardPage() {
                                 >
                                     Complete Now
                                 </Button>
-                                <ToolChatDialog
-                                    toolId="organization-profile"
-                                    buttonLabel="Tell AI"
-                                    buttonVariant="outline"
-                                    buttonSize="sm"
-                                />
                                 <Button
-                                    variant="ghost"
+                                    variant="outline"
                                     size="sm"
-                                    className="text-muted-foreground"
+                                    onClick={handleSkipBanner}
+                                    className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10"
                                 >
                                     Skip
                                 </Button>
@@ -530,7 +538,7 @@ export default function DashboardPage() {
             <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Workspace Overview</h3>
                 <div className="grid grid-cols-3 gap-4">
-                    
+
                     <Card
                         className="cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1 relative"
                         onClick={() => router.push("/dashboard/organization-profile")}
@@ -623,7 +631,7 @@ export default function DashboardPage() {
             <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Your Tools</h3>
                 <div className="grid grid-cols-2 gap-4">
-                    
+
                     <Card className="group cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1">
                         <CardContent className="p-4">
                             <div className="flex items-start justify-between mb-3">

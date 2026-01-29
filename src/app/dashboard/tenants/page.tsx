@@ -603,7 +603,7 @@ export default function TenantsPage() {
                     <SidebarTrigger />
                 </div>
                 <div className="flex items-center justify-between">
-                    <Button onClick={() => setIsModalOpen(true)}>
+                    <Button onClick={() => setIsModalOpen(true)} className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
                         <PlusIcon className="h-4 w-4 mr-2" />
                         Add Tenant
                     </Button>
@@ -785,7 +785,7 @@ export default function TenantsPage() {
                                                         : "No deactivated tenants yet."}
                                                 </p>
                                                 {activeTab === "active" && (
-                                                    <Button onClick={() => setIsModalOpen(true)}>
+                                                    <Button onClick={() => setIsModalOpen(true)} className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
                                                         <PlusIcon className="h-4 w-4 mr-2" />
                                                         Add Tenant
                                                     </Button>

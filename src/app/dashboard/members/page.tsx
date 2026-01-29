@@ -14,6 +14,7 @@ import {
     MoreVertical,
     Loader2,
 } from "lucide-react";
+import { InboxIcon, UserPlusIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -105,6 +106,7 @@ export default function TenantMembers() {
     const [showActivateModal, setShowActivateModal] = useState(false);
     const [isActivating, setIsActivating] = useState(false);
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    const [inviteToCancelId, setInviteToCancelId] = useState<string | null>(null);
 
     const roleOptions = [
         { value: "ADMIN" as const, label: "Tenant Admin" },
@@ -421,8 +423,11 @@ export default function TenantMembers() {
         if (deactivatedMembers.length === 0) {
             return (
                 <Card>
-                    <CardContent className="py-10 text-center text-base text-muted-foreground">
-                        No deactivated members.
+                    <CardContent className="py-16 text-center">
+                        <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20 mb-4">
+                            <UserPlusIcon className="h-12 w-12 text-[var(--primary-dark)]" />
+                        </div>
+                        <p className="text-base text-muted-foreground">No deactivated members.</p>
                     </CardContent>
                 </Card>
             );
@@ -508,8 +513,11 @@ export default function TenantMembers() {
         if (invites.length === 0) {
             return (
                 <Card>
-                    <CardContent className="py-10 text-center text-base text-muted-foreground">
-                        No pending invites.
+                    <CardContent className="py-16 text-center">
+                        <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20 mb-4">
+                            <InboxIcon className="h-12 w-12 text-[var(--primary-dark)]" />
+                        </div>
+                        <p className="text-base text-muted-foreground">No pending invites.</p>
                     </CardContent>
                 </Card>
             );
@@ -603,7 +611,7 @@ export default function TenantMembers() {
                         </p>
                     </div>
                     {selectedOrganization && (
-                        <Button onClick={() => setIsInviteModalOpen(true)}>
+                        <Button onClick={() => setIsInviteModalOpen(true)} className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
                             <Plus className="h-4 w-4 mr-2" />
                             Invite Member
                         </Button>
@@ -631,7 +639,7 @@ export default function TenantMembers() {
                         ) : !selectedOrganization ? (
                             <div className="py-16 space-y-6 text-center">
                                 <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
-                                    <Users className="h-12 w-12 text-[color:var(--accent-strong)]" />
+                                    <Users className="h-12 w-12 text-[var(--primary-dark)]" />
                                 </div>
                                 <div className="space-y-3 max-w-2xl mx-auto">
                                     <p className="text-2xl font-semibold">No organizations found</p>
@@ -703,7 +711,7 @@ export default function TenantMembers() {
                         )}
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsInviteModalOpen(false)} disabled={isSendingInvitation}>
+                        <Button variant="outline" onClick={() => setIsInviteModalOpen(false)} disabled={isSendingInvitation} className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10">
                             Cancel
                         </Button>
                         <Button
@@ -714,6 +722,7 @@ export default function TenantMembers() {
                                 }
                             }}
                             disabled={isSendingInvitation || !inviteEmail.trim()}
+                            className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
                         >
                             {isSendingInvitation ? (
                                 <>
@@ -742,7 +751,7 @@ export default function TenantMembers() {
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeactivating}>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel disabled={isDeactivating} className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10">Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={async () => {
                                 const result = await handleDeactivateMember();
@@ -788,7 +797,7 @@ export default function TenantMembers() {
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isActivating}>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel disabled={isActivating} className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10">Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={async () => {
                                 const success = await handleActivateMember();
@@ -797,6 +806,7 @@ export default function TenantMembers() {
                                 }
                             }}
                             disabled={isActivating}
+                            className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
                         >
                             {isActivating ? (
                                 <>
@@ -805,6 +815,41 @@ export default function TenantMembers() {
                                 </>
                             ) : (
                                 "Activate"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Cancel Invitation Confirmation */}
+            <AlertDialog open={!!inviteToCancelId} onOpenChange={(open) => !open && !cancellingInviteId && setInviteToCancelId(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Cancel invitation</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to cancel this invitation? The recipient will no longer be able to join with this invite.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={!!cancellingInviteId} className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={async () => {
+                                if (inviteToCancelId) {
+                                    await handleCancelInvite(inviteToCancelId);
+                                    setInviteToCancelId(null);
+                                    toast.success("Invitation cancelled");
+                                }
+                            }}
+                            disabled={!!cancellingInviteId}
+                            className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                        >
+                            {cancellingInviteId === inviteToCancelId ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Cancelling...
+                                </>
+                            ) : (
+                                "Cancel invitation"
                             )}
                         </AlertDialogAction>
                     </AlertDialogFooter>

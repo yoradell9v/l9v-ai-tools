@@ -9,15 +9,16 @@ import {
     LogOut,
     UserCircle,
     AlertCircle,
+    Network,
 } from "lucide-react";
 import {
     Squares2X2Icon,
     UserPlusIcon,
     LightBulbIcon,
     BriefcaseIcon,
-    ListBulletIcon,
     UserIcon,
     DocumentTextIcon,
+    CheckBadgeIcon,
 } from "@heroicons/react/24/outline";
 import { useState, useEffect } from "react";
 import Modal from "@/components/ui/Modal";
@@ -201,7 +202,12 @@ export function AppSidebar() {
         {
             title: "Process Builder",
             url: "/dashboard/process-builder",
-            icon: ListBulletIcon,
+            icon: Network,
+        },
+        {
+            title: "Task Intelligence",
+            url: "/dashboard/task-intelligence",
+            icon: CheckBadgeIcon,
         },
         {
             title: "AI Business Brain",

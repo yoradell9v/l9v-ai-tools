@@ -295,13 +295,12 @@ export default function SOPHistoryPage() {
 
     return (
         <>
-            <div className="flex items-center gap-2 p-4 border-b">
+            <div className="flex items-center gap-2 p-4 border-b flex-shrink-0">
                 <SidebarTrigger />
             </div>
-            <div className="min-h-screen">
-                <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
-
-                    <div className="flex flex-col gap-4 mb-6">
+            <div className="h-[calc(100vh-57px)] flex flex-col overflow-hidden">
+                <div className="w-full max-w-full py-6 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <header className="flex-shrink-0 space-y-4 mb-4">
                         <div className="flex items-center gap-4">
                             <Button
                                 variant="ghost"
@@ -321,9 +320,9 @@ export default function SOPHistoryPage() {
                                 </p>
                             </div>
                         </div>
-                    </div>
+                    </header>
 
-                    <div className="mb-6 space-y-4">
+                    <div className="flex-shrink-0 space-y-4 mb-4">
                         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <span className="text-base text-muted-foreground">View:</span>
@@ -427,6 +426,7 @@ export default function SOPHistoryPage() {
                         </div>
                     </div>
 
+                    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
                     {isLoading && (
                         <Card>
                             <CardContent className="flex items-center justify-center gap-3 py-12">
@@ -783,6 +783,7 @@ export default function SOPHistoryPage() {
                                 </CardContent>
                             </Card>
                         )}
+                    </div>
                 </div>
             </div>
         </>

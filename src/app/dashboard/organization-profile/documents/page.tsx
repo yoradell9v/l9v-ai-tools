@@ -33,19 +33,25 @@ export default function DocumentsPage() {
             setIsLoading(true);
             setError(null);
             const response = await fetch("/api/organization-knowledge-base/documents");
-            if (response.ok) {
-                const result = await response.json();
-                if (result.success && result.documents) {
-                    setDocuments(result.documents);
-                } else {
-                    setError(result.message || "Failed to load documents");
-                }
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result.success && result.documents) {
+                setDocuments(result.documents);
             } else {
-                setError("Failed to load documents");
+                const msg = result.message || "";
+                const isNoProfile =
+                    response.status === 404 ||
+                    msg.toLowerCase().includes("knowledge base") ||
+                    msg.toLowerCase().includes("organization") ||
+                    msg.toLowerCase().includes("not found");
+                setError(
+                    isNoProfile
+                        ? "Setup your organization profile first to add documents."
+                        : msg || "Failed to load documents"
+                );
             }
         } catch (error) {
             console.error("Error loading documents:", error);
-            setError("Failed to load documents");
+            setError("Setup your organization profile first to add documents.");
         } finally {
             setIsLoading(false);
         }
@@ -124,9 +130,9 @@ export default function DocumentsPage() {
                         </div>
 
                         {error && (
-                            <Card className="border-destructive/30 bg-destructive/10 mb-6">
+                            <Card className="mb-6 border-border bg-card py-2">
                                 <CardContent className="py-4">
-                                    <p className="text-base text-destructive">{error}</p>
+                                    <p className="text-base text-muted-foreground">{error}</p>
                                 </CardContent>
                             </Card>
                         )}

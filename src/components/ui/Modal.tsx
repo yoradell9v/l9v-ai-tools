@@ -44,7 +44,7 @@ export default function Modal({
   const confirmButtonClasses =
     confirmVariant === "danger"
       ? "bg-red-600 hover:bg-red-700 text-white"
-      : "text-white bg-[var(--primary)] dark:bg-[var(--accent)] hover:brightness-110 ";
+      : "text-white bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 ";
 
   return (
     <AnimatePresence>
