@@ -192,7 +192,7 @@ const AnalysisCard = ({ savedAnalysis, onDelete, onEdit, variant = 'default', on
                     (typeof detailedJD?.hours_per_week === 'string'
                         ? parseInt(detailedJD.hours_per_week, 10) || 0
                         : detailedJD?.hours_per_week ?? 0),
-            responsibilities,
+            responsibilities, 
             skills: [
                 ...(structureRole?.skill_requirements?.required ?? []),
                 ...(structureRole?.skill_requirements?.nice_to_have ?? []),

@@ -53,8 +53,30 @@ export const RATE_LIMIT_CONFIG: Record<string, RateLimitConfig> = {
     user: { window: 3600, limit: 8 },
     failStrategy: "open",
   },
+  "/api/task-intelligence/draft": {
+    user: { window: 3600, limit: 5 },
+    organization: { window: 3600, limit: 20 },
+    failStrategy: "closed",
+  },
 
   // TIER 3 - Low Cost/Read Operations
+
+  "/api/task-intelligence/draft/update": {
+    user: { window: 3600, limit: 60 },
+    failStrategy: "open",
+  },
+  "/api/task-intelligence/draft/submit": {
+    user: { window: 3600, limit: 60 },
+    failStrategy: "open",
+  },
+  "/api/task-intelligence/tasks": {
+    user: { window: 3600, limit: 60 },
+    failStrategy: "open",
+  },
+  "/api/task-intelligence/templates": {
+    user: { window: 3600, limit: 60 },
+    failStrategy: "open",
+  },
 
   "/api/sop/saved": {
     user: { window: 3600, limit: 60 },

@@ -25,6 +25,7 @@ model Organization {
   sops           SOP[]
   conversations  BusinessConversation[]
   enhancementAnalyses EnhancementAnalysis[]
+  tasks          Task[]
 }
 
 model User {
@@ -71,6 +72,7 @@ model UserOrganization {
   refinementMessages RefinementMessage[]
   sops          SOP[]
   businessConversations BusinessConversation[]
+  tasks         Task[]
   
   @@unique([userId, organizationId])
   @@index([organizationId])
@@ -589,5 +591,68 @@ model BusinessMessage {
   @@unique([conversationId, sequenceNumber])
   @@index([conversationId])
   @@index([role])
+  @@index([createdAt])
+}
+
+// Task Intelligence: global templates for semantic search and AI fill
+model TaskTemplate {
+  id                      String   @id @default(cuid())
+  title                   String   // e.g. "Build Landing Page for [OFFER NAME] on [PLATFORM]"
+  category                String   // Marketing, Development, Operations, Content, Admin
+  description             String   @db.Text
+  keyConsiderations        String   @db.Text
+  subtasks                String[] // up to 10
+  deliverables            String[]
+  qualityControlChecklist String[]
+  embedding               Float[]  @default([]) // for semantic search (text-embedding-3-small)
+  embeddingModel          String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  tasks                   Task[]   // tasks that matched this template
+
+  @@index([category])
+  @@index([createdAt])
+}
+
+enum TaskStatus {
+  DRAFT
+  SUBMITTED
+}
+
+// Task Intelligence: user-created task (draft → submitted)
+model Task {
+  id                      String    @id @default(cuid())
+  organizationId          String
+  organization            Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userOrganizationId      String
+  userOrganization        UserOrganization @relation(fields: [userOrganizationId], references: [id], onDelete: Cascade)
+
+  userPrompt              String    @db.Text
+  title                   String
+  category                String
+  description             String    @db.Text
+  keyConsiderations       String    @db.Text
+  subtasks                String[]
+  deliverables            String[]
+  qualityControlChecklist String[]
+
+  matchedTemplateId       String?
+  matchedTemplate         TaskTemplate? @relation(fields: [matchedTemplateId], references: [id], onDelete: SetNull)
+  matchScore              Float?    // cosine similarity 0–1
+  matchReason             String?   @db.Text
+
+  requestedCompletionAt   DateTime?  // optional
+  assetLinks              String[]  @default([]) // optional: URLs to assets, brand boards, shared folders
+
+  status                  TaskStatus @default(DRAFT)
+  submittedAt             DateTime?
+
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@index([userOrganizationId])
+  @@index([status])
   @@index([createdAt])
 }

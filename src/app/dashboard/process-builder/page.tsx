@@ -1543,16 +1543,6 @@ export default function SopPage() {
                   }
 
                   setIsToolChatOpen(false);
-
-                  if (sop?.sopHtml) {
-                    toast.success("SOP generated and displayed on page", {
-                      description: "Review the SOP below. You can continue chatting to make edits, or save it when ready.",
-                    });
-                  } else {
-                    toast.success("Form populated", {
-                      description: "The process details have been extracted and filled in. Review and click 'Generate SOP' when ready.",
-                    });
-                  }
                 } catch (error) {
                   console.error("Error applying chat action:", error);
                   toast.error("Failed to apply process details", {

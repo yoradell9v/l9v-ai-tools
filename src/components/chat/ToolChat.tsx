@@ -63,6 +63,7 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
 
   const [input, setInput] = React.useState("");
   const [isSending, setIsSending] = React.useState(false);
+  const [progressMessage, setProgressMessage] = React.useState<string | null>(null);
   const [lastActionRaw, setLastActionRaw] = React.useState<unknown>(null);
   const [lastActionParsed, setLastActionParsed] = React.useState<TAction | null>(null);
   const [lastActionError, setLastActionError] = React.useState<string | null>(null);
@@ -209,11 +210,56 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
         body: JSON.stringify(requestBody),
       });
 
+      const contentType = res.headers.get("Content-Type") ?? "";
+      const isStreaming = contentType.includes("ndjson") || contentType.includes("x-ndjson");
+
       let data: ToolChatResponse<unknown> | null = null;
-      try {
-        data = (await res.json()) as ToolChatResponse<unknown>;
-      } catch {
-        data = null;
+
+      if (isStreaming && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const parsed = JSON.parse(line) as { type?: string; stage?: string; data?: ToolChatResponse<unknown> };
+              if (parsed.type === "progress" && parsed.stage) {
+                setProgressMessage(parsed.stage);
+              } else if (parsed.type === "result" && parsed.data) {
+                data = parsed.data;
+                break;
+              } else if (parsed.type === "error" && parsed.data) {
+                data = parsed.data;
+                break;
+              }
+            } catch {
+              // skip malformed lines
+            }
+          }
+          if (data) break;
+        }
+        if (!data && buffer.trim()) {
+          try {
+            const parsed = JSON.parse(buffer) as { type?: string; data?: ToolChatResponse<unknown> };
+            if (parsed.type === "result" && parsed.data) data = parsed.data;
+            else if (parsed.type === "error" && parsed.data) data = parsed.data;
+          } catch {
+            // ignore
+          }
+        }
+        reader.releaseLock();
+      } else {
+        try {
+          data = (await res.json()) as ToolChatResponse<unknown>;
+        } catch {
+          data = null;
+        }
       }
 
       if (!res.ok) {
@@ -234,6 +280,33 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
         return;
       }
 
+      if (!data) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: makeId(),
+            role: "assistant",
+            content: "No response received. Please try again.",
+            createdAt: Date.now(),
+          },
+        ]);
+        return;
+      }
+
+      if (data.error) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: makeId(),
+            role: "assistant",
+            content: (data as any).assistantMessage ?? `Error: ${data.error}`,
+            createdAt: Date.now(),
+          },
+        ]);
+        toast.error(data.error, { description: (data as any).details });
+        return;
+      }
+
       const assistantText =
         data?.assistantMessage ??
         (typeof (data as any)?.reply === "string" ? (data as any).reply : "") ??
@@ -251,15 +324,15 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
         try {
           const parsed = (parseAction ? parseAction(data.action) : (data.action as TAction)) ?? null;
           setLastActionParsed(parsed);
-          
-          if (parsed && typeof parsed === 'object' && parsed !== null) {
+
+          if (parsed && typeof parsed === "object" && parsed !== null) {
             const actionObj = parsed as any;
             if (actionObj.analysis) {
               setCurrentAnalysis(actionObj.analysis);
-              setCurrentSOP(null); // Clear SOP if analysis is present
+              setCurrentSOP(null);
             } else if (actionObj.sop) {
               setCurrentSOP(actionObj.sop);
-              setCurrentAnalysis(null); // Clear analysis if SOP is present
+              setCurrentAnalysis(null);
             }
           }
         } catch (e) {
@@ -282,6 +355,7 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
       toast.error("Chat error", { description: msg });
     } finally {
       setIsSending(false);
+      setProgressMessage(null);
     }
   }, [apiEndpoint, buildRequest, input, isEnabled, isSending, parseAction]);
 
@@ -332,9 +406,18 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
                     <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full border bg-background">
                       <Bot className="h-4 w-4" />
                     </div>
-                    <div className="flex items-center gap-2 max-w-[85%] rounded-lg px-3 py-2 bg-muted min-h-[44px]">
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Analyzing your requirements...</span>
+                    <div className="flex flex-col gap-1 max-w-[85%] rounded-lg px-3 py-2 bg-muted min-h-[44px]">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground flex-shrink-0" />
+                        <span className="text-sm text-muted-foreground">
+                          {progressMessage ?? "Analyzing your requirements..."}
+                        </span>
+                      </div>
+                      {progressMessage && (
+                        <p className="text-xs text-muted-foreground/80">
+                          This usually takes 1–2 minutes. We&apos;re analyzing your role and building recommendations.
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}

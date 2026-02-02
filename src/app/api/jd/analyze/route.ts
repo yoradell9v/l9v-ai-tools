@@ -2,7 +2,6 @@ import { NextResponse, NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/core/prisma";
 import { verifyAccessToken } from "@/lib/core/auth";
-import { extractInsights } from "@/lib/analysis/extractInsights";
 import {
   extractFromFile,
   extractFromUrl,
@@ -1395,26 +1394,17 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Run the JD analysis pipeline
-          sendProgress("Stage 1: Running deep discovery...");
-          sendProgress("Stage 1.5: Classifying service type...");
-          sendProgress("Stage 2: Designing role architecture...");
-          sendProgress("Stage 3: Generating detailed specifications...");
-          sendProgress("Stage 4: Validating and analyzing risks...");
-          sendProgress("Stage 5: Assembling client package...");
-
+          // Run the JD analysis pipeline (progress is emitted at the start of each stage)
           const analysisResult = await runJDAnalysisPipeline(
             augmentedIntakeJson,
             sopText,
             knowledgeBase,
-            websiteContent
+            websiteContent,
+            (stage) => sendProgress(stage)
           );
 
-          // Extract insights (pipeline already does this, but we need to add KB metadata)
-          const extractedInsights = await extractInsights(
-            "JOB_DESCRIPTION",
-            analysisResult
-          );
+          // Use pipeline's extractInsights result (no duplicate call)
+          const extractedInsights = analysisResult.metadata?.extractedInsights;
 
           const finalResponse = {
             ...analysisResult,
@@ -1425,7 +1415,9 @@ export async function POST(request: NextRequest) {
               organizationId: organizationId,
             },
             extractedInsights:
-              extractedInsights.length > 0 ? extractedInsights : undefined,
+              extractedInsights && extractedInsights.length > 0
+                ? extractedInsights
+                : undefined,
           };
 
           console.log(`[KB Response] Sending KB metadata:`, {
@@ -1433,7 +1425,7 @@ export async function POST(request: NextRequest) {
             version: knowledgeBaseVersion,
             hasSnapshot: !!knowledgeBaseSnapshot,
             organizationId: organizationId,
-            insightsCount: extractedInsights.length,
+            insightsCount: extractedInsights?.length ?? 0,
           });
 
           const final = JSON.stringify({

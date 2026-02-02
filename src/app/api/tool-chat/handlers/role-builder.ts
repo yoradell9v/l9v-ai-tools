@@ -1,21 +1,12 @@
 import OpenAI from "openai";
-import type {
-  ToolChatRequest,
-  ToolChatResponse,
-  ChatMessage,
-} from "@/lib/tool-chat/types";
+import type { ToolChatRequest, ToolChatResponse } from "@/lib/tool-chat/types";
 import type { AuthResult } from "@/lib/tool-chat/utils";
 import {
-  extractStructuredDataFromConversation,
-  validateExtractedData,
-  createClarificationResponse,
   createSuccessResponse,
   createErrorResponse,
-  createSuggestionResponse,
 } from "@/lib/tool-chat/utils";
-import { jdFormConfig } from "@/components/forms/configs/jdFormConfig";
-import { runJDAnalysisPipeline } from "@/lib/jd-analysis/pipeline";
 import {
+  runJDAnalysisPipeline,
   normalizeTasks,
   normalizeStringArray,
 } from "@/lib/jd-analysis/pipeline";
@@ -24,54 +15,24 @@ import {
  * Handler for Role Builder tool chat.
  *
  * Flow:
- * 1. Detect if this is a refinement request (user editing existing analysis)
- * 2. Extract structured data from conversation using jdFormConfig
- * 3. Validate extracted data
- * 4. If incomplete → return clarification questions or suggestions
- * 5. If complete → run JD analysis pipeline
- * 6. Return success response with action containing form data and analysis
- *
- * Supports iterative refinement: users can continue chatting to make edits,
- * and the handler will re-extract and re-analyze with updated data.
+ * - If context contains existingAnalysis (refinement): run handleRefinement (one LLM call).
+ * - Otherwise (Generate with AI): build minimal intake from user prompt (one light LLM call),
+ *   run JD pipeline, return analysis. No full form extraction or form-field mapping.
  */
 export async function handleRoleBuilder(
   request: ToolChatRequest,
   auth: AuthResult,
 ): Promise<ToolChatResponse> {
   try {
-    // Initialize OpenAI client
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    // Check if this is a refinement request (context contains existingAnalysis)
     const context = request.context as any;
     const existingAnalysis = context?.existingAnalysis;
     const existingIntakeData = context?.existingIntakeData;
     const isRefinementMode = !!existingAnalysis;
 
-    // Detect if this is a refinement request from conversation
-    // If conversation has multiple turns and user is asking for changes, it's likely a refinement
-    const isRefinement = request.conversation.length > 2;
-    const lastUserMessage =
-      request.conversation
-        .filter((m) => m.role === "user")
-        .slice(-1)[0]
-        ?.content?.toLowerCase() || "";
-
-    const isEditRequest =
-      isRefinement &&
-      (lastUserMessage.includes("change") ||
-        lastUserMessage.includes("update") ||
-        lastUserMessage.includes("edit") ||
-        lastUserMessage.includes("modify") ||
-        lastUserMessage.includes("instead") ||
-        lastUserMessage.includes("rather") ||
-        lastUserMessage.includes("also") ||
-        lastUserMessage.includes("add") ||
-        lastUserMessage.includes("remove"));
-
-    // If we have an existing analysis, use refinement logic
     if (isRefinementMode && existingAnalysis) {
       return await handleRefinement(
         openai,
@@ -82,138 +43,8 @@ export async function handleRoleBuilder(
       );
     }
 
-    // Step 1: Extract structured data from conversation
-    // Transform conversation to full ChatMessage format (extraction only uses role/content)
-    const fullConversation: ChatMessage[] = request.conversation.map(
-      (msg, index) => ({
-        id: `msg-${index}`,
-        role: msg.role,
-        content: msg.content,
-        createdAt: Date.now() + index, // Dummy timestamp, not used by extraction
-      }),
-    );
-
-    const extractionResult = await extractStructuredDataFromConversation(
-      openai,
-      fullConversation,
-      jdFormConfig,
-      auth.knowledgeBase,
-      "role-builder",
-    );
-
-    // Handle extraction errors
-    if (extractionResult.extractionErrors.length > 0) {
-      console.error(
-        "[Role Builder] Extraction errors:",
-        extractionResult.extractionErrors,
-      );
-      return createErrorResponse(
-        "Failed to extract data from conversation",
-        extractionResult.extractionErrors.join(", "),
-      );
-    }
-
-    // Handle empty extraction (no data extracted at all)
-    if (
-      !extractionResult.extractedData ||
-      Object.keys(extractionResult.extractedData).length === 0
-    ) {
-      return createClarificationResponse(
-        ["tasks", "outcome90Day", "requirements"],
-        [
-          "What tasks will this role handle?",
-          "What is the 90-day outcome you want to achieve?",
-          "What are the key requirements for this role?",
-        ],
-      );
-    }
-
-    // Step 2: Normalize and validate extracted data
-    const normalizedData = normalizeExtractedDataForJD(
-      extractionResult.extractedData,
-    );
-    const validation = validateExtractedData(normalizedData, jdFormConfig);
-
-    // Step 3: If incomplete, return suggestions instead of clarification questions
-    // This is the proactive approach - AI generates suggestions for missing fields
-    if (!validation.isValid && validation.missingFields.length > 0) {
-      // Check if we have AI suggestions for missing fields
-      const suggestedFields = extractionResult.suggestedFields || {};
-      const fieldSources = extractionResult.fieldSources || {};
-
-      // If we have suggestions, return them; otherwise fall back to clarification
-      if (Object.keys(suggestedFields).length > 0) {
-        return createSuggestionResponse(
-          normalizedData,
-          suggestedFields,
-          fieldSources,
-          validation.missingFields,
-        );
-      } else {
-        // Fallback to clarification if extraction didn't generate suggestions
-        return createClarificationResponse(
-          validation.missingFields,
-          extractionResult.suggestedQuestions.length > 0
-            ? extractionResult.suggestedQuestions
-            : validation.missingFields.map(
-                (field) => `Could you provide more details about ${field}?`,
-              ),
-        );
-      }
-    }
-
-    // Step 4: Data is complete, run JD analysis pipeline
-    try {
-      // Prepare intake data for pipeline
-      const intakeData = prepareIntakeDataForPipeline(
-        normalizedData,
-        auth.knowledgeBase,
-      );
-
-      // Run analysis pipeline
-      // Note: SOP text and website content are not available from chat, so pass null
-      const analysisResult = await runJDAnalysisPipeline(
-        intakeData,
-        null, // sopText - not available from chat
-        auth.knowledgeBase,
-        null, // websiteContent - not available from chat
-      );
-
-      // Step 5: Return success response with action
-      const action = {
-        formData: normalizedData,
-        analysis: analysisResult,
-        kbDefaultsUsed: extractionResult.kbDefaultsUsed,
-        fieldSources: extractionResult.fieldSources || {},
-        isDraft: false, // Complete analysis, not a draft
-      };
-
-      // Determine response message based on whether this is a refinement
-      let assistantMessage: string;
-      if (isEditRequest || isRefinement) {
-        assistantMessage = `I've updated the analysis based on your changes. Here's the revised job description:`;
-      } else {
-        assistantMessage = `I've analyzed your role requirements and generated a comprehensive job description. The analysis includes service type recommendations, role architecture, detailed specifications, and risk assessment.`;
-      }
-
-      return createSuccessResponse(
-        assistantMessage,
-        action,
-        extractionResult.kbDefaultsUsed.length > 0
-          ? [
-              `Used organization defaults for: ${extractionResult.kbDefaultsUsed.join(", ")}`,
-            ]
-          : undefined,
-      );
-    } catch (analysisError) {
-      console.error("[Role Builder] Analysis pipeline error:", analysisError);
-      return createErrorResponse(
-        "Failed to generate job description analysis",
-        analysisError instanceof Error
-          ? analysisError.message
-          : "An unexpected error occurred during analysis",
-      );
-    }
+    // Generate with AI: minimal intake → pipeline → return analysis (optional onProgress for streaming)
+    return runRoleBuilderGenerateWithProgress(request, auth, openai, undefined);
   } catch (error) {
     console.error("[Role Builder] Handler error:", error);
     return createErrorResponse(
@@ -221,6 +52,170 @@ export async function handleRoleBuilder(
       error instanceof Error ? error.message : "An unexpected error occurred",
     );
   }
+}
+
+/**
+ * Generate-with-AI path with optional progress callback (for streaming).
+ * Used by handleRoleBuilder (onProgress undefined) and by tool-chat route when streaming.
+ */
+export async function runRoleBuilderGenerateWithProgress(
+  request: ToolChatRequest,
+  auth: AuthResult,
+  openai: OpenAI,
+  onProgress?: (stage: string) => void,
+): Promise<ToolChatResponse> {
+  const lastUserContent =
+    request.conversation
+      .filter((m: { role: string }) => m.role === "user")
+      .slice(-1)[0]?.content?.trim() || "";
+
+  if (!lastUserContent) {
+    return createErrorResponse(
+      "No message provided",
+      "Please describe the role you need (e.g. I need a social media manager).",
+    );
+  }
+
+  onProgress?.("Preparing your role description...");
+  const minimalIntake = await buildMinimalIntakeFromPrompt(
+    openai,
+    lastUserContent,
+    auth.knowledgeBase,
+  );
+
+  const analysisResult = await runJDAnalysisPipeline(
+    minimalIntake,
+    null,
+    auth.knowledgeBase,
+    null,
+    onProgress,
+  );
+
+  const formData = minimalIntakeToFormData(minimalIntake, auth.knowledgeBase);
+
+  const action = {
+    analysis: analysisResult,
+    formData,
+    isDraft: false,
+  };
+
+  return createSuccessResponse(
+    "I've generated a job description analysis based on your request. You can apply it below or refine it using Refine Analysis.",
+    action,
+    undefined,
+  );
+}
+
+/**
+ * One lightweight LLM call: user prompt → minimal JSON for pipeline.
+ * No full form schema or field-by-field extraction.
+ */
+async function buildMinimalIntakeFromPrompt(
+  openai: OpenAI,
+  userMessage: string,
+  knowledgeBase: any | null,
+): Promise<any> {
+  const kbHint = knowledgeBase?.businessName
+    ? `If the user doesn't specify a company, use "${knowledgeBase.businessName}".`
+    : "If the user doesn't specify a company, use a generic placeholder like 'Company'.";
+  const defaultHours = knowledgeBase?.defaultWeeklyHours
+    ? String(knowledgeBase.defaultWeeklyHours)
+    : "40";
+
+  const prompt = `The user wants to create a job description. They said: "${userMessage}"
+
+${kbHint}
+Default weekly hours if not specified: ${defaultHours}
+
+Output JSON only, no markdown:
+{
+  "company_name": "string (business/company name)",
+  "role_summary": "one short phrase (e.g. Social Media Manager)",
+  "tasks": ["task 1", "task 2", ...] (1-5 concrete tasks inferred from their message)",
+  "outcome_90d": "one sentence 90-day outcome",
+  "weekly_hours": number
+}`;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content:
+          "You output minimal JSON for a job description intake. Be concise. Infer tasks from the user's role description.",
+      },
+      { role: "user", content: prompt },
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.3,
+    max_tokens: 500,
+  });
+
+  const raw = completion.choices[0].message.content;
+  if (!raw) throw new Error("Empty response from minimal intake");
+
+  let parsed: { company_name?: string; role_summary?: string; tasks?: string[]; outcome_90d?: string; weekly_hours?: number };
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Invalid JSON from minimal intake");
+  }
+
+  const tasks = Array.isArray(parsed.tasks)
+    ? parsed.tasks.map((t) => (typeof t === "string" ? t.trim() : "")).filter(Boolean).slice(0, 5)
+    : [];
+  if (tasks.length === 0) {
+    tasks.push(parsed.role_summary?.trim() || userMessage.slice(0, 200));
+  }
+
+  const normalizedTasks = normalizeTasks(tasks);
+  const companyName =
+    (typeof parsed.company_name === "string" && parsed.company_name.trim()) ||
+    knowledgeBase?.businessName ||
+    "Company";
+  const weeklyHours = Number(parsed.weekly_hours) || Number(defaultHours) || 40;
+
+  return {
+    brand: { name: companyName },
+    tasks_top5: normalizedTasks,
+    outcome_90d: typeof parsed.outcome_90d === "string" ? parsed.outcome_90d.trim() : "",
+    weekly_hours: weeklyHours,
+    tools: [],
+    requirements: [],
+    client_facing: true,
+    business_goal: knowledgeBase?.primaryGoal || "",
+    english_level: knowledgeBase?.defaultEnglishLevel || "Excellent",
+    existing_sops: "No",
+    reporting_expectations: "",
+    management_style: knowledgeBase?.defaultManagementStyle || "Async",
+    security_needs: "",
+    deal_breakers: "",
+    nice_to_have_skills: "",
+  };
+}
+
+/**
+ * Map minimal pipeline intake to form-like shape for UI (businessName, tasks, outcome90Day, weeklyHours).
+ */
+function minimalIntakeToFormData(
+  intake: any,
+  knowledgeBase: any | null,
+): Record<string, any> {
+  return {
+    businessName: intake.brand?.name || knowledgeBase?.businessName || "",
+    tasks: Array.isArray(intake.tasks_top5) ? intake.tasks_top5 : [],
+    outcome90Day: intake.outcome_90d || "",
+    weeklyHours: String(intake.weekly_hours ?? knowledgeBase?.defaultWeeklyHours ?? "40"),
+    clientFacing: "Yes",
+    tools: "",
+    requirements: [],
+    existingSOPs: "No",
+    reportingExpectations: "",
+    managementStyle: knowledgeBase?.defaultManagementStyle || "Async",
+    securityNeeds: "",
+    dealBreakers: "",
+    niceToHaveSkills: "",
+  };
 }
 
 /**
@@ -615,145 +610,3 @@ function generateChangeSummary(changedSections: string[]): {
   };
 }
 
-/**
- * Normalizes extracted data to match JD form expectations.
- * Handles array fields, string normalization, and type conversions.
- */
-function normalizeExtractedDataForJD(
-  data: Record<string, any>,
-): Record<string, any> {
-  const normalized = { ...data };
-
-  // Normalize tasks array
-  if (normalized.tasks !== undefined) {
-    normalized.tasks = normalizeTasks(normalized.tasks);
-  }
-
-  // Normalize requirements array
-  if (normalized.requirements !== undefined) {
-    normalized.requirements = normalizeStringArray(normalized.requirements);
-  }
-
-  // Normalize tools (textarea -> string)
-  if (normalized.tools && Array.isArray(normalized.tools)) {
-    normalized.tools = normalized.tools.join(", ");
-  }
-
-  // Ensure weeklyHours is a string (select field)
-  if (
-    normalized.weeklyHours !== undefined &&
-    typeof normalized.weeklyHours !== "string"
-  ) {
-    normalized.weeklyHours = String(normalized.weeklyHours);
-  }
-
-  // Ensure clientFacing is a string (select field)
-  if (
-    normalized.clientFacing !== undefined &&
-    typeof normalized.clientFacing !== "string"
-  ) {
-    normalized.clientFacing = String(normalized.clientFacing);
-  }
-
-  // Normalize optional fields
-  if (normalized.existingSOPs === undefined) {
-    normalized.existingSOPs = "No";
-  }
-
-  // Ensure all required fields have defaults if missing
-  if (!normalized.tasks || normalized.tasks.length === 0) {
-    normalized.tasks = [""];
-  }
-  if (!normalized.requirements || normalized.requirements.length === 0) {
-    normalized.requirements = [""];
-  }
-
-  // Normalize outcome90Day (required textarea)
-  if (!normalized.outcome90Day || typeof normalized.outcome90Day !== "string") {
-    normalized.outcome90Day = normalized.outcome90Day || "";
-  }
-
-  // Normalize optional text fields to empty strings if undefined
-  const optionalTextFields = [
-    "businessName",
-    "tools",
-    "reportingExpectations",
-    "securityNeeds",
-    "dealBreakers",
-    "niceToHaveSkills",
-  ];
-  optionalTextFields.forEach((field) => {
-    if (normalized[field] === undefined || normalized[field] === null) {
-      normalized[field] = "";
-    } else if (typeof normalized[field] !== "string") {
-      normalized[field] = String(normalized[field]);
-    }
-  });
-
-  return normalized;
-}
-
-/**
- * Prepares intake data for JD analysis pipeline.
- * Maps form data structure to pipeline's expected intake format.
- * The pipeline expects snake_case fields and specific structure.
- */
-function prepareIntakeDataForPipeline(
-  formData: Record<string, any>,
-  knowledgeBase: any | null,
-): any {
-  const normalizedTasks = normalizeTasks(formData.tasks);
-  const normalizedRequirements = normalizeStringArray(formData.requirements);
-  const normalizedTools = normalizeStringArray(formData.tools);
-
-  // Convert weeklyHours to number
-  const weeklyHours = Number(
-    formData.weeklyHours || knowledgeBase?.defaultWeeklyHours || "40",
-  );
-
-  // Convert clientFacing to boolean (Yes/No -> true/false)
-  const clientFacing = formData.clientFacing === "Yes";
-
-  // Map form fields to pipeline's expected intake format (snake_case)
-  const intakeData: any = {
-    // Brand/Company info
-    brand: {
-      name: formData.businessName || knowledgeBase?.businessName || "",
-    },
-
-    // Business context
-    business_goal:
-      formData.businessGoal === "__ORG_DEFAULT__"
-        ? knowledgeBase?.primaryGoal || ""
-        : formData.businessGoal || "",
-    outcome_90d: formData.outcome90Day || "",
-
-    // Tasks and requirements
-    tasks_top5: normalizedTasks, // Pipeline expects this field name
-    requirements: normalizedRequirements,
-
-    // Work details
-    weekly_hours: weeklyHours,
-    client_facing: clientFacing,
-
-    // Skills and tools
-    tools: normalizedTools,
-    english_level:
-      formData.englishLevel === "__ORG_DEFAULT__"
-        ? knowledgeBase?.defaultEnglishLevel || "Excellent"
-        : formData.englishLevel || "Excellent",
-
-    // Additional details
-    existing_sops: formData.existingSOPs || "No",
-    reporting_expectations: formData.reportingExpectations || "",
-    management_style:
-      formData.managementStyle === "__ORG_DEFAULT__"
-        ? knowledgeBase?.defaultManagementStyle || "Async"
-        : formData.managementStyle || "Async",
-    security_needs: formData.securityNeeds || "",
-    deal_breakers: formData.dealBreakers || "",
-    nice_to_have_skills: formData.niceToHaveSkills || "",
-  };
-
-  return intakeData;
-}

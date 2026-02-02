@@ -231,7 +231,7 @@ Your job is to extract deep insights that aren't explicitly stated. Respond with
 Be specific and insightful. Look for what's NOT said but is clearly implied.`;
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-4o-mini",
     messages: [
       { role: "system", content: "You are an expert business analyst." },
       { role: "user", content: discoveryPrompt },
@@ -451,7 +451,7 @@ Respond with JSON:
 Be analytical and objective. The goal is to match the client's actual needs to the right service model, not force them into a specific service.`;
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-4o-mini",
     messages: [
       { role: "system", content: "You are a service classification expert." },
       { role: "user", content: classificationPrompt },
@@ -1387,7 +1387,8 @@ export async function runJDAnalysisPipeline(
   intakeData: any,
   sopText: string | null,
   knowledgeBase: any | null,
-  websiteContent?: any | null
+  websiteContent?: any | null,
+  onProgress?: (stage: string) => void
 ): Promise<JDAnalysisResult> {
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -1399,6 +1400,7 @@ export async function runJDAnalysisPipeline(
   };
 
   // Stage 1: Deep Discovery
+  onProgress?.("Stage 1: Running deep discovery...");
   const discovery = await runDeepDiscovery(
     openai,
     augmentedIntakeData,
@@ -1407,6 +1409,7 @@ export async function runJDAnalysisPipeline(
   );
 
   // Stage 1.5: Service Type Classification
+  onProgress?.("Stage 1.5: Classifying service type...");
   const serviceClassification = await classifyServiceType(
     openai,
     augmentedIntakeData,
@@ -1418,6 +1421,7 @@ export async function runJDAnalysisPipeline(
     serviceClassification.service_type_analysis.recommended_service;
 
   // Stage 2: Service-Aware Role Architecture
+  onProgress?.("Stage 2: Designing role architecture...");
   const architecture = await designRoleArchitecture(
     openai,
     augmentedIntakeData,
@@ -1427,6 +1431,7 @@ export async function runJDAnalysisPipeline(
   );
 
   // Stage 3: Generate Detailed Specifications
+  onProgress?.("Stage 3: Generating detailed specifications...");
   let detailedSpecs;
 
   if (recommendedService === "Dedicated VA") {
@@ -1456,6 +1461,7 @@ export async function runJDAnalysisPipeline(
   }
 
   // Stage 4: Validation & Risk Analysis
+  onProgress?.("Stage 4: Validating and analyzing risks...");
   const validation = await validateAndAnalyzeRisks(
     openai,
     architecture,
@@ -1466,6 +1472,7 @@ export async function runJDAnalysisPipeline(
   );
 
   // Stage 5: Assemble Client Package
+  onProgress?.("Stage 5: Assembling client package...");
   const clientPackage = assembleClientPackage(
     discovery,
     architecture,
@@ -1533,6 +1540,7 @@ export async function runJDAnalysisPipeline(
     metadata,
   });
 
+  onProgress?.("Extracting insights...");
   const extractedInsights = await extractInsights(
     "JOB_DESCRIPTION",
     cleanedResponse
