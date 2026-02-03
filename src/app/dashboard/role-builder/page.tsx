@@ -9,7 +9,7 @@ import { useUser } from "@/context/UserContext";
 import { OrganizationKnowledgeBase } from "@/lib/knowledge-base/organization-knowledge-base";
 import { mapOrgKBToJDForm, resolveJDFormWithOrgKB, resolvedJDFormToIntakePayload } from "@/lib/jd-analysis/field-mapping";
 import { Briefcase, Sparkles, CheckCircle2, ShieldAlert, AlertTriangle, TrendingUp, Target, AlertCircle, Network, FileText, Plus, MoreVertical, Edit, Download, Save, History, Loader2, Clock, Calendar, Zap, ArrowRight, X, Check, AlertCircle as AlertCircleIcon, ChevronDown, Copy } from "lucide-react";
-import { SparklesIcon, ClipboardIcon, BriefcaseIcon } from "@heroicons/react/24/outline";
+import { SparklesIcon, BriefcaseIcon } from "@heroicons/react/24/outline";
 import { getConfidenceValue, getConfidenceColor } from '@/utils/confidence';
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ import { isRateLimitError, parseRateLimitError, getRateLimitErrorMessage } from 
 import { toast } from "sonner";
 import { ToolChat } from "@/components/chat/ToolChat";
 import { getToolChatConfig } from "@/lib/tool-chat/registry";
+import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/utils/copy-to-clipboard";
 
 interface AnalysisResult {
@@ -1016,14 +1017,45 @@ export default function JdBuilderPage() {
                             )}
 
                             {isProcessing && !analysisError && !isDownloading && (
-                                <div className="flex flex-col items-center justify-center py-16">
-                                    <Loader2 className="h-8 w-8 mb-3 animate-spin" />
-                                    <h3 className="text-lg font-semibold mb-1">
+                                <div className="flex flex-col items-center justify-center py-16 px-4">
+                                    <Loader2 className="h-8 w-8 mb-3 animate-spin text-primary" />
+                                    <h3 className="text-lg font-semibold mb-1 text-center">
                                         {currentStage || "Processing your analysis"}
                                     </h3>
-                                    <p className="text-base text-muted-foreground">
-                                        {currentStage ? "Please wait..." : "This may take a moment..."}
+                                    <p className="text-base text-muted-foreground text-center mb-6">
+                                        This usually takes 1–2 minutes. We&apos;re analyzing your role and building recommendations.
                                     </p>
+                                    <div className="flex flex-wrap justify-center gap-2">
+                                        {[
+                                            "Deep discovery",
+                                            "Service type",
+                                            "Role architecture",
+                                            "Specifications",
+                                            "Validation & insights",
+                                        ].map((label, i) => {
+                                            const stageNum = currentStage?.match(/Stage (\d+(?:\.\d+)?)/)?.[1];
+                                            const isExtracting = currentStage?.toLowerCase().includes("extracting");
+                                            const current =
+                                                (stageNum === "1" && i === 0) ||
+                                                (stageNum === "1.5" && i === 1) ||
+                                                (stageNum === "2" && i === 2) ||
+                                                (stageNum === "3" && i === 3) ||
+                                                ((stageNum === "4" || stageNum === "5" || isExtracting) && i === 4);
+                                            return (
+                                                <span
+                                                    key={label}
+                                                    className={cn(
+                                                        "text-xs px-2 py-1 rounded-md border",
+                                                        current
+                                                            ? "border-primary bg-primary/10 text-primary font-medium"
+                                                            : "border-muted bg-muted/50 text-muted-foreground",
+                                                    )}
+                                                >
+                                                    {i + 1}. {label}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
 
@@ -1230,18 +1262,6 @@ export default function JdBuilderPage() {
                                                         <Copy className="h-4 w-4 mr-2" />
                                                         Copy to Clipboard
                                                     </DropdownMenuItem>
-                                                    {analysisSource === 'form' && (
-                                                        <>
-                                                            <Separator />
-                                                            <DropdownMenuItem onClick={() => {
-                                                                setActionsMenuOpen(false);
-                                                                setIsModalOpen(true);
-                                                            }}>
-                                                                <ClipboardIcon className="h-4 w-4 mr-2" />
-                                                                Edit Intake Form
-                                                            </DropdownMenuItem>
-                                                        </>
-                                                    )}
                                                     <Separator />
                                                     <DropdownMenuItem
                                                         onClick={async () => {
@@ -2272,9 +2292,6 @@ export default function JdBuilderPage() {
                                         }
 
                                         setIsToolChatOpen(false);
-                                        toast.success("Analysis displayed on page", {
-                                            description: "Review the analysis below. You can continue chatting to make edits.",
-                                        });
                                     } catch (error) {
                                         console.error("Error applying chat action:", error);
                                         toast.error("Failed to display analysis", {

@@ -1,54 +1,37 @@
 import OpenAI from "openai";
-import type { ToolChatRequest, ToolChatResponse, ChatMessage } from "@/lib/tool-chat/types";
+import type { ToolChatRequest, ToolChatResponse } from "@/lib/tool-chat/types";
 import type { AuthResult } from "@/lib/tool-chat/utils";
 import {
-  extractStructuredDataFromConversation,
-  validateExtractedData,
-  createClarificationResponse,
   createSuccessResponse,
   createErrorResponse,
-  createSuggestionResponse,
 } from "@/lib/tool-chat/utils";
-import { sopGeneratorConfig } from "@/components/forms/configs/sopGeneratorConfig";
 import { generateSOP } from "@/lib/sop-generation/generate-sop";
 import { markdownToHtml } from "@/lib/extraction/markdown-to-html";
 
+const VALID_FREQUENCIES = ["Daily", "Weekly", "Monthly", "Quarterly", "As-needed", "One-time"];
+
 /**
  * Handler for Process Builder tool chat.
- * 
+ *
  * Flow:
- * 1. Check if this is a refinement request (context contains existingSOP)
- * 2. If refinement mode → use handleSOPRefinement to refine existing SOP
- * 3. Otherwise → extract structured data from conversation using sopGeneratorConfig
- * 4. Validate extracted data
- * 5. If incomplete → return clarification questions or suggestions
- * 6. If complete → generate SOP
- * 7. Return success response with action containing form data and SOP
- * 
- * Supports chat-based refinement: users can refine existing SOPs through conversation.
+ * - If context contains existingSOP (refinement): run handleSOPRefinement.
+ * - Otherwise (Generate with AI): build minimal intake from user prompt (one light LLM call),
+ *   then generateSOP. No full form extraction or validation.
  */
 export async function handleProcessBuilder(
   request: ToolChatRequest,
   auth: AuthResult
 ): Promise<ToolChatResponse> {
   try {
-    // Initialize OpenAI client
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    // Check if this is a refinement request (context contains existingSOP)
     const context = request.context as any;
     const existingSOP = context?.existingSOP;
     const existingFormData = context?.existingFormData;
     const isRefinementMode = !!existingSOP;
 
-    // Check if this is a job analysis-linked request (context contains jobAnalysisId or linkedJobAnalysis)
-    const jobAnalysisId = context?.jobAnalysisId;
-    const linkedJobAnalysis = context?.linkedJobAnalysis;
-    const hasJobAnalysisContext = !!(jobAnalysisId || linkedJobAnalysis);
-
-    // If we have an existing SOP, use refinement logic
     if (isRefinementMode && existingSOP) {
       return await handleSOPRefinement(
         openai,
@@ -59,169 +42,7 @@ export async function handleProcessBuilder(
       );
     }
 
-    // If we have job analysis context, fetch full analysis if only ID provided
-    let jobAnalysis: { analysis: any; intakeData?: any } | null = null;
-    if (hasJobAnalysisContext) {
-      if (linkedJobAnalysis) {
-        jobAnalysis = {
-          analysis: linkedJobAnalysis.analysis,
-          intakeData: linkedJobAnalysis.intakeData || {},
-        };
-      } else if (jobAnalysisId) {
-        try {
-          // Fetch the saved analysis from database
-          const { prisma } = await import("@/lib/core/prisma");
-          const savedAnalysis = await prisma.savedAnalysis.findUnique({
-            where: { id: jobAnalysisId },
-            select: {
-              analysis: true,
-              intakeData: true,
-            },
-          });
-          if (savedAnalysis && savedAnalysis.analysis) {
-            jobAnalysis = {
-              analysis: savedAnalysis.analysis,
-              intakeData: savedAnalysis.intakeData || {},
-            };
-          }
-        } catch (error) {
-          console.error("[Process Builder] Error fetching job analysis:", error);
-          // Continue without job analysis if fetch fails
-        }
-      }
-    }
-
-    // Detect if this is a refinement request from conversation
-    const isRefinement = request.conversation.length > 2;
-    const lastUserMessage = request.conversation
-      .filter(m => m.role === "user")
-      .slice(-1)[0]?.content?.toLowerCase() || "";
-    
-    const isEditRequest = isRefinement && (
-      lastUserMessage.includes("change") ||
-      lastUserMessage.includes("update") ||
-      lastUserMessage.includes("edit") ||
-      lastUserMessage.includes("modify") ||
-      lastUserMessage.includes("instead") ||
-      lastUserMessage.includes("rather") ||
-      lastUserMessage.includes("also") ||
-      lastUserMessage.includes("add") ||
-      lastUserMessage.includes("remove")
-    );
-
-    // Step 1: Extract structured data from conversation
-    const fullConversation: ChatMessage[] = request.conversation.map((msg, index) => ({
-      id: `msg-${index}`,
-      role: msg.role,
-      content: msg.content,
-      createdAt: Date.now() + index,
-    }));
-
-    const extractionResult = await extractStructuredDataFromConversation(
-      openai,
-      fullConversation,
-      sopGeneratorConfig,
-      auth.knowledgeBase,
-      "process-builder"
-    );
-
-    // Handle extraction errors
-    if (extractionResult.extractionErrors.length > 0) {
-      console.error("[Process Builder] Extraction errors:", extractionResult.extractionErrors);
-      return createErrorResponse(
-        "Failed to extract data from conversation",
-        extractionResult.extractionErrors.join(", ")
-      );
-    }
-
-    // Handle empty extraction
-    if (!extractionResult.extractedData || Object.keys(extractionResult.extractedData).length === 0) {
-      return createClarificationResponse(
-        ["sopTitle", "processOverview", "mainSteps"],
-        [
-          "What is the name of this process?",
-          "What does this process accomplish?",
-          "What are the main steps in this process?",
-        ]
-      );
-    }
-
-    // Step 2: Normalize and validate extracted data
-    const normalizedData = normalizeExtractedDataForSOP(extractionResult.extractedData);
-    const validation = validateExtractedData(normalizedData, sopGeneratorConfig);
-
-    // Step 3: If incomplete, return suggestions instead of clarification questions
-    if (!validation.isValid && validation.missingFields.length > 0) {
-      const suggestedFields = extractionResult.suggestedFields || {};
-      const fieldSources = extractionResult.fieldSources || {};
-      
-      if (Object.keys(suggestedFields).length > 0) {
-        return createSuggestionResponse(
-          normalizedData,
-          suggestedFields,
-          fieldSources,
-          validation.missingFields
-        );
-      } else {
-        return createClarificationResponse(
-          validation.missingFields,
-          extractionResult.suggestedQuestions.length > 0
-            ? extractionResult.suggestedQuestions
-            : validation.missingFields.map(
-                (field) => `Could you provide more details about ${field}?`
-              )
-        );
-      }
-    }
-
-    // Step 4: Data is complete, generate SOP
-    try {
-      const sopResult = await generateSOP(
-        normalizedData,
-        auth.knowledgeBase,
-        openai,
-        jobAnalysis || null  // Pass job analysis context if available
-      );
-
-      // Step 5: Return success response with action
-      const action = {
-        formData: normalizedData,
-        sop: {
-          sopHtml: sopResult.sopHtml,
-          sopMarkdown: sopResult.sopMarkdown,
-          metadata: sopResult.metadata,
-        },
-        kbDefaultsUsed: extractionResult.kbDefaultsUsed,
-        fieldSources: extractionResult.fieldSources || {},
-        isDraft: false,
-      };
-
-      // Determine response message
-      let assistantMessage: string;
-      if (isEditRequest || isRefinement) {
-        assistantMessage = `I've updated and regenerated the SOP based on your changes. Here's your revised Standard Operating Procedure:`;
-      } else {
-        assistantMessage = `I've generated a comprehensive Standard Operating Procedure based on your process description. The SOP includes step-by-step instructions, quality gates, escalation rules, and performance metrics.`;
-      }
-
-      return createSuccessResponse(
-        assistantMessage,
-        action,
-        extractionResult.kbDefaultsUsed.length > 0
-          ? [
-              `Used organization defaults for: ${extractionResult.kbDefaultsUsed.join(", ")}`,
-            ]
-          : undefined
-      );
-    } catch (sopError) {
-      console.error("[Process Builder] SOP generation error:", sopError);
-      return createErrorResponse(
-        "Failed to generate SOP",
-        sopError instanceof Error
-          ? sopError.message
-          : "An unexpected error occurred during SOP generation"
-      );
-    }
+    return runProcessBuilderGenerateWithProgress(request, auth, openai, undefined);
   } catch (error) {
     console.error("[Process Builder] Handler error:", error);
     return createErrorResponse(
@@ -232,66 +53,197 @@ export async function handleProcessBuilder(
 }
 
 /**
- * Normalizes extracted data to match SOP form expectations.
- * Handles string normalization and type conversions.
+ * Generate-with-AI path with optional progress callback (for streaming).
+ * Builds minimal intake from user message, then calls generateSOP.
  */
-function normalizeExtractedDataForSOP(data: Record<string, any>): Record<string, any> {
-  const normalized = { ...data };
+export async function runProcessBuilderGenerateWithProgress(
+  request: ToolChatRequest,
+  auth: AuthResult,
+  openai: OpenAI,
+  onProgress?: (stage: string) => void
+): Promise<ToolChatResponse> {
+  const lastUserContent =
+    request.conversation
+      .filter((m: { role: string }) => m.role === "user")
+      .slice(-1)[0]?.content?.trim() || "";
 
-  // Normalize all text fields to strings
-  const textFields = [
-    "sopTitle",
-    "processOverview",
-    "primaryRole",
-    "mainSteps",
-    "toolsUsed",
-    "frequency",
-    "trigger",
-    "successCriteria",
-    "department",
-    "estimatedTime",
-    "decisionPoints",
-    "commonMistakes",
-    "requiredResources",
-    "supportingRoles",
-    "qualityStandards",
-    "complianceRequirements",
-    "relatedProcesses",
-    "tipsBestPractices",
-    "additionalContext",
-  ];
+  if (!lastUserContent) {
+    return createErrorResponse(
+      "No message provided",
+      "Please describe the process you want to document (e.g. How we onboard new clients)."
+    );
+  }
 
-  textFields.forEach((field) => {
-    if (normalized[field] === undefined || normalized[field] === null) {
-      normalized[field] = "";
-    } else if (typeof normalized[field] !== "string") {
-      // Handle arrays (e.g., if mainSteps comes as array)
-      if (Array.isArray(normalized[field])) {
-        normalized[field] = normalized[field].join("\n");
-      } else {
-        normalized[field] = String(normalized[field]);
+  // Job analysis context (if linked from role-builder)
+  const context = request.context as any;
+  const jobAnalysisId = context?.jobAnalysisId;
+  const linkedJobAnalysis = context?.linkedJobAnalysis;
+  let jobAnalysis: { analysis: any; intakeData?: any } | null = null;
+  if (linkedJobAnalysis) {
+    jobAnalysis = {
+      analysis: linkedJobAnalysis.analysis,
+      intakeData: linkedJobAnalysis.intakeData || {},
+    };
+  } else if (jobAnalysisId) {
+    try {
+      const { prisma } = await import("@/lib/core/prisma");
+      const savedAnalysis = await prisma.savedAnalysis.findUnique({
+        where: { id: jobAnalysisId },
+        select: { analysis: true, intakeData: true },
+      });
+      if (savedAnalysis?.analysis) {
+        jobAnalysis = {
+          analysis: savedAnalysis.analysis,
+          intakeData: savedAnalysis.intakeData || {},
+        };
       }
-    }
-  });
-
-  // Ensure frequency is a valid option
-  if (normalized.frequency && typeof normalized.frequency === "string") {
-    const validFrequencies = ["Daily", "Weekly", "Monthly", "Quarterly", "As-needed", "One-time"];
-    if (!validFrequencies.includes(normalized.frequency)) {
-      // Try to match partial
-      const matched = validFrequencies.find(f => 
-        f.toLowerCase().includes(normalized.frequency.toLowerCase()) ||
-        normalized.frequency.toLowerCase().includes(f.toLowerCase())
-      );
-      if (matched) {
-        normalized.frequency = matched;
-      } else {
-        normalized.frequency = "As-needed"; // Default
-      }
+    } catch (err) {
+      console.error("[Process Builder] Error fetching job analysis:", err);
     }
   }
 
-  return normalized;
+  onProgress?.("Preparing your SOP...");
+  const minimalIntake = await buildMinimalIntakeFromPrompt(
+    openai,
+    lastUserContent,
+    auth.knowledgeBase
+  );
+
+  onProgress?.("Generating SOP...");
+  const sopResult = await generateSOP(
+    minimalIntake,
+    auth.knowledgeBase,
+    openai,
+    jobAnalysis || null
+  );
+
+  const formData = minimalIntakeToFormData(minimalIntake, auth.knowledgeBase);
+  const action = {
+    formData,
+    sop: {
+      sopHtml: sopResult.sopHtml,
+      sopMarkdown: sopResult.sopMarkdown,
+      metadata: sopResult.metadata,
+    },
+    isDraft: false,
+  };
+
+  return createSuccessResponse(
+    "I've generated a Standard Operating Procedure based on your description. You can apply it below or refine it using Refine.",
+    action,
+    undefined
+  );
+}
+
+/**
+ * One lightweight LLM call: user prompt → minimal SOP form fields.
+ * Uses gpt-4o-mini for speed.
+ */
+async function buildMinimalIntakeFromPrompt(
+  openai: OpenAI,
+  userMessage: string,
+  knowledgeBase: any | null
+): Promise<Record<string, any>> {
+  const toolsHint =
+    knowledgeBase?.toolStack && Array.isArray(knowledgeBase.toolStack) && knowledgeBase.toolStack.length > 0
+      ? `If the user doesn't specify tools, consider: ${knowledgeBase.toolStack.slice(0, 5).join(", ")}.`
+      : "Infer tools from the process description if not specified.";
+
+  const prompt = `The user wants to create a Standard Operating Procedure. They said: "${userMessage}"
+
+${toolsHint}
+
+Output JSON only, no markdown:
+{
+  "sopTitle": "short process name (e.g. Client Onboarding Process)",
+  "processOverview": "2-3 sentences on what this process accomplishes",
+  "primaryRole": "who performs it (e.g. Operations Coordinator)",
+  "mainSteps": "numbered or bullet steps, one per line - 3-7 main steps",
+  "toolsUsed": "comma-separated or newline list of tools/software",
+  "frequency": "one of: Daily, Weekly, Monthly, Quarterly, As-needed, One-time",
+  "trigger": "what starts this process (e.g. New signup, End of month)",
+  "successCriteria": "how we know it's done correctly (2-3 points)"
+}`;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content:
+          "You output minimal JSON for an SOP intake. Be concise. Infer steps and details from the user's process description.",
+      },
+      { role: "user", content: prompt },
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.3,
+    max_tokens: 600,
+  });
+
+  const raw = completion.choices[0].message.content;
+  if (!raw) throw new Error("Empty response from minimal SOP intake");
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Invalid JSON from minimal SOP intake");
+  }
+
+  const toStr = (v: unknown): string =>
+    v == null ? "" : Array.isArray(v) ? v.map((x) => String(x)).join("\n") : String(v);
+
+  let frequency = toStr(parsed.frequency).trim();
+  if (!VALID_FREQUENCIES.includes(frequency)) {
+    const lower = frequency.toLowerCase();
+    const match = VALID_FREQUENCIES.find(
+      (f) => f.toLowerCase() === lower || f.toLowerCase().includes(lower) || lower.includes(f.toLowerCase())
+    );
+    frequency = match || "As-needed";
+  }
+
+  return {
+    sopTitle: toStr(parsed.sopTitle).trim() || "SOP",
+    processOverview: toStr(parsed.processOverview).trim(),
+    primaryRole: toStr(parsed.primaryRole).trim() || "Process Performer",
+    mainSteps: toStr(parsed.mainSteps).trim(),
+    toolsUsed: toStr(parsed.toolsUsed).trim(),
+    frequency,
+    trigger: toStr(parsed.trigger).trim(),
+    successCriteria: toStr(parsed.successCriteria).trim(),
+    department: "",
+    estimatedTime: "",
+    decisionPoints: "",
+    commonMistakes: "",
+    requiredResources: "",
+    supportingRoles: "",
+    qualityStandards: "",
+    complianceRequirements: "",
+    relatedProcesses: "",
+    tipsBestPractices: "",
+    additionalContext: "",
+  };
+}
+
+function minimalIntakeToFormData(
+  intake: Record<string, any>,
+  knowledgeBase: any | null
+): Record<string, any> {
+  return {
+    ...intake,
+    // Ensure all optional fields exist for UI
+    department: intake.department ?? "",
+    estimatedTime: intake.estimatedTime ?? "",
+    decisionPoints: intake.decisionPoints ?? "",
+    commonMistakes: intake.commonMistakes ?? "",
+    requiredResources: intake.requiredResources ?? "",
+    supportingRoles: intake.supportingRoles ?? "",
+    qualityStandards: intake.qualityStandards ?? "",
+    complianceRequirements: intake.complianceRequirements ?? "",
+    relatedProcesses: intake.relatedProcesses ?? "",
+    tipsBestPractices: intake.tipsBestPractices ?? "",
+    additionalContext: intake.additionalContext ?? "",
+  };
 }
 
 /**

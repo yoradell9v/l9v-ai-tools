@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { withRateLimit } from "@/lib/rate-limiting/rate-limit-utils";
 import type { ToolChatRequest, ToolChatResponse, ToolId } from "@/lib/tool-chat/types";
 import { getToolChatAuth, handleToolChatError, logToolChatError } from "@/lib/tool-chat/utils";
-import { handleRoleBuilder } from "./handlers/role-builder";
-import { handleProcessBuilder } from "./handlers/process-builder";
+import { handleRoleBuilder, runRoleBuilderGenerateWithProgress } from "./handlers/role-builder";
+import { handleProcessBuilder, runProcessBuilderGenerateWithProgress } from "./handlers/process-builder";
 import { handleOrganizationProfile } from "./handlers/organization-profile";
+import OpenAI from "openai";
 
 export const runtime = "nodejs";
+
+const STREAMING_CONTENT_TYPE = "application/x-ndjson";
 
 /**
  * Unified endpoint for all tool chat interactions.
@@ -75,7 +78,108 @@ export async function POST(request: NextRequest) {
     // Get authentication and KB data (non-blocking)
     const auth = await getToolChatAuth(body.toolId);
 
-    // Dispatch to tool-specific handler
+    // Role-builder Generate with AI: stream progress then result (no existingAnalysis)
+    const context = body.context as { existingAnalysis?: unknown; existingSOP?: unknown } | undefined;
+    const isRoleBuilderGenerate =
+      body.toolId === "role-builder" && !context?.existingAnalysis;
+    const isProcessBuilderGenerate =
+      body.toolId === "process-builder" && !context?.existingSOP;
+
+    if (isRoleBuilderGenerate) {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+            const onProgress = (stage: string) => {
+              controller.enqueue(
+                encoder.encode(JSON.stringify({ type: "progress", stage }) + "\n"),
+              );
+            };
+            const response = await runRoleBuilderGenerateWithProgress(
+              body,
+              auth,
+              openai,
+              onProgress,
+            );
+            controller.enqueue(
+              encoder.encode(JSON.stringify({ type: "result", data: response }) + "\n"),
+            );
+          } catch (error) {
+            logToolChatError(error, {
+              toolId: body.toolId,
+              userId: auth.userId || undefined,
+              organizationId: auth.organizationId || undefined,
+            });
+            const fallback = handleToolChatError(error);
+            controller.enqueue(
+              encoder.encode(
+                JSON.stringify({ type: "error", data: fallback }) + "\n",
+              ),
+            );
+          } finally {
+            controller.close();
+          }
+        },
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: {
+          "Content-Type": STREAMING_CONTENT_TYPE,
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      });
+    }
+
+    if (isProcessBuilderGenerate) {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+            const onProgress = (stage: string) => {
+              controller.enqueue(
+                encoder.encode(JSON.stringify({ type: "progress", stage }) + "\n"),
+              );
+            };
+            const response = await runProcessBuilderGenerateWithProgress(
+              body,
+              auth,
+              openai,
+              onProgress,
+            );
+            controller.enqueue(
+              encoder.encode(JSON.stringify({ type: "result", data: response }) + "\n"),
+            );
+          } catch (error) {
+            logToolChatError(error, {
+              toolId: body.toolId,
+              userId: auth.userId || undefined,
+              organizationId: auth.organizationId || undefined,
+            });
+            const fallback = handleToolChatError(error);
+            controller.enqueue(
+              encoder.encode(
+                JSON.stringify({ type: "error", data: fallback }) + "\n",
+              ),
+            );
+          } finally {
+            controller.close();
+          }
+        },
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: {
+          "Content-Type": STREAMING_CONTENT_TYPE,
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      });
+    }
+
+    // Dispatch to tool-specific handler (non-streaming)
     let response: ToolChatResponse;
     try {
       switch (body.toolId) {
@@ -89,7 +193,6 @@ export async function POST(request: NextRequest) {
           response = await handleOrganizationProfile(body, auth);
           break;
         default:
-          // This should never happen due to validation above, but TypeScript needs it
           return NextResponse.json(
             {
               error: "Unsupported tool",
@@ -99,18 +202,14 @@ export async function POST(request: NextRequest) {
           );
       }
     } catch (error) {
-      // Log error with context
       logToolChatError(error, {
         toolId: body.toolId,
         userId: auth.userId || undefined,
         organizationId: auth.organizationId || undefined,
       });
-
-      // Convert to user-friendly response
       response = handleToolChatError(error);
     }
 
-    // Return response
     return NextResponse.json(response, {
       status: response.error ? 500 : 200,
     });

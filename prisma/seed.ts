@@ -1,6 +1,7 @@
 import { config } from "dotenv";
 import { hash } from "bcrypt";
 import { PrismaClient } from "@prisma/client";
+import { getTaskTemplateSeeds } from "./seed-task-templates";
 
 config();
 
@@ -83,7 +84,7 @@ async function main() {
   console.log("Connected to:", hostPart);
 
   const systemOrg = await prisma.organization.upsert({
-    where: { slug: "system-superadmin" },
+    where: { slug: "level-9-virtual" },
     update: {},
     create: {
       name: "Level 9 Virtual",
@@ -130,6 +131,14 @@ async function main() {
     });
     console.log(`Linked to system organization: ${systemOrg.slug}`);
   }
+
+  // Task Intelligence: seed task templates (replace existing)
+  const taskTemplateSeeds = getTaskTemplateSeeds();
+  await prisma.taskTemplate.deleteMany({});
+  const created = await prisma.taskTemplate.createMany({
+    data: taskTemplateSeeds,
+  });
+  console.log(`Task templates seeded: ${created.count}`);
 
   console.log("\nSeeding complete!");
 }
