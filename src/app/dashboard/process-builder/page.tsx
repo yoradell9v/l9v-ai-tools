@@ -409,27 +409,8 @@ export default function SopPage() {
     const loadLatestSOP = async () => {
       if (!user || generatedSOP || isLoadingLatest) return;
 
-      try {
-        const pendingSOP = sessionStorage.getItem('pending-sop');
-        if (pendingSOP) {
-          hasAttemptedLoadRef.current = true;
-          return;
-        }
-      } catch (e) {
-      }
-
-      try {
-        const savedDraft = localStorage.getItem('sop-draft');
-        if (savedDraft) {
-          const parsed = JSON.parse(savedDraft);
-          if (parsed.sop && parsed.sop.isDraft) {
-            hasAttemptedLoadRef.current = true;
-            return;
-          }
-        }
-      } catch (e) {
-      }
-
+      // Always try to load the most recent saved SOP from the API so it displays.
+      // Draft/pending state is handled separately (restore dialog); we don't skip loading because of it.
       if (hasAttemptedLoadRef.current) return;
 
       const currentUserId = user.id;
@@ -896,7 +877,7 @@ export default function SopPage() {
               )}
 
               {generatedSOP && !isProcessing && (
-                <div className="flex flex-col h-full overflow-hidden">
+                <div className="flex flex-col h-full overflow-hidden animate-analysis-in">
                   {/* Draft Banner */}
                   {generatedSOP.isDraft && (
                     <div className="flex-shrink-0 p-4 pb-0">

@@ -187,3 +187,65 @@ export async function PATCH(
   }
 }
 
+// DELETE endpoint: Permanently delete an inactive organization (hard delete).
+// Only allowed when deactivatedAt is set. Cascades remove memberships, KB, invites, etc.; User records are not deleted.
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get("accessToken")?.value;
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { success: false, message: "Not authenticated." },
+        { status: 401 }
+      );
+    }
+
+    const decoded = await verifyAccessToken(accessToken);
+    if (!decoded) {
+      return NextResponse.json(
+        { success: false, message: "Invalid token." },
+        { status: 401 }
+      );
+    }
+
+    const { id } = await params;
+
+    const tenant = await prisma.organization.findUnique({
+      where: { id },
+    });
+
+    if (!tenant) {
+      return NextResponse.json(
+        { success: false, message: "Organization not found." },
+        { status: 404 }
+      );
+    }
+
+    if (!(tenant as any).deactivatedAt) {
+      return NextResponse.json(
+        { success: false, message: "Only inactive organizations can be deleted. Deactivate the organization first." },
+        { status: 400 }
+      );
+    }
+
+    await prisma.organization.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Organization deleted permanently.",
+    });
+  } catch (error) {
+    console.error("Error deleting tenant:", error);
+    return NextResponse.json(
+      { success: false, message: "Internal server error." },
+      { status: 500 }
+    );
+  }
+}
+

@@ -145,7 +145,7 @@ export default function SavedPage() {
                 </div>
                 <div className="h-[calc(100vh-57px)] flex flex-col overflow-hidden">
                     <div className="w-full max-w-full py-6 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col flex-1 min-h-0 overflow-hidden">
-                        <header className="flex-shrink-0 space-y-4 mb-4">
+                        <header className="flex-shrink-0 space-y-4 mb-4 animate-section-in">
                             <Button
                                 variant="ghost"
                                 size="sm"
@@ -216,7 +216,7 @@ export default function SavedPage() {
                         </div>
                     </header>
 
-                    <div className="flex-shrink-0 space-y-4 mb-4">
+                    <div className="flex-shrink-0 space-y-4 mb-4 animate-section-in" style={{ animationDelay: "80ms" }}>
                         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <span className="text-base text-muted-foreground">Sort by:</span>
@@ -247,17 +247,22 @@ export default function SavedPage() {
 
                     <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">
-                            {filteredAndSorted.map((item) => (
-                                <AnalysisCard
+                            {filteredAndSorted.map((item, index) => (
+                                <div
                                     key={item.id}
-                                    savedAnalysis={item}
-                                    variant="compact"
-                                    onDelete={(deletedId: string) =>
-                                        setSavedItems((prev) => prev.filter((i) => i.id !== deletedId))
-                                    }
-                                    onEdit={handleEdit}
-                                    onPreview={setPreviewAnalysis}
-                                />
+                                    className="animate-analysis-in"
+                                    style={{ animationDelay: `${index * 50}ms` }}
+                                >
+                                    <AnalysisCard
+                                        savedAnalysis={item}
+                                        variant="compact"
+                                        onDelete={(deletedId: string) =>
+                                            setSavedItems((prev) => prev.filter((i) => i.id !== deletedId))
+                                        }
+                                        onEdit={handleEdit}
+                                        onPreview={setPreviewAnalysis}
+                                    />
+                                </div>
                             ))}
                         </div>
                         {filteredAndSorted.length === 0 && searchQuery && (

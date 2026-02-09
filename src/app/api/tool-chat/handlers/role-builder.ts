@@ -32,8 +32,20 @@ export async function handleRoleBuilder(
     const existingAnalysis = context?.existingAnalysis;
     const existingIntakeData = context?.existingIntakeData;
     const isRefinementMode = !!existingAnalysis;
+    const isAnswerWithAIMode = !!context?.answerWithAIMode;
+    const criticalQuestions = Array.isArray(context?.criticalQuestions) ? context.criticalQuestions : [];
 
     if (isRefinementMode && existingAnalysis) {
+      if (isAnswerWithAIMode && criticalQuestions.length > 0) {
+        return await handleRefinementFromAnswers(
+          openai,
+          request,
+          existingAnalysis,
+          existingIntakeData || {},
+          criticalQuestions,
+          auth,
+        );
+      }
       return await handleRefinement(
         openai,
         request,
@@ -442,6 +454,188 @@ async function handleRefinement(
         : "An unexpected error occurred during refinement",
     );
   }
+}
+
+/**
+ * Handles refinement when the user is answering critical questions (Answer with AI).
+ * Uses the same LLM/parse/return flow as handleRefinement but with a system prompt
+ * that treats the user message as answers to the listed critical questions.
+ */
+async function handleRefinementFromAnswers(
+  openai: OpenAI,
+  request: ToolChatRequest,
+  existingAnalysis: any,
+  existingIntakeData: any,
+  criticalQuestions: string[],
+  auth: AuthResult,
+): Promise<ToolChatResponse> {
+  try {
+    const systemPrompt = buildRefinementFromAnswersSystemPrompt(
+      existingAnalysis,
+      existingIntakeData,
+      criticalQuestions,
+    );
+
+    const lastUserMessage =
+      request.conversation.filter((m) => m.role === "user").slice(-1)[0]
+        ?.content || "";
+
+    if (!lastUserMessage.trim()) {
+      return createErrorResponse(
+        "No answers provided",
+        "Please provide your answers to the critical questions above.",
+      );
+    }
+
+    const refinementConversation = [
+      { role: "system" as const, content: systemPrompt },
+      { role: "user" as const, content: lastUserMessage },
+    ];
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: refinementConversation,
+      response_format: { type: "json_object" },
+      temperature: 0.7,
+      max_tokens: 16384,
+    });
+
+    const responseText = completion.choices[0].message.content;
+    const finishReason = completion.choices[0].finish_reason;
+
+    if (!responseText) {
+      throw new Error("No response from OpenAI");
+    }
+
+    if (finishReason === "length") {
+      console.error(
+        "[Role Builder] Answer-with-AI response truncated - max_tokens limit reached",
+      );
+      return createErrorResponse(
+        "Response too large",
+        "The refined analysis was too large. Please try answering fewer questions or contact support.",
+      );
+    }
+
+    let jsonText = responseText.trim();
+    if (jsonText.includes("```json")) {
+      const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonMatch?.[1]) jsonText = jsonMatch[1].trim();
+    } else if (jsonText.includes("```")) {
+      const codeMatch = jsonText.match(/```\s*([\s\S]*?)\s*```/);
+      if (codeMatch?.[1]) jsonText = codeMatch[1].trim();
+    }
+    const firstBrace = jsonText.indexOf("{");
+    const lastBrace = jsonText.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+    }
+
+    if (!jsonText.startsWith("{") || !jsonText.endsWith("}")) {
+      return createErrorResponse(
+        "Failed to parse refined analysis",
+        "The refinement response was not valid JSON. Please try again.",
+      );
+    }
+
+    let refinedAnalysis: any;
+    try {
+      refinedAnalysis = JSON.parse(jsonText);
+      if (!refinedAnalysis.preview && !refinedAnalysis.full_package) {
+        return createErrorResponse(
+          "Failed to parse refined analysis",
+          "The refinement response doesn't contain the expected analysis structure.",
+        );
+      }
+    } catch (parseError) {
+      return createErrorResponse(
+        "Failed to parse refined analysis",
+        parseError instanceof Error ? parseError.message : "Invalid JSON. Please try again.",
+      );
+    }
+
+    const serviceType =
+      refinedAnalysis.preview?.service_type ||
+      refinedAnalysis.full_package?.service_structure?.service_type ||
+      refinedAnalysis.full_package?.executive_summary?.service_recommendation
+        ?.type;
+
+    if (serviceType === "Dedicated VA") {
+      if (refinedAnalysis.preview?.team_support_areas !== undefined) {
+        delete refinedAnalysis.preview.team_support_areas;
+      }
+      if (
+        refinedAnalysis.full_package?.service_structure?.team_support_areas !==
+        undefined
+      ) {
+        delete refinedAnalysis.full_package.service_structure.team_support_areas;
+      }
+      if (refinedAnalysis.full_package?.team_support_areas !== undefined) {
+        delete refinedAnalysis.full_package.team_support_areas;
+      }
+    }
+
+    const changedSections = identifyChanges(existingAnalysis, refinedAnalysis);
+    const changeSummary = generateChangeSummary(changedSections);
+
+    const action = {
+      refinedAnalysis,
+      changedSections,
+      changeSummary,
+      isRefinement: true,
+    };
+
+    const assistantMessage =
+      changedSections.length > 0
+        ? `I've updated the analysis based on your answers. ${changeSummary.summary}`
+        : "I've incorporated your answers into the analysis.";
+
+    return createSuccessResponse(assistantMessage, action, undefined);
+  } catch (error) {
+    console.error("[Role Builder] Refinement-from-answers error:", error);
+    return createErrorResponse(
+      "Failed to refine analysis from answers",
+      error instanceof Error
+        ? error.message
+        : "An unexpected error occurred. Please try again.",
+    );
+  }
+}
+
+/**
+ * Builds the system prompt for refinement from critical-question answers.
+ */
+function buildRefinementFromAnswersSystemPrompt(
+  currentAnalysis: any,
+  intakeData: any,
+  criticalQuestions: string[],
+): string {
+  const questionsList = criticalQuestions
+    .map((q, i) => `${i + 1}. ${q}`)
+    .join("\n");
+
+  return `You are an expert job description refinement assistant for Level 9 Virtual. The user has been shown a set of critical questions about their job description analysis. Their next message is their ANSWERS to those questions (they may number answers, use paragraphs, or mix formats). Your job is to incorporate these answers into the analysis and return the COMPLETE updated analysis as valid JSON.
+
+# Critical questions that were shown to the user
+${questionsList}
+
+# Current Analysis State
+${JSON.stringify(currentAnalysis, null, 2)}
+
+# Original Intake Data (for reference)
+${JSON.stringify(intakeData, null, 2)}
+
+# Your Role
+- Treat the user's message as answers to the critical questions above (in order when possible)
+- Update the analysis to reflect these answers: clarify assumptions, add or adjust details, fix inconsistencies
+- Maintain the same JSON structure and all sections; only modify what the answers affect
+- If the user also includes free-form refinement requests (e.g. "and remove X"), apply those too
+- Return the COMPLETE updated analysis as valid JSON
+
+# Response Format
+Return ONLY valid JSON in the SAME structure as the current analysis. Do not truncate any sections.
+
+CRITICAL: Return the COMPLETE analysis JSON.`;
 }
 
 /**

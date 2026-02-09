@@ -146,6 +146,10 @@ export async function GET(request: Request) {
       createdAt: analysis.createdAt.toISOString(),
       updatedAt: analysis.updatedAt.toISOString(),
       refinementCount: analysis.refinements.length,
+      usedKnowledgeBaseVersion: analysis.usedKnowledgeBaseVersion ?? null,
+      knowledgeBaseSnapshot: analysis.knowledgeBaseSnapshot ?? null,
+      organizationId: analysis.organizationId ?? null,
+      contributedInsights: analysis.contributedInsights ?? null,
       createdBy: {
         id: analysis.userOrganization.user.id,
         firstname: analysis.userOrganization.user.firstname,

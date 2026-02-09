@@ -310,14 +310,17 @@ export default function TenantMembers() {
             if (!response.ok) {
                 console.error("Error sending invitation:", data.message);
                 setInviteError(data.message || "Failed to send invitation. Please try again.");
+                toast.error("Failed to send invitation", {
+                    description: data.message || "An error occurred while sending the invitation.",
+                });
                 return;
             }
-
 
             setInviteEmail("");
             setInviteRole("MEMBER");
             setInviteError(null);
             setIsInviteModalOpen(false);
+            toast.success("Invitation sent");
 
             // Refresh members to update pending invites
             await fetchMembers();
@@ -715,12 +718,7 @@ export default function TenantMembers() {
                             Cancel
                         </Button>
                         <Button
-                            onClick={async () => {
-                                await handleSendInvitation();
-                                if (!inviteError && !isSendingInvitation) {
-                                    toast.success("Invitation sent");
-                                }
-                            }}
+                            onClick={() => handleSendInvitation()}
                             disabled={isSendingInvitation || !inviteEmail.trim()}
                             className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
                         >

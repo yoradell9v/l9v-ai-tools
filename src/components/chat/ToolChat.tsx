@@ -17,6 +17,11 @@ import { useSpeechRecognition } from "@/components/chat/useSpeechRecognition";
 import type { ToolChatMode, ToolChatRequest, ToolChatResponse, ToolId } from "@/lib/tool-chat/types";
 import { getToolChatConfig } from "@/lib/tool-chat/registry";
 
+export type InitialChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 type ToolChatProps<TContext = unknown, TAction = unknown> = {
   toolId: ToolId;
   mode?: ToolChatMode;
@@ -26,6 +31,8 @@ type ToolChatProps<TContext = unknown, TAction = unknown> = {
   enabled?: boolean;
   endpoint?: string;
   className?: string;
+  /** Optional messages to show at the start of the chat (e.g. critical questions from the assistant). */
+  initialMessages?: InitialChatMessage[];
 };
 
 function makeId() {
@@ -40,6 +47,18 @@ function safeJsonStringify(value: unknown) {
   }
 }
 
+function seedMessagesFromInitial(
+  initialMessages: InitialChatMessage[] | undefined,
+): Array<{ id: string; role: "user" | "assistant" | "system"; content: string; createdAt: number }> {
+  if (!initialMessages?.length) return [];
+  return initialMessages.map((m, i) => ({
+    id: makeId(),
+    role: m.role,
+    content: m.content,
+    createdAt: Date.now() - (initialMessages.length - i) * 1000,
+  }));
+}
+
 export function ToolChat<TContext = unknown, TAction = unknown>({
   toolId,
   mode = "both",
@@ -49,6 +68,7 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
   enabled,
   endpoint,
   className,
+  initialMessages,
 }: ToolChatProps<TContext, TAction>) {
   const ui = React.useMemo(() => getToolChatConfig(toolId), [toolId]);
   const isEnabled = enabled ?? ui.enabled;
@@ -59,7 +79,7 @@ export function ToolChat<TContext = unknown, TAction = unknown>({
     role: "user" | "assistant" | "system";
     content: string;
     createdAt: number;
-  }>>([]);
+  }>>(() => seedMessagesFromInitial(initialMessages));
 
   const [input, setInput] = React.useState("");
   const [isSending, setIsSending] = React.useState(false);

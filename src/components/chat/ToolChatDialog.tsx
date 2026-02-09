@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ToolChat } from "@/components/chat/ToolChat";
+import { ToolChat, type InitialChatMessage } from "@/components/chat/ToolChat";
 import { ArrowUpRight } from "lucide-react";
 import type { ToolId, ToolChatMode } from "@/lib/tool-chat/types";
 import { getToolChatConfig } from "@/lib/tool-chat/registry";
@@ -27,6 +27,8 @@ type ToolChatDialogProps = {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   initialContext?: unknown;
+  /** Optional initial messages (e.g. assistant message with critical questions). When provided, chat seeds with these so user sees them first. */
+  initialMessages?: InitialChatMessage[];
   showAnalysisBadge?: boolean;
   analysisBadgeData?: {
     analysis: any;
@@ -55,6 +57,7 @@ export function ToolChatDialog({
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
   initialContext,
+  initialMessages,
   showAnalysisBadge = false,
   analysisBadgeData,
   onViewAnalysis,
@@ -67,7 +70,7 @@ export function ToolChatDialog({
 }: ToolChatDialogProps) {
   const ui = React.useMemo(() => getToolChatConfig(toolId), [toolId]);
   const [internalOpen, setInternalOpen] = React.useState(false);
-  
+
   // Use controlled or internal state
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
@@ -126,9 +129,9 @@ export function ToolChatDialog({
               className="mb-3 w-full px-3 py-2 text-sm border border-[var(--primary-dark)] bg-[var(--primary-dark)]/10 text-[var(--primary-dark)] rounded-md hover:bg-[var(--primary-dark)]/20 transition-colors flex items-center justify-between flex-shrink-0"
             >
               <span>
-                Refining {analysisBadgeData.analysis?.preview?.service_type || 
-                         analysisBadgeData.analysis?.full_package?.service_structure?.service_type || 
-                         "Analysis"}
+                Refining {analysisBadgeData.analysis?.preview?.service_type ||
+                  analysisBadgeData.analysis?.full_package?.service_structure?.service_type ||
+                  "Analysis"}
               </span>
               <ArrowUpRight className="h-3 w-3" />
             </button>
@@ -145,11 +148,13 @@ export function ToolChatDialog({
               <ArrowUpRight className="h-3 w-3" />
             </button>
           )}
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             <ToolChat
+              key={initialMessages?.length ? "with-initial" : "no-initial"}
               toolId={toolId}
               mode={mode}
               className="h-full"
+              initialMessages={initialMessages}
               onApplyAction={handleApplyAction}
               parseAction={parseAction}
               getContext={contextGetter}

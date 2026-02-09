@@ -130,6 +130,9 @@ export default function TenantsPage() {
     const [isActivating, setIsActivating] = useState(false);
     const [tenantToActivate, setTenantToActivate] = useState<Tenant | null>(null);
     const [showActivateModal, setShowActivateModal] = useState(false);
+    const [tenantToDelete, setTenantToDelete] = useState<Tenant | null>(null);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [activeTab, setActiveTab] = useState<"current" | "active" | "inactive">("current");
     const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
     const [currentTenantDetails, setCurrentTenantDetails] = useState<TenantDetails | null>(null);
@@ -407,6 +410,42 @@ export default function TenantsPage() {
         }
     };
 
+    const handleDeleteTenant = async () => {
+        if (!tenantToDelete) return;
+
+        setIsDeleting(true);
+        try {
+            const response = await fetch(`/api/tenant/${tenantToDelete.id}`, {
+                method: "DELETE",
+                credentials: "include",
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                toast.error("Failed to delete organization", {
+                    description: data.message || "An error occurred while deleting the organization.",
+                });
+                return;
+            }
+
+            setShowDeleteModal(false);
+            setTenantToDelete(null);
+            setOpenMenuId(null);
+            toast.success("Organization deleted", {
+                description: `${tenantToDelete.name} has been permanently removed.`,
+            });
+            await fetchTenants();
+        } catch (error) {
+            console.error("Error deleting tenant:", error);
+            toast.error("Failed to delete organization", {
+                description: "An unexpected error occurred.",
+            });
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     const handleCancelInvite = (invite: PendingInvite) => {
         setInviteToCancel(invite);
         setShowCancelInviteModal(true);
@@ -610,15 +649,16 @@ export default function TenantsPage() {
                 </div>
 
                 <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="space-y-4">
-                    <TabsList>
-                        <TabsTrigger value="current">Current Organization</TabsTrigger>
-                        <TabsTrigger value="active">Active</TabsTrigger>
-                        <TabsTrigger value="inactive">Inactive</TabsTrigger>
+                    <TabsList className="transition-opacity duration-200">
+                        <TabsTrigger value="current" className="transition-all duration-200">Current Organization</TabsTrigger>
+                        <TabsTrigger value="active" className="transition-all duration-200">Active</TabsTrigger>
+                        <TabsTrigger value="inactive" className="transition-all duration-200">Inactive</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value={activeTab} className="space-y-4">
-                        <Card>
-                            <CardContent>
+                    <TabsContent value={activeTab} className="space-y-4 mt-0">
+                        <div key={activeTab} className="animate-tenants-tab-in">
+                        <Card className="transition-shadow duration-300">
+                            <CardContent className="pt-6">
                                 {isLoading ? (
                                     <div className="flex flex-col items-center justify-center py-16 space-y-4">
                                         <Skeleton className="h-8 w-8 rounded-full" />
@@ -630,8 +670,8 @@ export default function TenantsPage() {
                                     if (activeTab === "current") {
                                         if (!currentTenantId) {
                                             return (
-                                                <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-                                                    <div className="p-4 rounded-xl mb-4 bg-muted">
+                                                <div className="animate-section-in opacity-0 flex flex-col items-center justify-center py-12 px-6 text-center">
+                                                    <div className="p-4 rounded-xl mb-4 bg-muted transition-transform duration-300">
                                                         <BuildingOffice2Icon className="h-10 w-10 text-muted-foreground" />
                                                     </div>
                                                     <h3 className="text-lg font-semibold mb-1">No current organization detected</h3>
@@ -644,7 +684,7 @@ export default function TenantsPage() {
 
                                         if (isLoadingCurrentTenant || !currentTenantDetails) {
                                             return (
-                                                <div className="space-y-4">
+                                                <div className="space-y-4 animate-section-in opacity-0">
                                                     <Skeleton className="h-8 w-48" />
                                                     <Skeleton className="h-64 w-full" />
                                                 </div>
@@ -652,7 +692,7 @@ export default function TenantsPage() {
                                         }
 
                                         return (
-                                            <div className="space-y-6">
+                                            <div className="space-y-6 animate-section-in opacity-0">
                                                 <div className="flex items-center justify-between">
                                                     <div>
                                                         <h2 className="text-lg font-semibold">{currentTenantDetails.name}</h2>
@@ -772,7 +812,7 @@ export default function TenantsPage() {
 
                                     if (filteredTenants.length === 0) {
                                         return (
-                                            <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+                                            <div className="animate-section-in opacity-0 flex flex-col items-center justify-center py-12 px-6 text-center">
                                                 <div className="p-4 rounded-xl mb-4 bg-muted">
                                                     <BuildingOffice2Icon className="h-10 w-10 text-muted-foreground" />
                                                 </div>
@@ -796,14 +836,15 @@ export default function TenantsPage() {
 
                                     return (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                            {filteredTenants.map((tenant: Tenant) => {
+                                            {filteredTenants.map((tenant: Tenant, index: number) => {
                                                 const isCurrentTenant = tenant.id === currentTenantId;
 
                                                 return (
                                                     <Card
                                                         key={tenant.id}
                                                         onClick={() => !tenant.deactivatedAt && handleTenantClick(tenant)}
-                                                        className={`group transition-all duration-200 ${isCurrentTenant ? "ring-2 ring-primary shadow-md" : ""} ${tenant.deactivatedAt ? "opacity-60" : "hover:shadow-lg hover:border-primary/50 cursor-pointer"}`}
+                                                        className={`animate-section-in opacity-0 group transition-all duration-300 ${isCurrentTenant ? "ring-2 ring-primary shadow-md" : ""} ${tenant.deactivatedAt ? "opacity-60" : "hover:shadow-lg hover:border-primary/50 cursor-pointer"}`}
+                                                        style={{ animationDelay: `${index * 60}ms` }}
                                                     >
                                                         <CardHeader className="pb-3">
                                                             <div className="flex items-start justify-between gap-3">
@@ -850,16 +891,29 @@ export default function TenantsPage() {
                                                                                     Deactivate
                                                                                 </DropdownMenuItem>
                                                                             ) : (
-                                                                                <DropdownMenuItem
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        setTenantToActivate(tenant);
-                                                                                        setShowActivateModal(true);
-                                                                                    }}
-                                                                                >
-                                                                                    <CheckCircleIcon className="h-4 w-4 mr-2" />
-                                                                                    Activate
-                                                                                </DropdownMenuItem>
+                                                                                <>
+                                                                                    <DropdownMenuItem
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setTenantToActivate(tenant);
+                                                                                            setShowActivateModal(true);
+                                                                                        }}
+                                                                                    >
+                                                                                        <CheckCircleIcon className="h-4 w-4 mr-2" />
+                                                                                        Activate
+                                                                                    </DropdownMenuItem>
+                                                                                    <DropdownMenuItem
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setTenantToDelete(tenant);
+                                                                                            setShowDeleteModal(true);
+                                                                                        }}
+                                                                                        className="text-destructive"
+                                                                                    >
+                                                                                        <TrashIcon className="h-4 w-4 mr-2" />
+                                                                                        Delete
+                                                                                    </DropdownMenuItem>
+                                                                                </>
                                                                             )}
                                                                         </DropdownMenuContent>
                                                                     </DropdownMenu>
@@ -891,6 +945,7 @@ export default function TenantsPage() {
                                 })()}
                             </CardContent>
                         </Card>
+                        </div>
                     </TabsContent>
                 </Tabs>
 
@@ -1000,6 +1055,34 @@ export default function TenantsPage() {
                             <AlertDialogCancel disabled={isActivating}>Cancel</AlertDialogCancel>
                             <AlertDialogAction onClick={handleActivateTenant} disabled={isActivating}>
                                 {isActivating ? "Activating..." : "Activate"}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                <AlertDialog open={showDeleteModal} onOpenChange={(open) => {
+                    if (!isDeleting) {
+                        setShowDeleteModal(open);
+                        if (!open) setTenantToDelete(null);
+                    }
+                }}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Organization</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                {tenantToDelete
+                                    ? `Are you sure you want to permanently delete "${tenantToDelete.name}"? This will remove the organization, its knowledge base, invitations, and all related data. User accounts that belonged to this organization will not be deleted, but they will no longer have access to this organization. This action cannot be undone.`
+                                    : ""}
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={handleDeleteTenant}
+                                disabled={isDeleting}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                                {isDeleting ? "Deleting..." : "Delete permanently"}
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>

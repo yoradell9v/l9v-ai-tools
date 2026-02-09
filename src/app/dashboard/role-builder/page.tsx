@@ -488,6 +488,12 @@ interface IntakeFormData {
     niceToHaveSkills: string;
 }
 
+function buildCriticalQuestionsAssistantMessage(questions: string[]): string {
+    if (!questions?.length) return "";
+    const list = questions.map((q, i) => `${i + 1}. ${q}`).join("\n");
+    return `Here are the critical questions to clarify your analysis:\n\n${list}\n\nPlease answer in your next message (you can number your answers or write in paragraphs).`;
+}
+
 export default function JdBuilderPage() {
     const { user } = useUser();
     const router = useRouter();
@@ -500,6 +506,7 @@ export default function JdBuilderPage() {
     const [analysisSource, setAnalysisSource] = useState<'form' | 'chat' | null>(null);
     const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
     const [isRefinementModalOpen, setIsRefinementModalOpen] = useState(false);
+    const [refinementDialogMode, setRefinementDialogMode] = useState<'refine' | 'answerWithAI'>('refine');
     const [isCreateProcessDialogOpen, setIsCreateProcessDialogOpen] = useState(false);
     const [savedAnalysisId, setSavedAnalysisId] = useState<string | null>(null);
     const [currentStage, setCurrentStage] = useState<string>("");
@@ -558,7 +565,7 @@ export default function JdBuilderPage() {
             };
             setAnalysisResult(result);
             setIntakeData(input);
-            setAnalysisSource('form'); 
+            setAnalysisSource('form');
 
             const usedKnowledgeBaseVersion = apiResult.knowledgeBase?.version ?? null;
             const knowledgeBaseSnapshot = apiResult.knowledgeBase?.snapshot ?? null;
@@ -699,6 +706,7 @@ export default function JdBuilderPage() {
                 const saveData = await saveResponse.json();
                 if (saveResponse.ok && saveData.savedAnalysis?.id) {
                     setSavedAnalysisId(saveData.savedAnalysis.id);
+                    setRefinementDialogMode('refine');
                     setIsRefinementModalOpen(true);
                 } else {
                     alert("Please save your analysis first before refining.");
@@ -708,6 +716,7 @@ export default function JdBuilderPage() {
                 alert("Failed to save analysis. Please try again.");
             }
         } else if (savedAnalysisId) {
+            setRefinementDialogMode('refine');
             setIsRefinementModalOpen(true);
         } else {
             alert("Please save your analysis first before refining.");
@@ -733,7 +742,7 @@ export default function JdBuilderPage() {
             if (lastLoadedUserIdRef.current !== currentUserId) {
                 hasAttemptedLoadRef.current = false;
             }
-            if (hasAttemptedLoadRef.current && !analysisId) return; 
+            if (hasAttemptedLoadRef.current && !analysisId) return;
 
             hasAttemptedLoadRef.current = true;
             lastLoadedUserIdRef.current = currentUserId;
@@ -793,11 +802,13 @@ export default function JdBuilderPage() {
                 });
 
                 if (shouldRefine) {
+                    setRefinementDialogMode('refine');
                     setIsRefinementModalOpen(true);
                 }
             } catch (error) {
                 console.error("Error loading analysis:", error);
                 setHasNoSavedAnalyses(true);
+                hasAttemptedLoadRef.current = false;
             } finally {
                 setIsLoadingLatest(false);
             }
@@ -1107,9 +1118,9 @@ export default function JdBuilderPage() {
                             )}
 
                             {analysisResult && !isProcessing && !isDownloading && (
-                                <div className="w-full max-w-full flex flex-col h-full overflow-hidden">
-                                   
-                                    <div id="analysis-display" className="flex-shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b p-4 mb-6">
+                                <div className="w-full max-w-full flex flex-col h-full overflow-hidden animate-analysis-in">
+
+                                    <div id="analysis-display" className="flex-shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b p-4 mb-6 transition-shadow duration-300">
                                         <div className="flex items-start justify-between gap-4">
                                             <div className="flex-1 space-y-4">
                                                 <div>
@@ -1124,7 +1135,7 @@ export default function JdBuilderPage() {
                                                 </div>
 
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                    
+
                                                     {(analysisResult.preview.service_type === "Dedicated VA" && analysisResult.preview.role_title) ||
                                                         (analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.preview.core_va_title) ||
                                                         (analysisResult.preview.service_type === "Projects on Demand" && analysisResult.preview.project_count) ? (
@@ -1291,6 +1302,7 @@ export default function JdBuilderPage() {
                                                                     const saveData = await saveResponse.json();
                                                                     if (saveResponse.ok && saveData.savedAnalysis?.id) {
                                                                         setSavedAnalysisId(saveData.savedAnalysis.id);
+                                                                        setRefinementDialogMode('refine');
                                                                         setIsRefinementModalOpen(true);
                                                                     } else {
                                                                         toast.error("Please save your analysis first before refining.");
@@ -1300,6 +1312,7 @@ export default function JdBuilderPage() {
                                                                     toast.error("Failed to save analysis. Please try again.");
                                                                 }
                                                             } else if (analysisResult) {
+                                                                setRefinementDialogMode('refine');
                                                                 setIsRefinementModalOpen(true);
                                                             } else {
                                                                 toast.error("Please save your analysis first before refining.");
@@ -1326,7 +1339,7 @@ export default function JdBuilderPage() {
                                     <ScrollArea className="flex-1 min-h-0">
                                         <div className="pr-4">
                                             <Accordion type="multiple" defaultValue={["role-details", "skills-requirements", "what-you-told-us"]} className="w-full space-y-4">
-                                               
+
                                                 <AccordionItem value="role-details" className="rounded-lg px-4 bg-card">
                                                     <AccordionTrigger className="hover:no-underline">
                                                         <div className="flex items-center gap-3">
@@ -1548,7 +1561,7 @@ export default function JdBuilderPage() {
                                                         </AccordionTrigger>
                                                         <AccordionContent className="pt-4 pb-6">
                                                             <div className="space-y-4">
-                                                               
+
                                                                 <div className="flex items-start gap-3">
                                                                     <TrendingUp className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                                                                     <div className="flex-1 min-w-0">
@@ -1556,7 +1569,7 @@ export default function JdBuilderPage() {
                                                                         <p className="text-base mt-0.5 font-medium">{summary?.company_stage}</p>
                                                                     </div>
                                                                 </div>
-                                                                
+
                                                                 <div className="flex items-start gap-3">
                                                                     <Target className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                                                                     <div className="flex-1 min-w-0">
@@ -1603,8 +1616,11 @@ export default function JdBuilderPage() {
                                                                             <Button
                                                                                 variant="default"
                                                                                 size="sm"
-                                                                                disabled
                                                                                 className="gap-2 bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                                                onClick={() => {
+                                                                                    setRefinementDialogMode('answerWithAI');
+                                                                                    setIsRefinementModalOpen(true);
+                                                                                }}
                                                                             >
                                                                                 <SparklesIcon className="h-4 w-4" />
                                                                                 Answer with AI
@@ -1989,7 +2005,14 @@ export default function JdBuilderPage() {
                                 initialContext={{
                                     existingAnalysis: analysisResult,
                                     existingIntakeData: intakeData,
+                                    ...(refinementDialogMode === 'answerWithAI' ? {
+                                        answerWithAIMode: true,
+                                        criticalQuestions: analysisResult.preview?.critical_questions ?? [],
+                                    } : {}),
                                 }}
+                                initialMessages={refinementDialogMode === 'answerWithAI' && analysisResult.preview?.critical_questions?.length
+                                    ? [{ role: 'assistant', content: buildCriticalQuestionsAssistantMessage(analysisResult.preview.critical_questions) }]
+                                    : undefined}
                                 showAnalysisBadge={true}
                                 analysisBadgeData={{
                                     analysis: analysisResult,
@@ -2058,7 +2081,7 @@ export default function JdBuilderPage() {
                                         if (action.refinedAnalysis) {
                                             return {
                                                 ...action,
-                                                analysis: action.refinedAnalysis, 
+                                                analysis: action.refinedAnalysis,
                                                 refinedAnalysis: action.refinedAnalysis,
                                             };
                                         }
