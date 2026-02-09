@@ -4,8 +4,8 @@ import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Building2, Loader2, Users, Calendar, AlertCircle, Globe, Database, DollarSign, User, Target, Brain, BarChart3, Info, ChevronRight, Clock, CheckCircle2, Plus, Zap, ChevronDown, MessageSquareText } from "lucide-react";
-import { LightBulbIcon, PencilIcon, DocumentTextIcon, BoltIcon, SparklesIcon, CheckCircleIcon, CheckBadgeIcon, ArrowTrendingUpIcon, InformationCircleIcon, ArrowUpOnSquareStackIcon, BriefcaseIcon, RocketLaunchIcon } from "@heroicons/react/24/outline";
+import { Loader2, Users, User, Brain, ChevronRight, Clock, CheckCircle2, Plus, Zap, ChevronDown, MessageSquareText } from "lucide-react";
+import { LightBulbIcon, DocumentTextIcon, BoltIcon, SparklesIcon, ArrowTrendingUpIcon, ArrowUpOnSquareStackIcon, BriefcaseIcon, RocketLaunchIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { ToolChatDialog } from "@/components/chat/ToolChatDialog";
 import {
@@ -250,6 +250,35 @@ type OrganizationProfile = {
     } | null;
 };
 
+function useCountUp(target: number, enabled: boolean, durationMs = 900) {
+    const [value, setValue] = useState(0);
+    const rafRef = React.useRef<number | null>(null);
+
+    React.useEffect(() => {
+        if (!enabled) {
+            setValue(target);
+            return;
+        }
+        const start = performance.now();
+        const startVal = 0;
+        const tick = (now: number) => {
+            const elapsed = now - start;
+            const t = Math.min(elapsed / durationMs, 1);
+            const eased = 1 - Math.pow(1 - t, 2);
+            setValue(Math.round(startVal + (target - startVal) * eased));
+            if (t < 1) rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+        return () => {
+            if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+        };
+    }, [target, enabled, durationMs]);
+
+    return value;
+}
+
+const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * 45;
+
 export default function OrganizationProfilePage() {
     const { user } = useUser();
     const router = useRouter();
@@ -265,7 +294,18 @@ export default function OrganizationProfilePage() {
     const [allDocuments, setAllDocuments] = useState<Document[]>([]);
     const [isDocumentUploadOpen, setIsDocumentUploadOpen] = useState(false);
     const [isToolChatOpen, setIsToolChatOpen] = useState(false);
+    /** When set, the tool chat was opened from All Tasks "Fix" and shows this task as the initial assistant message. */
+    const [taskFixTask, setTaskFixTask] = useState<{
+        message: string;
+        description?: string;
+        priority?: string;
+        fields: string[];
+        type: "completion" | "quality";
+    } | null>(null);
     const previousCompletionState = useRef<boolean | null>(null);
+
+    const healthScoreTarget = profile && completionAnalysis ? (qualityAnalysis?.overallScore ?? 0) : 0;
+    const animatedHealthScore = useCountUp(healthScoreTarget, !!(profile && completionAnalysis && qualityAnalysis?.overallScore != null), 1000);
 
     useEffect(() => {
         loadProfile();
@@ -293,7 +333,7 @@ export default function OrganizationProfilePage() {
                 const result = await response.json();
                 if (result.success && result.documents) {
                     setAllDocuments(result.documents);
-                    // Only show PENDING and PROCESSING documents on profile page
+                    
                     const activeDocs = result.documents.filter(
                         (doc: Document) => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING"
                     );
@@ -315,9 +355,7 @@ export default function OrganizationProfilePage() {
             if (result.success) {
                 setProfile(result.organizationProfile);
                 setCompletionAnalysis(result.completionAnalysis || null);
-                if (result.qualityAnalysis) {
-                    setQualityAnalysis(result.qualityAnalysis);
-                }
+                setQualityAnalysis(result.qualityAnalysis || null);
 
                 if (result.documents) {
                     setAllDocuments(result.documents);
@@ -362,7 +400,6 @@ export default function OrganizationProfilePage() {
 
             if (result.success) {
                 setQualityAnalysis(result.qualityAnalysis);
-                // Reload profile to get updated completion analysis with quality readiness scores
                 await loadProfile();
                 toast.success("Quality analysis completed!", {
                     description: result.cached
@@ -387,34 +424,6 @@ export default function OrganizationProfilePage() {
             loadQualityAnalysis();
         }
     }, [profile]);
-
-    const formatDate = (dateString: string | null) => {
-        if (!dateString) return "Never";
-        const date = new Date(dateString);
-        return date.toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-        });
-    };
-
-    const formatRelativeTime = (dateString: string | null) => {
-        if (!dateString) return "Never";
-        const date = new Date(dateString);
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-
-        if (diffMins < 1) return "Just now";
-        if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
-        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
-        if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
-        return formatDate(dateString);
-    };
 
     const handleSave = async (formData: Record<string, any>, uploadedFileUrls?: Record<string, Array<{ url: string; name: string; key: string; type: string }>>) => {
         setIsSaving(true);
@@ -492,60 +501,12 @@ export default function OrganizationProfilePage() {
         }
     };
 
-    const getQualityColor = (quality: string) => {
-        switch (quality?.toLowerCase()) {
-            case "excellent":
-                return "text-green-600 dark:text-green-400";
-            case "good":
-                return "text-[color:var(--accent-strong)]";
-            case "basic":
-                return "text-amber-600 dark:text-amber-400";
-            case "insufficient":
-                return "text-red-600 dark:text-red-400";
-            default:
-                return "text-muted-foreground";
-        }
-    };
-
-    const getQualityBadgeVariant = (quality: string) => {
-        switch (quality?.toLowerCase()) {
-            case "excellent":
-                return "default";
-            case "good":
-                return "secondary";
-            case "basic":
-                return "outline";
-            case "insufficient":
-                return "destructive";
-            default:
-                return "outline";
-        }
-    };
-
-    // Helper functions for new design
-    const getStatusBadge = (score: number) => {
-        if (score >= 80) return { label: "Ready to Use", color: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20" };
-        if (score >= 30) return { label: "In Progress", color: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20" };
-        return { label: "Getting Started", color: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20" };
-    };
-
-    const getPrimaryCTA = (score: number) => {
+    const getPrimaryCTA = (qualityAnalysis: QualityAnalysis | null, completionAnalysis: CompletionAnalysis | null) => {
+        if (!qualityAnalysis) return { label: "Run quality check", action: () => analyzeQuality() };
+        const score = qualityAnalysis.overallScore;
         if (score < 30) return { label: "Complete Setup", action: () => setIsEditing(true) };
         if (score < 70) return { label: "Continue Setup", action: () => setIsEditing(true) };
         return { label: "Optimize Quality", action: () => analyzeQuality() };
-    };
-
-    const getCombinedToolScore = (tool: { score: number; qualityReadiness?: { score: number } }) => {
-        if (tool.qualityReadiness) {
-            return Math.round((tool.score + tool.qualityReadiness.score) / 2);
-        }
-        return tool.score;
-    };
-
-    const getToolStatus = (score: number) => {
-        if (score >= 80) return "Ready";
-        if (score >= 60) return "Almost Ready";
-        return "Needs Work";
     };
 
     const estimateTimeToReady = (missingFields: string[]) => {
@@ -559,81 +520,89 @@ export default function OrganizationProfilePage() {
         // This would require form ref or field ID mapping
     };
 
-    // New helper functions for redesigned UI
+    /** Builds the assistant message shown when opening chat from All Tasks "Fix" (same pattern as critical questions in role-builder). */
+    const buildTaskFixAssistantMessage = (task: {
+        message: string;
+        description?: string;
+        fields?: string[];
+    }): string => {
+        let text = `Here’s a task to address:\n\n**${task.message}**`;
+        if (task.description) {
+            text += `\n\n${task.description}`;
+        }
+        if (task.fields?.length) {
+            text += `\n\nFields involved: ${task.fields.join(", ")}.`;
+        }
+        text += "\n\nAdd your prompt below to address this task. The AI will use your input to improve your knowledge base.";
+        return text;
+    };
+
     const getCompletionTier = (score: number) => {
         if (score >= 80) return { label: "Optimized", color: "text-green-600 dark:text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/20" };
         if (score >= 50) return { label: "Building", color: "text-amber-600 dark:text-amber-400", bgColor: "bg-amber-500/10", borderColor: "border-amber-500/20" };
         return { label: "Getting Started", color: "text-blue-600 dark:text-blue-400", bgColor: "bg-blue-500/10", borderColor: "border-blue-500/20" };
     };
 
-    const getNextMilestone = (completionAnalysis: CompletionAnalysis | null) => {
-        if (!completionAnalysis) return null;
-        
-        // Find the next tool that can be unlocked
-        const tools = [
-            { name: "Job Descriptions", tool: completionAnalysis.toolReadiness.jobDescriptionBuilder, route: "/dashboard/role-builder" },
-            { name: "Process Builder", tool: completionAnalysis.toolReadiness.sopGenerator, route: "/dashboard/process-builder" },
-            { name: "Business Brain", tool: completionAnalysis.toolReadiness.businessBrain, route: "/dashboard/ai-business-brain" },
-        ];
+    const getHealthDisplay = (quality: QualityAnalysis | null, completion: CompletionAnalysis | null) => {
+        const primaryScore = quality?.overallScore ?? null;
+        const coverageScore = completion?.overallScore ?? null;
+        const primaryLabel = primaryScore !== null
+            ? "Knowledge base quality"
+            : "Not yet analyzed";
+        return { primaryScore, coverageScore, primaryLabel };
+    };
 
-        const notReadyTools = tools.filter(({ tool }) => !tool.ready && tool.missingFields.length > 0);
-        if (notReadyTools.length === 0) return null;
+    const getBusinessBrainReadiness = (quality: QualityAnalysis | null) => {
+        const impact = quality?.toolImpact?.businessBrain;
+        const score = impact?.qualityScore ?? 0;
+        const ready = score >= 60;
+        let message = "Run quality check to see readiness";
+        if (impact) {
+            message = ready ? "Ready for AI conversations" : "Improve profile quality for better AI answers";
+        }
+        const qualityLabel = score >= 80 ? "excellent" : score >= 60 ? "good" : score >= 40 ? "basic" : "insufficient";
+        return { ready, score, message, quality: qualityLabel };
+    };
 
-        // Sort by missing fields count (fewest first)
-        notReadyTools.sort((a, b) => a.tool.missingFields.length - b.tool.missingFields.length);
-        const nextTool = notReadyTools[0];
-        const combinedScore = getCombinedToolScore(nextTool.tool);
-        const fieldsNeeded = nextTool.tool.missingFields.length;
-        const progress = combinedScore;
+    const isEnrichedWithAI = (quality: QualityAnalysis | null, toolKey: "jobDescriptionBuilder" | "sopGenerator") => {
+        const impact = quality?.toolImpact?.[toolKey];
+        return (impact?.qualityScore ?? 0) >= 50;
+    };
 
+    const getNextMilestone = (completionAnalysis: CompletionAnalysis | null, qualityAnalysis: QualityAnalysis | null) => {
+        const brain = getBusinessBrainReadiness(qualityAnalysis);
+        if (brain.ready) return null;
         return {
-            toolName: nextTool.name,
-            fieldsNeeded,
-            progress,
-            message: `${fieldsNeeded} field${fieldsNeeded > 1 ? 's' : ''} to unlock ${nextTool.name}`,
+            toolName: "Business Brain",
+            fieldsNeeded: 0,
+            progress: brain.score,
+            message: qualityAnalysis
+                ? "Improve profile quality for better AI conversations"
+                : "Run quality check to see how ready your knowledge base is for AI",
         };
     };
 
     const getQuickWins = (completionAnalysis: CompletionAnalysis | null, qualityAnalysis: QualityAnalysis | null) => {
         if (!completionAnalysis) return [];
-        
-        const allRecs = [
-            ...completionAnalysis.recommendations.map(rec => ({ ...rec, type: 'completion' as const })),
-            ...(qualityAnalysis?.topRecommendations || []).map(rec => ({ ...rec, type: 'quality' as const }))
-        ];
+
+        const qualityRecs = (qualityAnalysis?.topRecommendations || []).map(rec => ({ ...rec, type: 'quality' as const }));
+        const completionRecs = completionAnalysis.recommendations.map(rec => ({ ...rec, type: 'completion' as const }));
+        const allRecs = [...qualityRecs, ...completionRecs];
 
         return allRecs
             .filter(rec => {
                 const isCompletionRec = rec.type === 'completion';
                 const fields = isCompletionRec ? (rec as any).fields : ((rec as any).field ? [(rec as any).field] : []);
                 const timeEstimate = estimateTimeToReady(fields);
-                return timeEstimate <= 5; // Quick wins are 5 minutes or less
+                return timeEstimate <= 5; // Quick wins ar or less
             })
-            .slice(0, 2) // Top 2 quick wins
+            .slice(0, 2) 
             .map(rec => {
                 const isCompletionRec = rec.type === 'completion';
                 const fields = isCompletionRec ? (rec as any).fields : ((rec as any).field ? [(rec as any).field] : []);
                 const timeEstimate = estimateTimeToReady(fields);
                 return { ...rec, timeEstimate, fields };
             });
-    };
-
-    const getToolUnlockInfo = (tool: { score: number; missingFields: string[]; qualityReadiness?: { score: number } }) => {
-        const combinedScore = getCombinedToolScore(tool);
-        if (combinedScore >= 80) return { unlocked: true, message: "Ready to use" };
-        if (combinedScore >= 60) {
-            const fieldsNeeded = tool.missingFields.length;
-            return { unlocked: false, message: `Add ${fieldsNeeded} field${fieldsNeeded > 1 ? 's' : ''} → unlock Basic generation` };
-        }
-        const fieldsNeeded = tool.missingFields.length;
-        return { unlocked: false, message: `${fieldsNeeded} field${fieldsNeeded > 1 ? 's' : ''} needed to get started` };
-    };
-
-    const getTierVisual = (score: number) => {
-        if (score >= 80) return "🟢🟢🟢"; // Excellent
-        if (score >= 60) return "🟡🟡⚪"; // Good
-        if (score >= 30) return "🟡⚪⚪"; // Basic
-        return "⚪⚪⚪"; // Getting Started
     };
 
     if (isLoading) {
@@ -675,16 +644,15 @@ export default function OrganizationProfilePage() {
             </div>
             <div className="min-h-screen">
                 <div className="py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 space-y-6">
-                    {/* Header */}
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between animate-section-in opacity-0">
                         <div>
                             <h1 className="text-2xl font-semibold mb-2">Organization Knowledge Base</h1>
                         </div>
                     </div>
 
-                    {/* Empty State - Enhanced */}
                     {!profile && (
-                        <div className="py-16 space-y-8">
+                        <div className="py-16 space-y-8 animate-section-in opacity-0">
                             <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
                                 <RocketLaunchIcon className="h-12 w-12 text-[color:var(--accent-strong)] animate-pulse" />
                             </div>
@@ -719,21 +687,13 @@ export default function OrganizationProfilePage() {
                                 <Button onClick={() => setIsEditing(true)} size="lg" variant="outline">
                                     Complete Setup (15 min)
                                 </Button>
-                                <ToolChatDialog
-                                    toolId="organization-profile"
-                                    buttonLabel="Tell AI"
-                                    buttonSize="lg"
-                                    buttonVariant="outline"
-                                    className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white"
-                                    icon={SparklesIcon}
-                                />
+                                {/* Tell AI hidden when KB not set up — tool chat requires a knowledge base */}
                             </div>
                         </div>
                     )}
 
-                    {/* Alert Banner - Document Processing */}
                     {profile && documents.some(doc => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING") && (
-                        <Alert className="border-blue-500/20 bg-blue-500/5">
+                        <Alert className="border-blue-500/20 bg-blue-500/5 animate-section-in opacity-0 transition-opacity duration-300">
                             <DocumentTextIcon className="h-4 w-4" />
                             <AlertTitle>Documents Processing</AlertTitle>
                             <AlertDescription>
@@ -742,15 +702,15 @@ export default function OrganizationProfilePage() {
                         </Alert>
                     )}
 
-                    {/* Status Banner - Hero Section Replacement */}
                     {profile && completionAnalysis && (() => {
+                        const health = getHealthDisplay(qualityAnalysis, completionAnalysis);
                         const tier = getCompletionTier(completionAnalysis.overallScore);
-                        const nextMilestone = getNextMilestone(completionAnalysis);
-                        const cta = getPrimaryCTA(completionAnalysis.overallScore);
-                        
+                        const nextMilestone = getNextMilestone(completionAnalysis, qualityAnalysis);
+                        const cta = getPrimaryCTA(qualityAnalysis, completionAnalysis);
+
                         return (
-                            <div className="relative p-6 rounded-lg border bg-gradient-to-br from-background to-muted/20">
-                                {/* Health Score Badge - Top Right */}
+                            <div className="relative p-6 rounded-lg border bg-gradient-to-br from-background to-muted/20 animate-section-in opacity-0">
+                                {/* Health Score Badge - Top Right: primary = quality when available, else "Not yet analyzed" */}
                                 <div className="absolute top-4 right-4">
                                     <TooltipProvider>
                                         <Tooltip>
@@ -772,45 +732,54 @@ export default function OrganizationProfilePage() {
                                                             fill="none"
                                                             className="text-muted"
                                                         />
-                                                        <circle
-                                                            cx="50"
-                                                            cy="50"
-                                                            r="45"
-                                                            stroke="url(#healthGradientCompact)"
-                                                            strokeWidth="8"
-                                                            fill="none"
-                                                            strokeDasharray={`${2 * Math.PI * 45}`}
-                                                            strokeDashoffset={`${2 * Math.PI * 45 * (1 - completionAnalysis.overallScore / 100)}`}
-                                                            className="transition-all duration-500"
-                                                            strokeLinecap="round"
-                                                        />
+                                                        {health.primaryScore !== null ? (
+                                                            <circle
+                                                                cx="50"
+                                                                cy="50"
+                                                                r="45"
+                                                                stroke="url(#healthGradientCompact)"
+                                                                strokeWidth="8"
+                                                                fill="none"
+                                                                strokeDasharray={CIRCLE_CIRCUMFERENCE}
+                                                                strokeDashoffset={CIRCLE_CIRCUMFERENCE * (1 - animatedHealthScore / 100)}
+                                                                className="transition-all duration-1000 ease-out"
+                                                                strokeLinecap="round"
+                                                            />
+                                                        ) : null}
                                                     </svg>
-                                                    <div className="absolute inset-0 flex items-center justify-center">
-                                                        <span className="text-2xl font-bold">{completionAnalysis.overallScore}%</span>
+                                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                        {health.primaryScore !== null ? (
+                                                            <span className="text-2xl font-bold tabular-nums">{animatedHealthScore}%</span>
+                                                        ) : (
+                                                            <span className="text-xs font-medium text-muted-foreground text-center px-1">Not yet analyzed</span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                                <p>Knowledge Base Health: {completionAnalysis.overallScore}%</p>
+                                                <p>{health.primaryLabel}{health.primaryScore !== null ? `: ${health.primaryScore}%` : ""}</p>
+                                                {health.coverageScore !== null && (
+                                                    <p className="text-xs mt-1">Profile coverage: {health.coverageScore}%</p>
+                                                )}
                                             </TooltipContent>
                                         </Tooltip>
                                     </TooltipProvider>
                                 </div>
 
                                 <div className="space-y-4 pr-20">
-                                    {/* Completion Tier */}
-                                    <div className="flex items-center gap-3">
+                                    {/* Tier + optional coverage */}
+                                    <div className="flex items-center gap-3 flex-wrap">
                                         <Badge className={`${tier.bgColor} ${tier.color} ${tier.borderColor} border`}>
                                             {tier.label}
                                         </Badge>
-                                        {qualityAnalysis && (
+                                        {health.coverageScore !== null && (
                                             <span className="text-sm text-muted-foreground">
-                                                Quality: <span className="font-medium text-[color:var(--accent-strong)]">{qualityAnalysis.overallScore}%</span>
+                                                Profile coverage: <span className="font-medium">{health.coverageScore}%</span>
                                             </span>
                                         )}
                                     </div>
 
-                                    {/* Next Milestone / Completion Message */}
+                                    {/* Next Milestone: Business Brain only (Phase 4) */}
                                     {nextMilestone ? (
                                         <div className="space-y-2">
                                             <p className="text-2xl font-semibold">Keep building your AI Knowledge Base</p>
@@ -820,8 +789,8 @@ export default function OrganizationProfilePage() {
                                         </div>
                                     ) : (
                                         <div className="space-y-2">
-                                            <p className="text-2xl font-semibold">All tools unlocked! 🎉</p>
-                                            <p className="text-sm text-muted-foreground">Your knowledge base is ready to power all AI tools.</p>
+                                            <p className="text-2xl font-semibold">Business Brain ready 🎉</p>
+                                            <p className="text-sm text-muted-foreground">Your knowledge base quality supports strong AI conversations.</p>
                                         </div>
                                     )}
 
@@ -832,9 +801,18 @@ export default function OrganizationProfilePage() {
                                             size="lg"
                                             variant="outline"
                                             className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white"
+                                            disabled={cta.label === "Run quality check" && isAnalyzingQuality}
                                         >
-                                            {cta.label}
+                                            {cta.label === "Run quality check" && isAnalyzingQuality ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                    Running…
+                                                </>
+                                            ) : (
+                                                cta.label
+                                            )}
                                         </Button>
+                                        {profile?.requiredFieldsComplete && (
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button
@@ -857,10 +835,19 @@ export default function OrganizationProfilePage() {
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
+                                        )}
                                         <ToolChatDialog
+                                            key={taskFixTask ? `task-fix-${taskFixTask.message.substring(0, 40)}-${taskFixTask.type}` : "general"}
                                             toolId="organization-profile"
                                             open={isToolChatOpen}
-                                            onOpenChange={setIsToolChatOpen}
+                                            onOpenChange={(open) => {
+                                                setIsToolChatOpen(open);
+                                                if (!open) {
+                                                    setTaskFixTask(null);
+                                                    loadProfile();
+                                                }
+                                            }}
+                                            initialMessages={taskFixTask ? [{ role: "assistant", content: buildTaskFixAssistantMessage(taskFixTask) }] : undefined}
                                         />
                                     </div>
                                 </div>
@@ -868,20 +855,19 @@ export default function OrganizationProfilePage() {
                         );
                     })()}
 
-                    {/* Quick Wins Section */}
                     {profile && completionAnalysis && (() => {
                         const quickWins = getQuickWins(completionAnalysis, qualityAnalysis);
                         if (quickWins.length === 0) return null;
-                        
+
                         return (
-                            <div className="space-y-4">
+                            <div className="space-y-4 animate-section-in opacity-0" style={{ animationDelay: "80ms" }}>
                                 <div>
                                     <div className="flex items-center gap-2 mb-1">
                                         <Zap className="h-5 w-5 text-amber-500" />
                                         <h2 className="text-2xl font-semibold">Quick Wins</h2>
                                     </div>
                                     <p className="text-sm text-muted-foreground">
-                                        Complete these in under 5 minutes to unlock immediate value
+                                        Complete these in under 5 minutes to improve quality and coverage
                                     </p>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -938,10 +924,8 @@ export default function OrganizationProfilePage() {
                         );
                     })()}
 
-
-                    {/* Completion Chips - Tier Status */}
                     {profile && completionAnalysis && (
-                        <div className="space-y-4">
+                        <div className="space-y-4 animate-section-in opacity-0" style={{ animationDelay: "120ms" }}>
                             <div>
                                 <h2 className="text-2xl font-semibold mb-1">Completion Status</h2>
                                 <p className="text-sm text-muted-foreground">
@@ -958,7 +942,7 @@ export default function OrganizationProfilePage() {
                                     const isComplete = step.complete || (step.fields && step.fields.complete);
                                     const IconComponent = step.icon;
                                     const progress = step.fields ? step.fields.percentage : (step.complete ? 100 : 0);
-                                    
+
                                     return (
                                         <TooltipProvider key={step.name}>
                                             <Tooltip>
@@ -967,12 +951,12 @@ export default function OrganizationProfilePage() {
                                                         onClick={() => {
                                                             if (step.name !== "Quality Check") {
                                                                 setIsEditing(true);
-                                                            } else if (!qualityAnalysis) {
+                                                            } else if (!qualityAnalysis && !isAnalyzingQuality) {
                                                                 analyzeQuality();
                                                             }
                                                         }}
-                                                        className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${
-                                                            isComplete
+                                                        disabled={step.name === "Quality Check" && !qualityAnalysis && isAnalyzingQuality}
+                                                        className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${isComplete
                                                                 ? step.name === "Brand Voice"
                                                                     ? "bg-[color:var(--accent-strong)]/10 border-[color:var(--accent-strong)] text-[color:var(--accent-strong)] hover:bg-[color:var(--accent-strong)]/20"
                                                                     : "bg-[var(--primary-dark)]/10 border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/20"
@@ -981,16 +965,21 @@ export default function OrganizationProfilePage() {
                                                                         ? "bg-[color:var(--accent-strong)]/10 border-[color:var(--accent-strong)] text-[color:var(--accent-strong)] hover:bg-[color:var(--accent-strong)]/20"
                                                                         : "bg-[var(--primary-dark)]/10 border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/20"
                                                                     : "bg-muted border-muted-foreground/30 text-muted-foreground hover:bg-muted/80"
-                                                        }`}
+                                                            }`}
                                                     >
                                                         {isComplete ? (
                                                             <CheckCircle2 className="h-4 w-4" />
+                                                        ) : step.name === "Quality Check" && isAnalyzingQuality ? (
+                                                            <Loader2 className="h-4 w-4 animate-spin" />
                                                         ) : (
                                                             <IconComponent className="h-4 w-4" />
                                                         )}
                                                         <span className="text-sm font-medium">{step.name}</span>
                                                         {step.fields && !step.fields.complete && (
                                                             <span className="text-xs">({step.fields.filledFields}/{step.fields.totalFields})</span>
+                                                        )}
+                                                        {step.name === "Quality Check" && isAnalyzingQuality && (
+                                                            <span className="text-xs">Running…</span>
                                                         )}
                                                     </button>
                                                 </TooltipTrigger>
@@ -1008,9 +997,8 @@ export default function OrganizationProfilePage() {
                         </div>
                     )}
 
-                    {/* Tool Readiness - Enhanced */}
                     {profile && completionAnalysis && (
-                        <div className="space-y-4">
+                        <div className="space-y-4 animate-section-in opacity-0" style={{ animationDelay: "160ms" }}>
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
                                     <BoltIcon className="h-5 w-5" />
@@ -1021,149 +1009,134 @@ export default function OrganizationProfilePage() {
                                 </p>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {/* Job Descriptions: use anytime; Enriched with AI when quality sufficient */}
                                 {(() => {
-                                    const tools = [
-                                        {
-                                            name: "Job Descriptions",
-                                            icon: DocumentTextIcon,
-                                            tool: completionAnalysis.toolReadiness.jobDescriptionBuilder,
-                                            route: "/dashboard/role-builder",
-                                        },
-                                        {
-                                            name: "Process Builder",
-                                            icon: DocumentTextIcon,
-                                            tool: completionAnalysis.toolReadiness.sopGenerator,
-                                            route: "/dashboard/process-builder",
-                                        },
-                                        {
-                                            name: "Business Brain",
-                                            icon: Brain,
-                                            tool: completionAnalysis.toolReadiness.businessBrain,
-                                            route: "/dashboard/ai-business-brain",
-                                        },
-                                    ];
-                                    
-                                    // Sort by combined score (highest first)
-                                    const sortedTools = [...tools].sort((a, b) => {
-                                        const scoreA = getCombinedToolScore(a.tool);
-                                        const scoreB = getCombinedToolScore(b.tool);
-                                        return scoreB - scoreA;
-                                    });
-                                    
-                                    return sortedTools.map(({ name, icon: Icon, tool, route }) => {
-                                        const combinedScore = getCombinedToolScore(tool);
-                                        const status = getToolStatus(combinedScore);
-                                        const timeToReady = tool.missingFields.length > 0 ? estimateTimeToReady(tool.missingFields) : 0;
-                                        const unlockInfo = getToolUnlockInfo(tool);
-                                        
-                                        return (
-                                            <div 
-                                                key={name} 
-                                                className="p-6 rounded-lg border border-border/50 bg-card space-y-4 transition-all hover:shadow-md"
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <Icon className="h-5 w-5" />
-                                                        <span className="font-semibold">{name}</span>
-                                                    </div>
-                                                    {tool.ready && (
-                                                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                                    )}
+                                    const jdEnriched = isEnrichedWithAI(qualityAnalysis, "jobDescriptionBuilder");
+                                    return (
+                                        <div className="p-6 rounded-lg border border-border/50 bg-card space-y-4 transition-all duration-300 hover:shadow-md">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <DocumentTextIcon className="h-5 w-5" />
+                                                    <span className="font-semibold">Job Descriptions</span>
                                                 </div>
-
-                                                {/* Circular/Donut Progress Graph */}
-                                                <div className="flex flex-col items-center justify-center space-y-2">
-                                                    <div className="relative w-24 h-24">
-                                                        <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
-                                                            <defs>
-                                                                <linearGradient id={`toolGradient-${name.replace(/\s+/g, '-')}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                                                                    <stop offset="0%" stopColor="#f0b214" />
-                                                                    <stop offset="100%" stopColor="#1374B4" />
-                                                                </linearGradient>
-                                                            </defs>
-                                                            <circle
-                                                                cx="50"
-                                                                cy="50"
-                                                                r="45"
-                                                                stroke="currentColor"
-                                                                strokeWidth="8"
-                                                                fill="none"
-                                                                className="text-muted"
-                                                            />
-                                                            <circle
-                                                                cx="50"
-                                                                cy="50"
-                                                                r="45"
-                                                                stroke={`url(#toolGradient-${name.replace(/\s+/g, '-')})`}
-                                                                strokeWidth="8"
-                                                                fill="none"
-                                                                strokeDasharray={`${2 * Math.PI * 45}`}
-                                                                strokeDashoffset={`${2 * Math.PI * 45 * (1 - combinedScore / 100)}`}
-                                                                className="transition-all duration-500"
-                                                                strokeLinecap="round"
-                                                            />
-                                                        </svg>
-                                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                            <span className="text-xl font-bold">{combinedScore}%</span>
-                                                            <span className="text-xs text-muted-foreground">Ready</span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center justify-between w-full">
-                                                        <Badge
-                                                            variant={
-                                                                status === "Ready" ? "default" :
-                                                                    status === "Almost Ready" ? "secondary" :
-                                                                        "outline"
-                                                            }
-                                                            className="text-xs"
-                                                        >
-                                                            {status}
-                                                        </Badge>
-                                                        <span className="text-xs text-muted-foreground text-right">{unlockInfo.message}</span>
-                                                    </div>
-                                                </div>
-
-                                                {tool.missingFields.length > 0 && (
-                                                    <div className="text-xs text-muted-foreground text-center">
-                                                        {tool.missingFields.length} field{tool.missingFields.length > 1 ? 's' : ''} missing
-                                                    </div>
+                                                {jdEnriched && (
+                                                    <Badge className="bg-[color:var(--accent-strong)]/20 text-[color:var(--accent-strong)] border-[color:var(--accent-strong)]/30">Enriched with AI</Badge>
                                                 )}
-
-                                                <Button
-                                                    onClick={() => {
-                                                        if (tool.ready) {
-                                                            router.push(route);
-                                                        } else {
-                                                            setIsEditing(true);
-                                                        }
-                                                    }}
-                                                    className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
-                                                    size="sm"
-                                                >
-                                                    {tool.ready ? (
-                                                        <>
-                                                            Launch {name}
-                                                            <ChevronRight className="h-4 w-4 ml-1" />
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            Complete {tool.missingFields.length} Field{tool.missingFields.length > 1 ? 's' : ''}
-                                                            {timeToReady > 0 && (
-                                                                <span className="ml-1 text-xs">(~{timeToReady} min)</span>
-                                                            )}
-                                                        </>
-                                                    )}
-                                                </Button>
                                             </div>
-                                        );
-                                    });
+                                            <div className="flex flex-col items-center justify-center space-y-2">
+                                                <p className="text-sm text-muted-foreground text-center">Use anytime. More profile data improves results.</p>
+                                                <Badge variant="secondary" className="text-xs">Use anytime</Badge>
+                                            </div>
+                                            <Button
+                                                onClick={() => router.push("/dashboard/role-builder")}
+                                                className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                size="sm"
+                                            >
+                                                Launch Job Descriptions
+                                                <ChevronRight className="h-4 w-4 ml-1" />
+                                            </Button>
+                                        </div>
+                                    );
+                                })()}
+                                {/* Process Builder (SOP): use anytime; Enriched with AI when quality sufficient */}
+                                {(() => {
+                                    const sopEnriched = isEnrichedWithAI(qualityAnalysis, "sopGenerator");
+                                    return (
+                                        <div className="p-6 rounded-lg border border-border/50 bg-card space-y-4 transition-all duration-300 hover:shadow-md">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <DocumentTextIcon className="h-5 w-5" />
+                                                    <span className="font-semibold">Process Builder</span>
+                                                </div>
+                                                {sopEnriched && (
+                                                    <Badge className="bg-[color:var(--accent-strong)]/20 text-[color:var(--accent-strong)] border-[color:var(--accent-strong)]/30">Enriched with AI</Badge>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col items-center justify-center space-y-2">
+                                                <p className="text-sm text-muted-foreground text-center">Use anytime. More profile data improves results.</p>
+                                                <Badge variant="secondary" className="text-xs">Use anytime</Badge>
+                                            </div>
+                                            <Button
+                                                onClick={() => router.push("/dashboard/process-builder")}
+                                                className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                size="sm"
+                                            >
+                                                Launch Process Builder
+                                                <ChevronRight className="h-4 w-4 ml-1" />
+                                            </Button>
+                                        </div>
+                                    );
+                                })()}
+                                {/* Business Brain: readiness from quality only */}
+                                {(() => {
+                                    const brain = getBusinessBrainReadiness(qualityAnalysis);
+                                    const Icon = Brain;
+                                    return (
+                                        <div className="p-6 rounded-lg border border-border/50 bg-card space-y-4 transition-all duration-300 hover:shadow-md">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Icon className="h-5 w-5" />
+                                                    <span className="font-semibold">Business Brain</span>
+                                                </div>
+                                                {brain.ready && <CheckCircle2 className="h-5 w-5 text-green-600" />}
+                                            </div>
+                                            <div className="flex flex-col items-center justify-center space-y-2">
+                                                <div className="relative w-24 h-24">
+                                                    <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
+                                                        <defs>
+                                                            <linearGradient id="toolGradient-Business-Brain" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                                <stop offset="0%" stopColor="#f0b214" />
+                                                                <stop offset="100%" stopColor="#1374B4" />
+                                                            </linearGradient>
+                                                        </defs>
+                                                        <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth="8" fill="none" className="text-muted" />
+                                                        <circle
+                                                            cx="50" cy="50" r="45"
+                                                            stroke="url(#toolGradient-Business-Brain)"
+                                                            strokeWidth="8" fill="none"
+                                                            strokeDasharray={`${2 * Math.PI * 45}`}
+                                                            strokeDashoffset={`${2 * Math.PI * 45 * (1 - brain.score / 100)}`}
+                                                            className="transition-all duration-500"
+                                                            strokeLinecap="round"
+                                                        />
+                                                    </svg>
+                                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                        <span className="text-xl font-bold">{brain.score}%</span>
+                                                        <span className="text-xs text-muted-foreground">{brain.quality}</span>
+                                                    </div>
+                                                </div>
+                                                <Badge variant={brain.ready ? "default" : "secondary"} className="text-xs">
+                                                    {brain.ready ? "Ready" : "Not yet ready"}
+                                                </Badge>
+                                                <span className="text-xs text-muted-foreground text-center">{brain.message}</span>
+                                            </div>
+                                            <Button
+                                                onClick={() => {
+                                                    if (brain.ready) router.push("/dashboard/ai-business-brain");
+                                                    else if (qualityAnalysis) setIsEditing(true);
+                                                    else if (!isAnalyzingQuality) analyzeQuality();
+                                                }}
+                                                disabled={!brain.ready && !qualityAnalysis && isAnalyzingQuality}
+                                                className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                size="sm"
+                                            >
+                                                {brain.ready ? (
+                                                    <>Launch Business Brain<ChevronRight className="h-4 w-4 ml-1" /></>
+                                                ) : qualityAnalysis ? (
+                                                    <>Improve profile</>
+                                                ) : isAnalyzingQuality ? (
+                                                    <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Running…</>
+                                                ) : (
+                                                    <>Run quality check</>
+                                                )}
+                                            </Button>
+                                        </div>
+                                    );
                                 })()}
                             </div>
                         </div>
                     )}
 
-
-                    {/* All Tasks - Collapsible */}
                     {profile && completionAnalysis && (() => {
                         const allRecs = [
                             ...completionAnalysis.recommendations.map(rec => ({ ...rec, type: 'completion' as const })),
@@ -1176,11 +1149,11 @@ export default function OrganizationProfilePage() {
                             const timeEstimate = estimateTimeToReady(fields);
                             return !quickWins.some(qw => qw.message === rec.message);
                         });
-                        
+
                         if (remainingTasks.length === 0) return null;
-                        
+
                         return (
-                            <Accordion type="single" collapsible className="w-full">
+                            <Accordion type="single" collapsible className="w-full animate-section-in opacity-0" style={{ animationDelay: "200ms" }}>
                                 <AccordionItem value="all-tasks" className="border-none">
                                     <AccordionTrigger className="hover:no-underline">
                                         <div className="flex items-center gap-2">
@@ -1231,11 +1204,14 @@ export default function OrganizationProfilePage() {
                                                             size="sm"
                                                             variant="outline"
                                                             onClick={() => {
-                                                                if (fieldCount > 0) {
-                                                                    handleFixField(fields[0]);
-                                                                } else {
-                                                                    setIsEditing(true);
-                                                                }
+                                                                setTaskFixTask({
+                                                                    message: rec.message,
+                                                                    description: description ?? undefined,
+                                                                    priority: rec.priority,
+                                                                    fields: fields,
+                                                                    type: rec.type,
+                                                                });
+                                                                setIsToolChatOpen(true);
                                                             }}
                                                         >
                                                             Fix
@@ -1250,7 +1226,6 @@ export default function OrganizationProfilePage() {
                         );
                     })()}
 
-                    {/* Document Upload Dialog */}
                     <Dialog open={isDocumentUploadOpen} onOpenChange={setIsDocumentUploadOpen}>
                         <DialogContent className="w-[min(600px,95vw)] sm:max-w-2xl max-h-[90vh] overflow-hidden p-0 sm:p-2 flex flex-col">
                             <DialogHeader className="px-4 pt-4 pb-2 flex-shrink-0">
@@ -1305,8 +1280,6 @@ export default function OrganizationProfilePage() {
                         </DialogContent>
                     </Dialog>
 
-
-                    {/* Edit Form Dialog */}
                     {user && (
                         <Dialog open={isEditing} onOpenChange={(open) => {
                             if (!isSaving) {
@@ -1390,7 +1363,6 @@ export default function OrganizationProfilePage() {
                             </DialogContent>
                         </Dialog>
                     )}
-
 
                 </div>
             </div>

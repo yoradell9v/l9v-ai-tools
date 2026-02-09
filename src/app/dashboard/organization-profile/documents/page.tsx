@@ -120,7 +120,7 @@ export default function DocumentsPage() {
             <div className="h-[calc(100vh-64px)] overflow-hidden">
                 <div className="w-full max-w-full h-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col min-h-0">
                     <div className="flex-shrink-0">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-6">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-6 animate-section-in opacity-0">
                             <div>
                                 <h1 className="text-2xl font-semibold mb-2">Documents</h1>
                                 <p className="text-base text-muted-foreground">
@@ -130,14 +130,14 @@ export default function DocumentsPage() {
                         </div>
 
                         {error && (
-                            <Card className="mb-6 border-border bg-card py-2">
+                            <Card className="mb-6 border-border bg-card py-2 animate-section-in opacity-0 transition-shadow duration-300" style={{ animationDelay: "60ms" }}>
                                 <CardContent className="py-4">
                                     <p className="text-base text-muted-foreground">{error}</p>
                                 </CardContent>
                             </Card>
                         )}
 
-                        <div className="mb-6 space-y-4">
+                        <div className="mb-6 space-y-4 animate-section-in opacity-0" style={{ animationDelay: "100ms" }}>
                             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <span className="text-base text-muted-foreground">Filter:</span>
@@ -211,7 +211,7 @@ export default function DocumentsPage() {
                         </div>
                     </div>
 
-                    <div className="flex-1 min-h-0">
+                    <div className="flex-1 min-h-0 animate-section-in opacity-0 transition-opacity duration-300" style={{ animationDelay: "140ms" }}>
                         <DocumentList
                             documents={filteredAndSortedDocuments}
                             onDocumentsChange={setDocuments}

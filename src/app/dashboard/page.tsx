@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useUser } from "@/context/UserContext";
@@ -50,6 +50,8 @@ interface DashboardStats {
     myAnalyses?: number;
     mySOPs?: number;
     myConversations?: number;
+    // Task Intelligence: submitted (non-draft) tasks for Getting Started
+    submittedTasksCount?: number;
 }
 
 interface TeamMember {
@@ -61,6 +63,35 @@ interface TeamMember {
     role: "ADMIN" | "MEMBER";
     joinedAt?: string;
     deactivatedAt?: string | null;
+}
+
+/** Animates from 0 to target over duration when enabled. */
+function useCountUp(target: number, enabled: boolean, durationMs = 800) {
+    const [value, setValue] = useState(0);
+    const rafRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        if (!enabled) {
+            setValue(target);
+            return;
+        }
+        const start = performance.now();
+        const startVal = 0;
+
+        const tick = (now: number) => {
+            const elapsed = now - start;
+            const t = Math.min(elapsed / durationMs, 1);
+            const eased = 1 - Math.pow(1 - t, 2);
+            setValue(Math.round(startVal + (target - startVal) * eased));
+            if (t < 1) rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+        return () => {
+            if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+        };
+    }, [target, enabled, durationMs]);
+
+    return value;
 }
 
 export default function DashboardPage() {
@@ -289,9 +320,32 @@ export default function DashboardPage() {
         );
     };
 
-    const getProgressCount = () => {
-        return [isKBComplete(), hasSOP(), hasRole(), hasConversation()].filter(Boolean).length;
+    /** True if user has submitted at least one task (non-draft) in Task Intelligence. */
+    const hasSubmittedTask = () => {
+        if (!stats) return false;
+        return (stats.submittedTasksCount ?? 0) > 0;
     };
+
+    const getProgressCount = () => {
+        return [isKBComplete(), hasSOP(), hasRole(), hasSubmittedTask()].filter(Boolean).length;
+    };
+
+    // Targets for count-up and progress animations (computed from current state)
+    const kbCompletionTarget = getKBCompletion();
+    const progressCountTarget = getProgressCount();
+    const progressPercentTarget = (progressCountTarget / 4) * 100;
+    const rolesCountTarget = stats ? (stats.organizationAnalyses || stats.myAnalyses || stats.totalAnalyses || 0) : 0;
+    const sopsCountTarget = stats ? (stats.organizationSOPs || stats.mySOPs || stats.totalSOPs || 0) : 0;
+    const teamCountTarget = stats ? (stats.organizationMembers || 0) : 0;
+    const conversationsCountTarget = stats ? (stats.organizationConversations || stats.myConversations || stats.totalConversations || 0) : 0;
+
+    const animatedKb = useCountUp(kbCompletionTarget, !isLoadingOnboarding, 700);
+    const animatedProgressCount = useCountUp(progressCountTarget, !isLoadingOnboarding, 600);
+    const animatedProgressPercent = useCountUp(Math.round(progressPercentTarget), !isLoadingOnboarding, 900);
+    const animatedRoles = useCountUp(rolesCountTarget, !!stats && !isLoading, 700);
+    const animatedSops = useCountUp(sopsCountTarget, !!stats && !isLoading, 700);
+    const animatedTeam = useCountUp(teamCountTarget, !!stats && !isLoading, 700);
+    const animatedConversations = useCountUp(conversationsCountTarget, !!stats && !isLoading, 700);
 
     const estimateTimeToComplete = (percentage: number) => {
         const remaining = 100 - percentage;
@@ -347,7 +401,7 @@ export default function DashboardPage() {
             };
 
             return (
-                <Card className="py-2 px-4">
+                <Card className="animate-dashboard-card-in opacity-0 py-2 px-4">
                     <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3 flex-1">
@@ -385,9 +439,11 @@ export default function DashboardPage() {
     };
 
     // Render Setup Progress Component (Redesigned)
-    const renderSetupProgress = () => {
+    const renderSetupProgress = (animatedPercent?: number, animatedCount?: number) => {
         const progressCount = getProgressCount();
         const progressPercent = (progressCount / 4) * 100;
+        const displayPercent = animatedPercent ?? Math.round(progressPercent);
+        const displayCount = animatedCount ?? progressCount;
 
         // Define tasks in order
         const tasks = [
@@ -416,8 +472,8 @@ export default function DashboardPage() {
                 id: "task",
                 title: "Submit Your First Task",
                 subtitle: "Delegate work with AI assistance",
-                completed: hasConversation(),
-                action: () => router.push("/dashboard/ai-business-brain"),
+                completed: hasSubmittedTask(),
+                action: () => router.push("/dashboard/task-intelligence"),
             },
         ];
 
@@ -426,28 +482,28 @@ export default function DashboardPage() {
         const firstIncomplete = firstIncompleteIndex !== -1 ? tasks[firstIncompleteIndex] : null;
 
         return (
-            <Card>
+            <Card className="animate-dashboard-card-in opacity-0" style={{ animationDelay: "200ms" }}>
                 <CardHeader className="pb-0">
                     <div className="flex items-center justify-between">
                         <CardTitle className="text-xl font-bold flex items-center gap-2">
                             <Sparkles className="h-5 w-5" />
                             Getting Started
                         </CardTitle>
-                        <span className="text-2xl font-bold text-[var(--primary-dark)]">
-                            {Math.round(progressPercent)}%
+                        <span className="text-2xl font-bold text-[var(--primary-dark)] tabular-nums">
+                            {displayPercent}%
                         </span>
                     </div>
                     <CardDescription className="text-base">
-                        {progressCount} of 4 complete
+                        {displayCount} of 4 complete
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {/* Gradient Progress Bar */}
+                    {/* Gradient Progress Bar - animates from 0 to value */}
                     <div className="relative h-3 w-full rounded-full bg-muted overflow-hidden">
                         <div
-                            className="h-full rounded-full transition-all duration-500"
+                            className="h-full rounded-full transition-all duration-700 ease-out"
                             style={{
-                                width: `${progressPercent}%`,
+                                width: `${displayPercent}%`,
                                 background: "linear-gradient(90deg, #f0b214 0%, #1374B4 100%)",
                             }}
                         />
@@ -540,7 +596,8 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-3 gap-4">
 
                     <Card
-                        className="cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1 relative"
+                        className="animate-dashboard-card-in opacity-0 cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1 relative"
+                        style={{ animationDelay: "0ms" }}
                         onClick={() => router.push("/dashboard/organization-profile")}
                     >
                         <CardContent className="p-4">
@@ -549,7 +606,7 @@ export default function DashboardPage() {
                                 <LightBulbIcon className="h-5 w-5 text-[var(--primary-dark)]" />
                                 <span className="text-base font-semibold">KB</span>
                             </div>
-                            <div className="text-2xl font-bold mb-1">{Math.round(kbCompletion)}%</div>
+                            <div className="text-2xl font-bold mb-1 tabular-nums">{animatedKb}%</div>
                             <Badge className="text-xs mb-2 bg-[var(--primary-dark)] text-white">
                                 {kbStatus}
                             </Badge>
@@ -557,7 +614,8 @@ export default function DashboardPage() {
                     </Card>
 
                     <Card
-                        className="cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1 relative"
+                        className="animate-dashboard-card-in opacity-0 cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1 relative"
+                        style={{ animationDelay: "80ms" }}
                         onClick={() => router.push("/dashboard/role-builder")}
                     >
                         <CardContent className="p-4">
@@ -566,7 +624,7 @@ export default function DashboardPage() {
                                 <BriefcaseIcon className="h-5 w-5 text-[var(--primary-dark)]" />
                                 <span className="text-base font-semibold">Roles</span>
                             </div>
-                            <div className="text-2xl font-bold mb-1">{rolesCount}</div>
+                            <div className="text-2xl font-bold mb-1 tabular-nums">{animatedRoles}</div>
                             <Badge className={`text-xs mb-2 ${isToolReady('jobDescriptionBuilder') ? 'bg-[var(--primary-dark)] text-white' : 'bg-muted text-muted-foreground'}`}>
                                 {isToolReady('jobDescriptionBuilder') ? '✓ Ready' : 'Not Ready'}
                             </Badge>
@@ -574,7 +632,8 @@ export default function DashboardPage() {
                     </Card>
 
                     <Card
-                        className="cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1 relative"
+                        className="animate-dashboard-card-in opacity-0 cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1 relative"
+                        style={{ animationDelay: "160ms" }}
                         onClick={() => router.push("/dashboard/process-builder")}
                     >
                         <CardContent className="p-4">
@@ -583,7 +642,7 @@ export default function DashboardPage() {
                                 <ClipboardDocumentCheckIcon className="h-5 w-5 text-[var(--primary-dark)]" />
                                 <span className="text-base font-semibold">SOPs</span>
                             </div>
-                            <div className="text-2xl font-bold mb-1">{sopsCount}</div>
+                            <div className="text-2xl font-bold mb-1 tabular-nums">{animatedSops}</div>
                             <Badge className={`text-xs mb-2 ${isToolReady('sopGenerator') ? 'bg-[var(--primary-dark)] text-white' : 'bg-muted text-muted-foreground'}`}>
                                 {sopsCreatedToday > 0 ? `+${sopsCreatedToday} today` : (isToolReady('sopGenerator') ? '✓ Ready' : 'Not Ready')}
                             </Badge>
@@ -593,7 +652,8 @@ export default function DashboardPage() {
 
                 {teamCount > 0 && (
                     <Card
-                        className="cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1"
+                        className="animate-dashboard-card-in opacity-0 cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1"
+                        style={{ animationDelay: "240ms" }}
                         onClick={() => router.push("/dashboard/tenants")}
                     >
                         <CardContent className="p-4">
@@ -601,12 +661,12 @@ export default function DashboardPage() {
                                 <div className="flex items-center gap-4">
                                     <div className="flex items-center gap-2">
                                         <UserGroupIcon className="h-5 w-5 text-[var(--primary-dark)]" />
-                                        <span className="text-base font-semibold">Team: {teamCount} members</span>
+                                        <span className="text-base font-semibold">Team: <span className="tabular-nums">{animatedTeam}</span> members</span>
                                     </div>
                                     {conversationsCount > 0 && (
                                         <div className="flex items-center gap-2">
                                             <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                                            <span className="text-base text-muted-foreground">{conversationsCount} conversations</span>
+                                            <span className="text-base text-muted-foreground tabular-nums">{animatedConversations} conversations</span>
                                         </div>
                                     )}
                                 </div>
@@ -623,16 +683,12 @@ export default function DashboardPage() {
     };
 
     const renderToolsSection = () => {
-        const rolesCount = stats ? (stats.organizationAnalyses || stats.myAnalyses || stats.totalAnalyses || 0) : 0;
-        const sopsCount = stats ? (stats.organizationSOPs || stats.mySOPs || stats.totalSOPs || 0) : 0;
-        const kbCompletion = getKBCompletion();
-
         return (
             <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Your Tools</h3>
                 <div className="grid grid-cols-2 gap-4">
 
-                    <Card className="group cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1">
+                    <Card className="animate-dashboard-card-in opacity-0 group cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1" style={{ animationDelay: "100ms" }}>
                         <CardContent className="p-4">
                             <div className="flex items-start justify-between mb-3">
                                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--accent-strong)] to-[var(--accent-light)]">
@@ -640,7 +696,7 @@ export default function DashboardPage() {
                                 </div>
                             </div>
                             <h4 className="text-base font-semibold mb-1">Role Builder</h4>
-                            <p className="text-sm text-muted-foreground mb-3">{rolesCount} active roles</p>
+                            <p className="text-sm text-muted-foreground mb-3 tabular-nums">{animatedRoles} active roles</p>
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -654,7 +710,7 @@ export default function DashboardPage() {
                         </CardContent>
                     </Card>
 
-                    <Card className="group cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1">
+                    <Card className="animate-dashboard-card-in opacity-0 group cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1" style={{ animationDelay: "180ms" }}>
                         <CardContent className="p-4">
                             <div className="flex items-start justify-between mb-3">
                                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--accent-strong)] to-[var(--accent-light)]">
@@ -662,7 +718,7 @@ export default function DashboardPage() {
                                 </div>
                             </div>
                             <h4 className="text-base font-semibold mb-1">Process Builder</h4>
-                            <p className="text-sm text-muted-foreground mb-3">{sopsCount} SOPs created</p>
+                            <p className="text-sm text-muted-foreground mb-3 tabular-nums">{animatedSops} SOPs created</p>
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -676,7 +732,7 @@ export default function DashboardPage() {
                         </CardContent>
                     </Card>
 
-                    <Card className="group cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1">
+                    <Card className="animate-dashboard-card-in opacity-0 group cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1" style={{ animationDelay: "260ms" }}>
                         <CardContent className="p-4">
                             <div className="flex items-start justify-between mb-3">
                                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--accent-strong)] to-[var(--accent-light)]">
@@ -684,7 +740,7 @@ export default function DashboardPage() {
                                 </div>
                             </div>
                             <h4 className="text-base font-semibold mb-1">AI Business Brain</h4>
-                            <p className="text-sm text-muted-foreground mb-3">24 conversations</p>
+                            <p className="text-sm text-muted-foreground mb-3 tabular-nums">{animatedConversations} conversations</p>
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -698,7 +754,7 @@ export default function DashboardPage() {
                         </CardContent>
                     </Card>
 
-                    <Card className="group cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1">
+                    <Card className="animate-dashboard-card-in opacity-0 group cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-1" style={{ animationDelay: "340ms" }}>
                         <CardContent className="p-4">
                             <div className="flex items-start justify-between mb-3">
                                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--accent-strong)] to-[var(--accent-light)]">
@@ -706,7 +762,7 @@ export default function DashboardPage() {
                                 </div>
                             </div>
                             <h4 className="text-base font-semibold mb-1">Knowledge Base</h4>
-                            <p className="text-sm text-muted-foreground mb-3">{Math.round(kbCompletion)}% complete</p>
+                            <p className="text-sm text-muted-foreground mb-3 tabular-nums">{animatedKb}% complete</p>
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -759,7 +815,7 @@ export default function DashboardPage() {
         const activeCount = teamMembers.length;
 
         return (
-            <Card>
+            <Card className="animate-dashboard-card-in opacity-0" style={{ animationDelay: "120ms" }}>
                 <CardHeader className="pb-0 gap-0">
                     <div className="flex items-center justify-between">
                         <CardTitle className="text-base">Team</CardTitle>
@@ -835,7 +891,7 @@ export default function DashboardPage() {
                     {renderTeamSection()}
 
                     {/* Setup Progress - Replaces Quick Actions */}
-                    {!isLoadingOnboarding && renderSetupProgress()}
+                    {!isLoadingOnboarding && renderSetupProgress(animatedProgressPercent, animatedProgressCount)}
                 </div>
             </div>
 

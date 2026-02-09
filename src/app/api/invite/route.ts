@@ -91,6 +91,8 @@ export async function POST(request: Request) {
       }
     }
 
+    // Only block if there is an active (non-cancelled, non-expired) pending invite.
+    // Cancelled or deleted invites allow the same email to be re-invited to this or another org.
     const existingPendingInvite = await prisma.invitationToken.findFirst({
       where: {
         organizationId: organizationId,

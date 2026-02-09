@@ -59,6 +59,17 @@ export async function GET() {
       (uo: (typeof userOrganizations)[0]) => uo.organizationId
     );
 
+    // Submitted tasks (task-intelligence): non-draft, actually submitted
+    let submittedTasksCount = 0;
+    if (typeof (prisma as any).task !== "undefined") {
+      submittedTasksCount = await (prisma as any).task.count({
+        where: {
+          userOrganizationId: { in: userOrganizationIds },
+          status: "SUBMITTED",
+        },
+      });
+    }
+
     let stats: any = {};
 
     if (user.globalRole === "SUPERADMIN") {
@@ -100,6 +111,7 @@ export async function GET() {
         totalKnowledgeBases,
         pendingInvitations,
         totalConversations,
+        submittedTasksCount,
       };
     } else if (
       userOrganizations.some(
@@ -168,6 +180,7 @@ export async function GET() {
         organizationKnowledgeBases,
         pendingInvitations,
         organizationConversations,
+        submittedTasksCount,
       };
     } else {
       // Get knowledge base for conversation count
@@ -204,6 +217,7 @@ export async function GET() {
         myAnalyses,
         mySOPs,
         myConversations,
+        submittedTasksCount,
       };
     }
 

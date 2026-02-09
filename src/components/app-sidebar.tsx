@@ -243,7 +243,7 @@ export function AppSidebar() {
                             <SidebarGroupContent>
                                 <SidebarMenu>
                                     {superAdminItems.map((item) => (
-                                        <SidebarMenuItem key={item.title}>
+                                        <SidebarMenuItem key={`superadmin-${item.url}`}>
                                             <SidebarMenuButton
                                                 asChild
                                                 isActive={isActive(item.url)}
@@ -252,7 +252,7 @@ export function AppSidebar() {
                                                     : "text-white hover:bg-white/10 hover:text-white [&>a>svg]:text-white [&>a>span]:text-white"
                                                     }`}
                                             >
-                                                <Link href={item.url}>
+                                                <Link href={item.url} prefetch={item.url === "/dashboard/tenants" ? false : undefined}>
                                                     <item.icon />
                                                     <span>{item.title}</span>
                                                 </Link>
@@ -270,7 +270,7 @@ export function AppSidebar() {
                             <SidebarGroupContent>
                                 <SidebarMenu>
                                     {adminItems.map((item) => (
-                                        <SidebarMenuItem key={item.title}>
+                                        <SidebarMenuItem key={`admin-${item.url}`}>
                                             <SidebarMenuButton
                                                 asChild
                                                 isActive={isActive(item.url)}
@@ -279,7 +279,7 @@ export function AppSidebar() {
                                                     : "text-white hover:bg-white/10 hover:text-white [&>a>svg]:text-white [&>a>span]:text-white"
                                                     }`}
                                             >
-                                                <Link href={item.url}>
+                                                <Link href={item.url} prefetch={item.url === "/dashboard/members" ? false : undefined}>
                                                     <item.icon />
                                                     <span>{item.title}</span>
                                                 </Link>

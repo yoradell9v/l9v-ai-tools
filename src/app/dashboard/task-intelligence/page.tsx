@@ -24,7 +24,7 @@ import {
     Plus,
     Loader2,
     ChevronRight,
-    CheckCircle2,
+    Send,
     Search,
     PenTool,
     Headset,
@@ -32,12 +32,12 @@ import {
     ChevronDown,
     ChevronUp,
     LayoutGrid,
-    Table2,
     Calendar,
     Link2,
     X,
     FileStack,
     AlertCircle,
+    ArrowUpDown,
 } from "lucide-react";
 import {
     ChartPieIcon,
@@ -47,6 +47,9 @@ import {
     MegaphoneIcon,
     ShareIcon,
     VideoCameraIcon,
+    ClipboardDocumentCheckIcon,
+    RectangleStackIcon,
+    XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useSpeechRecognition } from "@/components/chat/useSpeechRecognition";
 import { toast } from "sonner";
@@ -165,7 +168,7 @@ function ReviewField({
 }) {
     return (
         <div>
-            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className="text-base text-muted-foreground font-medium">{label}</p>
             <div className={className}>{children}</div>
         </div>
     );
@@ -180,6 +183,7 @@ export default function TaskIntelligencePage() {
     const [isCreating, setIsCreating] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
     const [isUsingTemplate, setIsUsingTemplate] = useState(false);
+    const [isLoadingTask, setIsLoadingTask] = useState(false);
 
     const [editTitle, setEditTitle] = useState("");
     const [editCategory, setEditCategory] = useState("");
@@ -198,6 +202,9 @@ export default function TaskIntelligencePage() {
     const [selectedTemplateCategory, setSelectedTemplateCategory] = useState<string>("all");
     const [expandedTemplateCategories, setExpandedTemplateCategories] = useState<Set<string>>(new Set());
     const [selectedTemplateForDialog, setSelectedTemplateForDialog] = useState<TemplateLibraryItem | null>(null);
+    const [recentTaskSearch, setRecentTaskSearch] = useState("");
+    const [recentTasksSortOrder, setRecentTasksSortOrder] = useState<"desc" | "asc">("desc");
+    const [recentTasksOpen, setRecentTasksOpen] = useState(true);
 
     const fetchRecentTasks = useCallback(async () => {
         try {
@@ -342,6 +349,30 @@ export default function TaskIntelligencePage() {
         }
     };
 
+    const handleSelectRecentTask = async (taskId: string, status: TaskStatus) => {
+        setIsLoadingTask(true);
+        try {
+            const res = await fetch(`/api/task-intelligence/draft/${taskId}`);
+            const json = await res.json();
+            if (!res.ok) {
+                toast.error(json.error || "Could not load task.");
+                return;
+            }
+            const task = json.data as Task;
+            setCurrentTask(task);
+            setActiveTab("new-task");
+            if (status === "DRAFT") {
+                setCurrentStage(1);
+            } else {
+                setCurrentStage(2);
+            }
+        } catch {
+            toast.error("Could not load task.");
+        } finally {
+            setIsLoadingTask(false);
+        }
+    };
+
     const handleDetachTemplate = async () => {
         if (!currentTask) return;
         try {
@@ -420,6 +451,24 @@ export default function TaskIntelligencePage() {
         setList(list.filter((_, i) => i !== index));
     };
 
+    const filteredRecentTasks = React.useMemo(() => {
+        const q = recentTaskSearch.trim().toLowerCase();
+        let list = recentTasks;
+        if (q) {
+            list = list.filter(
+                (t) =>
+                    t.title.toLowerCase().includes(q) ||
+                    t.category.toLowerCase().includes(q)
+            );
+        }
+        list = [...list].sort((a, b) => {
+            const da = new Date(a.createdAt).getTime();
+            const db = new Date(b.createdAt).getTime();
+            return recentTasksSortOrder === "desc" ? db - da : da - db;
+        });
+        return list;
+    }, [recentTasks, recentTaskSearch, recentTasksSortOrder]);
+
     const displayTask = currentTask
         ? {
             ...currentTask,
@@ -445,7 +494,7 @@ export default function TaskIntelligencePage() {
             <div className="transition-all duration-300 ease-in-out flex-1 min-h-0 flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full">
                 <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col flex-1 min-h-0 overflow-hidden">
                     <div className="flex-shrink-0 mb-6">
-                        <h1 className="text-2xl font-semibold mb-1">Task Intelligence</h1>
+                        <h1 className="text-2xl font-bold mb-1">Task Intelligence</h1>
                         <p className="text-base text-muted-foreground">
                             Describe what you need done or browse templates
                         </p>
@@ -462,7 +511,7 @@ export default function TaskIntelligencePage() {
                                 New Task
                             </TabsTrigger>
                             <TabsTrigger value="templates" className="gap-2">
-                                <Table2 className="h-4 w-4" />
+                                <RectangleStackIcon className="h-4 w-4" />
                                 Template Library
                             </TabsTrigger>
                         </TabsList>
@@ -480,7 +529,7 @@ export default function TaskIntelligencePage() {
                                                 }`}
                                         >
                                             <span
-                                                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-medium ${currentStage === i
+                                                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base font-medium ${currentStage === i
                                                     ? "bg-[var(--primary-dark)] text-white"
                                                     : "bg-muted text-muted-foreground"
                                                     }`}
@@ -488,7 +537,7 @@ export default function TaskIntelligencePage() {
                                                 {i + 1}
                                             </span>
                                             <span
-                                                className={`text-sm font-medium whitespace-nowrap ${currentStage === i
+                                                className={`text-base font-medium whitespace-nowrap ${currentStage === i
                                                     ? "text-[var(--primary-dark)]"
                                                     : "text-muted-foreground"
                                                     }`}
@@ -509,7 +558,7 @@ export default function TaskIntelligencePage() {
                             {currentStage === 0 && (
                                 <div className="flex flex-col flex-1 min-h-0 gap-6">
                                     <div className="flex-shrink-0 rounded-lg border border-border/60 bg-muted/20 p-4 space-y-4">
-                                        <h2 className="text-lg font-medium mb-3">What do you need done?</h2>
+                                        <h2 className="text-lg font-bold mb-3">What do you need done?</h2>
                                         <div className="relative">
                                             <Textarea
                                                 placeholder="Describe your task in detail. You can type or use the mic to speak."
@@ -576,63 +625,143 @@ export default function TaskIntelligencePage() {
                                         </div>
                                     </div>
 
-                                    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                                        <h3 className="text-base font-medium mb-3 flex-shrink-0">Recent Tasks</h3>
-                                        <div className="flex-1 min-h-0 overflow-y-auto">
-                                            {recentTasks.length === 0 ? (
-                                                <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 p-8 text-center">
-                                                    <p className="text-base font-medium text-muted-foreground">
-                                                        No tasks yet
-                                                    </p>
-                                                    <p className="text-sm text-muted-foreground mt-1">
-                                                        Describe what you need above and click Create with AI
-                                                    </p>
+                                    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-muted/10">
+                                        <div className="flex flex-shrink-0 items-center justify-between gap-3 py-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setRecentTasksOpen((o) => !o)}
+                                                className="flex items-center gap-2 rounded-md py-1 pr-2 text-left text-base font-semibold transition-colors hover:bg-muted/50 focus-visible:outline focus-visible:ring-2 focus-visible:ring-ring"
+                                                aria-expanded={recentTasksOpen}
+                                            >
+                                                <ChevronDown
+                                                    className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${recentTasksOpen ? "" : "-rotate-90"}`}
+                                                />
+                                                <h3>Recent Tasks</h3>
+                                            </button>
+                                            <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                                <div className="relative w-[180px]">
+                                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                                    <Input
+                                                        placeholder="Search tasks..."
+                                                        value={recentTaskSearch}
+                                                        onChange={(e) => setRecentTaskSearch(e.target.value)}
+                                                        className="pl-8 text-base h-9"
+                                                    />
                                                 </div>
-                                            ) : (
-                                                <ul className="space-y-2">
-                                                    {recentTasks.map((t) => (
-                                                        <li key={t.id}>
-                                                            <Card>
-                                                                <CardContent className="py-3 px-4 flex items-center justify-between gap-2">
-                                                                    <div className="min-w-0">
-                                                                        <p className="font-medium truncate">{t.title}</p>
-                                                                        <p className="text-sm text-muted-foreground">
-                                                                            {t.category} · {t.status.toLowerCase()} ·{" "}
-                                                                            {new Date(t.createdAt).toLocaleDateString()}
-                                                                        </p>
-                                                                    </div>
-                                                                    <span
-                                                                        className={`shrink-0 text-xs px-2 py-0.5 rounded ${t.status === "SUBMITTED"
-                                                                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-                                                                            : "bg-muted text-muted-foreground"
-                                                                            }`}
-                                                                    >
-                                                                        {t.status}
-                                                                    </span>
-                                                                </CardContent>
-                                                            </Card>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            )}
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="gap-1.5 border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10 h-9"
+                                                    onClick={() =>
+                                                        setRecentTasksSortOrder((o) => (o === "desc" ? "asc" : "desc"))
+                                                    }
+                                                >
+                                                    <ArrowUpDown className="h-4 w-4" />
+                                                    {recentTasksSortOrder === "desc" ? "Newest" : "Oldest"}
+                                                </Button>
+                                            </div>
                                         </div>
+                                        {recentTasksOpen && (
+                                            <div className="flex-1 min-h-0 overflow-y-auto">
+                                                {recentTasks.length === 0 ? (
+                                                    <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 p-8 text-center">
+                                                        <p className="text-base font-medium text-muted-foreground">
+                                                            No tasks yet
+                                                        </p>
+                                                        <p className="text-base text-muted-foreground mt-1">
+                                                            Describe what you need above and click Create with AI
+                                                        </p>
+                                                    </div>
+                                                ) : filteredRecentTasks.length === 0 ? (
+                                                    <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 p-6 text-center">
+                                                        <p className="text-base font-medium text-muted-foreground">
+                                                            No tasks match your search
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    <ul className="space-y-2 pr-1">
+                                                        {filteredRecentTasks.map((t) => (
+                                                            <li key={t.id}>
+                                                                <Card
+                                                                    className="cursor-pointer transition-colors hover:bg-muted/50 border-border/60"
+                                                                    onClick={() => handleSelectRecentTask(t.id, t.status)}
+                                                                >
+                                                                    <CardContent className="py-3 px-4 flex items-center justify-between gap-2">
+                                                                        <div className="flex items-center gap-3 min-w-0">
+                                                                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-[var(--primary-dark)]/10 text-[var(--primary-dark)]">
+                                                                                <RectangleStackIcon className="h-5 w-5" />
+                                                                            </span>
+                                                                            <div className="min-w-0">
+                                                                                <p className="font-bold truncate">{t.title}</p>
+                                                                                <p className="text-base text-muted-foreground">
+                                                                                    {t.category} · {t.status.toLowerCase()} ·{" "}
+                                                                                    {new Date(t.createdAt).toLocaleDateString()}
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <span
+                                                                            className={`shrink-0 text-xs px-2 py-0.5 rounded ${t.status === "DRAFT"
+                                                                                ? "text-[color:var(--accent-strong)] bg-[color:var(--accent-strong)]/10"
+                                                                                : "text-[var(--primary-dark)] bg-[var(--primary-dark)]/10"
+                                                                                }`}
+                                                                        >
+                                                                            {t.status}
+                                                                        </span>
+                                                                    </CardContent>
+                                                                </Card>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {currentStage === 1 && !currentTask && (
+                                <div className="flex flex-col flex-1 min-h-0 gap-6">
+                                    <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 p-8 flex flex-col items-center justify-center text-center gap-4 flex-1 min-h-0">
+                                        <ClipboardDocumentCheckIcon className="h-12 w-12 text-muted-foreground" />
+                                        <p className="text-base font-medium text-muted-foreground">
+                                            Create task with AI or Start with a task template
+                                        </p>
+                                        <Button
+                                            variant="outline"
+                                            className="gap-2 border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10"
+                                            onClick={() => setCurrentStage(0)}
+                                        >
+                                            Go to Draft
+                                        </Button>
                                     </div>
                                 </div>
                             )}
 
                             {currentStage === 1 && currentTask && (
                                 <div className="flex flex-col flex-1 min-h-0 gap-6">
-                                    <Card className="border bg-card flex-1 min-h-0 flex flex-col overflow-hidden">
-                                        <CardContent className="pt-6 space-y-5 flex-1 min-h-0 overflow-y-auto">
-                                            <div className="flex items-center gap-2">
-                                                <FileStack className="h-5 w-5 text-muted-foreground shrink-0" />
-                                                <h2 className="text-lg font-medium">Edit Task Details</h2>
+                                    <Card className="border border-border/60 rounded-lg flex-1 min-h-0 flex flex-col overflow-hidden">
+                                        <CardContent className="pt-4 pb-4 px-6 space-y-5 flex-1 min-h-0 overflow-y-auto">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <FileStack className="h-5 w-5 text-muted-foreground shrink-0" />
+                                                    <h2 className="text-lg font-bold">Edit Task Details</h2>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="gap-2 text-muted-foreground shrink-0"
+                                                    onClick={() => setCurrentStage(0)}
+                                                >
+                                                    Go to Draft
+                                                </Button>
                                             </div>
 
                                             {(currentTask.matchedTemplateId ?? currentTask.matchedTemplate) && (
                                                 <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50">
                                                     <FileStack className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                                                    <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                                                    <span className="text-base font-medium text-amber-800 dark:text-amber-200">
                                                         Using template: {(currentTask.matchedTemplate?.title ?? currentTask.matchReason?.replace(/^Matched:\s*/i, "")) || "Template"}
                                                     </span>
                                                     <Button
@@ -649,14 +778,14 @@ export default function TaskIntelligencePage() {
                                             )}
 
                                             <div>
-                                                <p className="text-sm font-medium text-muted-foreground mb-1.5">Task Category</p>
+                                                <p className="text-base font-medium text-muted-foreground mb-1.5">Task Category</p>
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     {(() => {
                                                         const CatIcon = TEMPLATE_CATEGORY_ICONS[editCategory] ?? CodeBracketIcon;
                                                         const cardBox = TEMPLATE_CATEGORY_CARD_BOX[editCategory] ?? DEFAULT_CARD_BOX;
                                                         return (
                                                             <span
-                                                                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium ${cardBox}`}
+                                                                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-base font-medium ${cardBox}`}
                                                             >
                                                                 <CatIcon className="h-4 w-4 shrink-0" />
                                                                 {editCategory || "—"}
@@ -692,13 +821,13 @@ export default function TaskIntelligencePage() {
                                                 </div>
                                             </div>
 
-                                            <div className="rounded-lg border border-border/60 overflow-hidden">
+                                            <div className="rounded-lg overflow-hidden">
                                                 <button
                                                     type="button"
                                                     className="w-full flex items-center justify-between gap-2 p-3 text-left hover:bg-muted/50 transition-colors"
                                                     onClick={() => setAssetsSectionExpanded((b) => !b)}
                                                 >
-                                                    <span className="font-medium text-sm">Assets & Resources</span>
+                                                    <span className="font-bold text-base">Assets & Resources</span>
                                                     {assetsSectionExpanded ? (
                                                         <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
                                                     ) : (
@@ -706,14 +835,14 @@ export default function TaskIntelligencePage() {
                                                     )}
                                                 </button>
                                                 {assetsSectionExpanded && (
-                                                    <div className="px-3 pb-4 space-y-3 border-t border-border/60 pt-3">
+                                                    <div className="px-3 pb-4 space-y-3 pt-3">
                                                         <div className="flex gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-destructive dark:bg-destructive/20 dark:border-destructive/30 dark:text-destructive">
                                                             <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                                                            <p className="text-sm">
+                                                            <p className="text-base">
                                                                 Do NOT include passwords here. Your PM will request access securely via your project management tool after task assignment.
                                                             </p>
                                                         </div>
-                                                        <p className="text-sm text-muted-foreground">
+                                                        <p className="text-base text-muted-foreground">
                                                             Add links to assets, brand boards, shared folders, or tools needed for this task.
                                                         </p>
                                                         <div className="space-y-2">
@@ -725,7 +854,7 @@ export default function TaskIntelligencePage() {
                                                                             updateList(editAssetLinks, setEditAssetLinks, i, e.target.value)
                                                                         }
                                                                         placeholder="https://..."
-                                                                        className="font-mono text-sm"
+                                                                        className="font-mono text-base"
                                                                     />
                                                                     <Button
                                                                         type="button"
@@ -736,7 +865,7 @@ export default function TaskIntelligencePage() {
                                                                         }
                                                                         disabled={editAssetLinks.length <= 1}
                                                                     >
-                                                                        <Trash2 className="h-4 w-4" />
+                                                                        <XMarkIcon className="h-4 w-4" />
                                                                     </Button>
                                                                 </div>
                                                             ))}
@@ -755,158 +884,166 @@ export default function TaskIntelligencePage() {
                                                 )}
                                             </div>
 
-                                            <div className="pt-2 border-t border-border/60">
-                                                <p className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                                            <div className="pt-2">
+                                                <p className="text-base font-bold text-muted-foreground mb-2 flex items-center gap-1.5">
                                                     <Sparkles className="h-4 w-4" />
                                                     AI-Enhanced Details
                                                 </p>
                                             </div>
                                             <div className="space-y-4">
-                                        <div>
-                                            <Label htmlFor="edit-title">Title</Label>
-                                            <Input
-                                                id="edit-title"
-                                                value={editTitle}
-                                                onChange={(e) => setEditTitle(e.target.value)}
-                                                className="mt-1"
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label htmlFor="edit-category">Category</Label>
-                                            <Input
-                                                id="edit-category"
-                                                value={editCategory}
-                                                onChange={(e) => setEditCategory(e.target.value)}
-                                                className="mt-1"
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label htmlFor="edit-description">Description</Label>
-                                            <Textarea
-                                                id="edit-description"
-                                                value={editDescription}
-                                                onChange={(e) => setEditDescription(e.target.value)}
-                                                className="mt-1 min-h-[80px]"
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label htmlFor="edit-considerations">Key considerations</Label>
-                                            <Textarea
-                                                id="edit-considerations"
-                                                value={editKeyConsiderations}
-                                                onChange={(e) => setEditKeyConsiderations(e.target.value)}
-                                                className="mt-1 min-h-[60px]"
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label className="mb-2 block">Subtasks</Label>
-                                            <div className="space-y-2">
-                                                {editSubtasks.map((s, i) => (
-                                                    <div key={i} className="flex gap-2">
-                                                        <Input
-                                                            value={s}
-                                                            onChange={(e) =>
-                                                                updateList(editSubtasks, setEditSubtasks, i, e.target.value)
-                                                            }
-                                                            placeholder={`Subtask ${i + 1}`}
-                                                        />
+                                                <div>
+                                                    <Label htmlFor="edit-title">Title</Label>
+                                                    <Input
+                                                        id="edit-title"
+                                                        value={editTitle}
+                                                        onChange={(e) => setEditTitle(e.target.value)}
+                                                        className="mt-1"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label htmlFor="edit-category">Category</Label>
+                                                    <Input
+                                                        id="edit-category"
+                                                        value={editCategory}
+                                                        onChange={(e) => setEditCategory(e.target.value)}
+                                                        className="mt-1"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label htmlFor="edit-description">Description</Label>
+                                                    <Textarea
+                                                        id="edit-description"
+                                                        value={editDescription}
+                                                        onChange={(e) => setEditDescription(e.target.value)}
+                                                        className="mt-1 min-h-[80px]"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label htmlFor="edit-considerations">Key considerations</Label>
+                                                    <Textarea
+                                                        id="edit-considerations"
+                                                        value={editKeyConsiderations}
+                                                        onChange={(e) => setEditKeyConsiderations(e.target.value)}
+                                                        className="mt-1 min-h-[60px]"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label className="mb-2 block">Subtasks</Label>
+                                                    <div className="space-y-2">
+                                                        {editSubtasks.map((s, i) => (
+                                                            <div key={i} className="flex gap-2">
+                                                                <Input
+                                                                    value={s}
+                                                                    onChange={(e) =>
+                                                                        updateList(editSubtasks, setEditSubtasks, i, e.target.value)
+                                                                    }
+                                                                    placeholder={`Subtask ${i + 1}`}
+                                                                />
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={() => removeFromList(editSubtasks, setEditSubtasks, i)}
+                                                                    disabled={editSubtasks.length <= 1}
+                                                                >
+                                                                    <XMarkIcon className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        ))}
                                                         <Button
                                                             type="button"
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            onClick={() => removeFromList(editSubtasks, setEditSubtasks, i)}
-                                                            disabled={editSubtasks.length <= 1}
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="gap-1"
+                                                            onClick={() => addToList(editSubtasks, setEditSubtasks)}
                                                         >
-                                                            <Trash2 className="h-4 w-4" />
+                                                            <Plus className="h-4 w-4" />
+                                                            Add subtask
                                                         </Button>
                                                     </div>
-                                                ))}
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="gap-1"
-                                                    onClick={() => addToList(editSubtasks, setEditSubtasks)}
-                                                >
-                                                    <Plus className="h-4 w-4" />
-                                                    Add subtask
-                                                </Button>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <Label className="mb-2 block">Deliverables</Label>
-                                            <div className="space-y-2">
-                                                {editDeliverables.map((d, i) => (
-                                                    <div key={i} className="flex gap-2">
-                                                        <Input
-                                                            value={d}
-                                                            onChange={(e) =>
-                                                                updateList(editDeliverables, setEditDeliverables, i, e.target.value)
-                                                            }
-                                                            placeholder={`Deliverable ${i + 1}`}
-                                                        />
+                                                </div>
+                                                <div>
+                                                    <Label className="mb-2 block">Deliverables</Label>
+                                                    <div className="space-y-2">
+                                                        {editDeliverables.map((d, i) => (
+                                                            <div key={i} className="flex gap-2">
+                                                                <Input
+                                                                    value={d}
+                                                                    onChange={(e) =>
+                                                                        updateList(editDeliverables, setEditDeliverables, i, e.target.value)
+                                                                    }
+                                                                    placeholder={`Deliverable ${i + 1}`}
+                                                                />
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={() =>
+                                                                        removeFromList(editDeliverables, setEditDeliverables, i)
+                                                                    }
+                                                                    disabled={editDeliverables.length <= 1}
+                                                                >
+                                                                    <XMarkIcon className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        ))}
                                                         <Button
                                                             type="button"
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            onClick={() =>
-                                                                removeFromList(editDeliverables, setEditDeliverables, i)
-                                                            }
-                                                            disabled={editDeliverables.length <= 1}
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="gap-1"
+                                                            onClick={() => addToList(editDeliverables, setEditDeliverables)}
                                                         >
-                                                            <Trash2 className="h-4 w-4" />
+                                                            <Plus className="h-4 w-4" />
+                                                            Add deliverable
                                                         </Button>
                                                     </div>
-                                                ))}
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="gap-1"
-                                                    onClick={() => addToList(editDeliverables, setEditDeliverables)}
-                                                >
-                                                    <Plus className="h-4 w-4" />
-                                                    Add deliverable
-                                                </Button>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <Label className="mb-2 block">Quality control checklist</Label>
-                                            <div className="space-y-2">
-                                                {editQC.map((q, i) => (
-                                                    <div key={i} className="flex gap-2">
-                                                        <Input
-                                                            value={q}
-                                                            onChange={(e) => updateList(editQC, setEditQC, i, e.target.value)}
-                                                            placeholder={`Check ${i + 1}`}
-                                                        />
+                                                </div>
+                                                <div>
+                                                    <Label className="mb-2 block">Quality control checklist</Label>
+                                                    <div className="space-y-2">
+                                                        {editQC.map((q, i) => (
+                                                            <div key={i} className="flex gap-2">
+                                                                <Input
+                                                                    value={q}
+                                                                    onChange={(e) => updateList(editQC, setEditQC, i, e.target.value)}
+                                                                    placeholder={`Check ${i + 1}`}
+                                                                />
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={() => removeFromList(editQC, setEditQC, i)}
+                                                                    disabled={editQC.length <= 1}
+                                                                >
+                                                                    <XMarkIcon className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        ))}
                                                         <Button
                                                             type="button"
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            onClick={() => removeFromList(editQC, setEditQC, i)}
-                                                            disabled={editQC.length <= 1}
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="gap-1"
+                                                            onClick={() => addToList(editQC, setEditQC)}
                                                         >
-                                                            <Trash2 className="h-4 w-4" />
+                                                            <Plus className="h-4 w-4" />
+                                                            Add item
                                                         </Button>
                                                     </div>
-                                                ))}
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="gap-1"
-                                                    onClick={() => addToList(editQC, setEditQC)}
-                                                >
-                                                    <Plus className="h-4 w-4" />
-                                                    Add item
-                                                </Button>
-                                            </div>
-                                        </div>
+                                                </div>
                                             </div>
                                         </CardContent>
                                     </Card>
-                                    <div className="flex-shrink-0">
+                                    <div className="flex gap-2 flex-shrink-0">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="gap-2"
+                                            onClick={() => setCurrentStage(0)}
+                                        >
+                                            Go to Draft
+                                        </Button>
                                         <Button
                                             onClick={handleContinueToReview}
                                             disabled={isUpdating}
@@ -923,11 +1060,29 @@ export default function TaskIntelligencePage() {
                                 </div>
                             )}
 
+                            {currentStage === 2 && !displayTask && (
+                                <div className="flex flex-col flex-1 min-h-0 gap-6">
+                                    <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 p-8 flex flex-col items-center justify-center text-center gap-4 flex-1 min-h-0">
+                                        <ClipboardDocumentCheckIcon className="h-12 w-12 text-muted-foreground" />
+                                        <p className="text-base font-medium text-muted-foreground">
+                                            Create task with AI or Start with a task template
+                                        </p>
+                                        <Button
+                                            variant="outline"
+                                            className="gap-2 border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10"
+                                            onClick={() => setCurrentStage(0)}
+                                        >
+                                            Go to Draft
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
                             {currentStage === 2 && displayTask && (
                                 <div className="flex flex-col flex-1 min-h-0 gap-6">
-                                    <h2 className="text-lg font-medium flex-shrink-0">Review & Submit</h2>
-                                    <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                                        <CardContent className="pt-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
+                                    <h2 className="text-lg font-bold flex-shrink-0">Review & Submit</h2>
+                                    <Card className="border border-border/60 rounded-lg flex-1 min-h-0 flex flex-col overflow-hidden">
+                                        <CardContent className="pt-6 pb-4 px-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
                                             <ReviewField label="Title">
                                                 <p className="font-medium">{displayTask.title}</p>
                                             </ReviewField>
@@ -994,7 +1149,15 @@ export default function TaskIntelligencePage() {
                                     </Card>
                                     <div className="flex gap-2 flex-shrink-0">
                                         <Button
+                                            variant="ghost"
+                                            className="gap-2 text-muted-foreground"
+                                            onClick={() => setCurrentStage(0)}
+                                        >
+                                            Go to Draft
+                                        </Button>
+                                        <Button
                                             variant="outline"
+                                            className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10"
                                             onClick={() => setCurrentStage(1)}
                                         >
                                             Back
@@ -1003,7 +1166,7 @@ export default function TaskIntelligencePage() {
                                             onClick={handleSubmitTask}
                                             className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white gap-2"
                                         >
-                                            <CheckCircle2 className="h-4 w-4" />
+                                            <Send className="h-4 w-4" />
                                             Submit Task
                                         </Button>
                                     </div>
@@ -1063,7 +1226,7 @@ export default function TaskIntelligencePage() {
                                                         <button
                                                             type="button"
                                                             onClick={() => setSelectedTemplateCategory("all")}
-                                                            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors inline-flex items-center gap-2 ${selectedTemplateCategory === "all"
+                                                            className={`rounded-full px-3 py-1.5 text-base font-medium transition-colors inline-flex items-center gap-2 ${selectedTemplateCategory === "all"
                                                                 ? "bg-[var(--primary-dark)] text-white"
                                                                 : "bg-muted/80 text-muted-foreground hover:bg-muted"
                                                                 }`}
@@ -1079,7 +1242,7 @@ export default function TaskIntelligencePage() {
                                                                     key={cat}
                                                                     type="button"
                                                                     onClick={() => setSelectedTemplateCategory(cat)}
-                                                                    className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors inline-flex items-center gap-2 ${selectedTemplateCategory === cat
+                                                                    className={`rounded-full px-3 py-1.5 text-base font-medium transition-colors inline-flex items-center gap-2 ${selectedTemplateCategory === cat
                                                                         ? "bg-[var(--primary-dark)] text-white"
                                                                         : "bg-muted/80 hover:bg-muted"
                                                                         }`}
@@ -1128,7 +1291,7 @@ export default function TaskIntelligencePage() {
                                                                             </span>
                                                                             <div className="flex-1 min-w-0">
                                                                                 <p className="font-medium">{category}</p>
-                                                                                <p className="text-sm text-muted-foreground">
+                                                                                <p className="text-base text-muted-foreground">
                                                                                     {categoryTemplates.length} template
                                                                                     {categoryTemplates.length !== 1 ? "s" : ""}
                                                                                 </p>
@@ -1158,7 +1321,7 @@ export default function TaskIntelligencePage() {
                                                                                             <h3 className="font-medium line-clamp-2 mb-2">
                                                                                                 {t.title}
                                                                                             </h3>
-                                                                                            <p className="text-sm text-muted-foreground line-clamp-2 flex-1">
+                                                                                            <p className="text-base text-muted-foreground line-clamp-2 flex-1">
                                                                                                 {t.description || "—"}
                                                                                             </p>
                                                                                             <p className="text-xs text-muted-foreground mt-2">
@@ -1212,30 +1375,30 @@ export default function TaskIntelligencePage() {
                                 <div className="flex-1 min-h-0 overflow-y-auto">
                                     <div className="space-y-5 pr-3">
                                         <div>
-                                            <p className="text-sm font-semibold text-foreground mb-1.5">Description</p>
-                                            <p className="text-sm whitespace-pre-wrap text-muted-foreground">{selectedTemplateForDialog.description || "—"}</p>
+                                            <p className="text-base font-semibold text-foreground mb-1.5">Description</p>
+                                            <p className="text-base whitespace-pre-wrap text-muted-foreground">{selectedTemplateForDialog.description || "—"}</p>
                                         </div>
                                         <div>
-                                            <p className="text-sm font-semibold text-foreground mb-1.5">Subtasks</p>
+                                            <p className="text-base font-semibold text-foreground mb-1.5">Subtasks</p>
                                             {subtasks.length > 0 ? (
                                                 <ul className="space-y-2 list-none p-0 m-0">
                                                     {subtasks.map((s, i) => (
                                                         <li key={i} className="flex gap-2 items-start">
-                                                            <span className="flex h-6 w-6 shrink-0 items-center justify-center text-sm font-medium text-muted-foreground">
+                                                            <span className="flex h-6 w-6 shrink-0 items-center justify-center text-base font-medium text-muted-foreground">
                                                                 {i + 1}.
                                                             </span>
-                                                            <div className="flex-1 min-w-0 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm">
+                                                            <div className="flex-1 min-w-0 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-base">
                                                                 {s}
                                                             </div>
                                                         </li>
                                                     ))}
                                                 </ul>
                                             ) : (
-                                                <p className="text-sm text-muted-foreground">—</p>
+                                                <p className="text-base text-muted-foreground">—</p>
                                             )}
                                         </div>
                                         <div>
-                                            <p className="text-sm font-semibold text-foreground mb-1.5">Deliverables</p>
+                                            <p className="text-base font-semibold text-foreground mb-1.5">Deliverables</p>
                                             {deliverables.length > 0 ? (
                                                 <ul className="space-y-2 list-none p-0 m-0">
                                                     {deliverables.map((d, i) => (
@@ -1244,18 +1407,18 @@ export default function TaskIntelligencePage() {
                                                                 className="flex h-4 w-4 shrink-0 rounded-full border-2 border-muted-foreground/40 mt-0.5"
                                                                 aria-hidden
                                                             />
-                                                            <div className="flex-1 min-w-0 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm">
+                                                            <div className="flex-1 min-w-0 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-base">
                                                                 {d}
                                                             </div>
                                                         </li>
                                                     ))}
                                                 </ul>
                                             ) : (
-                                                <p className="text-sm text-muted-foreground">—</p>
+                                                <p className="text-base text-muted-foreground">—</p>
                                             )}
                                         </div>
                                         <div>
-                                            <p className="text-sm font-semibold text-foreground mb-1.5">Quality control checklist</p>
+                                            <p className="text-base font-semibold text-foreground mb-1.5">Quality control checklist</p>
                                             {qcList.length > 0 ? (
                                                 <ul className="space-y-2 list-none p-0 m-0">
                                                     {qcList.map((q, i) => (
@@ -1264,14 +1427,14 @@ export default function TaskIntelligencePage() {
                                                                 className="flex h-4 w-4 shrink-0 rounded-full border-2 border-muted-foreground/40 mt-0.5"
                                                                 aria-hidden
                                                             />
-                                                            <div className="flex-1 min-w-0 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm">
+                                                            <div className="flex-1 min-w-0 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-base">
                                                                 {q}
                                                             </div>
                                                         </li>
                                                     ))}
                                                 </ul>
                                             ) : (
-                                                <p className="text-sm text-muted-foreground">—</p>
+                                                <p className="text-base text-muted-foreground">—</p>
                                             )}
                                         </div>
                                     </div>

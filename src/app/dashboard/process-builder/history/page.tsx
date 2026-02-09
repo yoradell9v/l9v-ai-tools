@@ -300,7 +300,7 @@ export default function SOPHistoryPage() {
             </div>
             <div className="h-[calc(100vh-57px)] flex flex-col overflow-hidden">
                 <div className="w-full max-w-full py-6 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col flex-1 min-h-0 overflow-hidden">
-                    <header className="flex-shrink-0 space-y-4 mb-4">
+                    <header className="flex-shrink-0 space-y-4 mb-4 animate-section-in">
                         <div className="flex items-center gap-4">
                             <Button
                                 variant="ghost"
@@ -322,7 +322,7 @@ export default function SOPHistoryPage() {
                         </div>
                     </header>
 
-                    <div className="flex-shrink-0 space-y-4 mb-4">
+                    <div className="flex-shrink-0 space-y-4 mb-4 animate-section-in" style={{ animationDelay: "80ms" }}>
                         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <span className="text-base text-muted-foreground">View:</span>
@@ -469,13 +469,17 @@ export default function SOPHistoryPage() {
                     {!isLoading && viewMode === "grouped" && filteredGroups.length > 0 && (
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                                {filteredGroups.map((group) => {
+                                {filteredGroups.map((group, index) => {
                                     const isExpanded = expandedGroups.has(group.rootSOPId);
                                     const currentVersion = group.currentVersion;
 
                                     return (
-                                        <Card
+                                        <div
                                             key={group.rootSOPId}
+                                            className="animate-analysis-in"
+                                            style={{ animationDelay: `${index * 50}ms` }}
+                                        >
+                                        <Card
                                             className="group transition-all duration-200 hover:shadow-lg hover:border-primary/50"
                                         >
                                             <CardHeader className="pb-3">
@@ -629,6 +633,7 @@ export default function SOPHistoryPage() {
                                                 </div>
                                             </CardContent>
                                         </Card>
+                                        </div>
                                     );
                                 })}
                             </div>
@@ -672,9 +677,13 @@ export default function SOPHistoryPage() {
                     {!isLoading && viewMode === "individual" && filteredSOPs.length > 0 && (
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                                {filteredSOPs.map((sop) => (
-                                    <Card
+                                {filteredSOPs.map((sop, index) => (
+                                    <div
                                         key={sop.id}
+                                        className="animate-analysis-in"
+                                        style={{ animationDelay: `${index * 50}ms` }}
+                                    >
+                                    <Card
                                         className="group transition-all duration-200 hover:shadow-lg hover:border-primary/50 cursor-pointer"
                                         onClick={() => handleViewSOP(sop.id)}
                                     >
@@ -720,6 +729,7 @@ export default function SOPHistoryPage() {
 
                                         </CardContent>
                                     </Card>
+                                    </div>
                                 ))}
                             </div>
 
