@@ -295,38 +295,36 @@ export default function SOPHistoryPage() {
 
     return (
         <>
-            <div className="flex items-center gap-2 p-4 border-b flex-shrink-0">
-                <SidebarTrigger />
-            </div>
             <div className="h-[calc(100vh-57px)] flex flex-col overflow-hidden">
-                <div className="w-full max-w-full py-6 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col flex-1 min-h-0 overflow-hidden">
-                    <header className="flex-shrink-0 space-y-4 mb-4 animate-section-in">
-                        <div className="flex items-center gap-4">
+                <div className="w-full max-w-full py-6 px-4 flex flex-col flex-1 min-h-0 overflow-hidden md:px-8 lg:px-16 xl:px-24 2xl:px-32">
+                    <header className="flex-shrink-0 space-y-3 mb-3 animate-section-in md:space-y-4 md:mb-4">
+                        <div className="flex items-center gap-2 md:gap-4">
                             <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => router.push("/dashboard/process-builder")}
-                                className="gap-2"
+                                className="gap-2 text-sm"
                             >
                                 <ArrowLeft className="h-4 w-4" />
                                 Back
                             </Button>
                         </div>
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <h1 className="text-2xl font-semibold">SOP History</h1>
-                                <p className="text-base text-muted-foreground">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                                <h1 className="text-xl font-semibold truncate md:text-2xl">SOP History</h1>
+                                <p className="text-sm text-muted-foreground md:text-base">
                                     View and manage all your generated Standard Operating Procedures
                                 </p>
                             </div>
+                            <SidebarTrigger className="flex-shrink-0" />
                         </div>
                     </header>
 
-                    <div className="flex-shrink-0 space-y-4 mb-4 animate-section-in" style={{ animationDelay: "80ms" }}>
-                        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <span className="text-base text-muted-foreground">View:</span>
-                                <div className="flex border rounded-md">
+                    <div className="flex-shrink-0 space-y-3 mb-3 animate-section-in md:space-y-4 md:mb-4" style={{ animationDelay: "80ms" }}>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex flex-col gap-2 min-w-0 sm:flex-row sm:items-center sm:gap-2">
+                                <span className="text-xs text-muted-foreground shrink-0 md:text-base">View:</span>
+                                <div className="flex flex-wrap gap-1">
                                     <Button
                                         variant={viewMode === "grouped" ? "default" : "ghost"}
                                         size="sm"
@@ -334,9 +332,9 @@ export default function SOPHistoryPage() {
                                             setViewMode("grouped");
                                             setCurrentPage(1);
                                         }}
-                                        className={viewMode === "grouped" ? "rounded-r-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-r-none"}
+                                        className={`rounded-md text-xs md:text-sm ${viewMode === "grouped" ? "bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : ""}`}
                                     >
-                                        <Layers className="h-4 w-4 mr-2" />
+                                        <Layers className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5 md:mr-2" />
                                         Grouped
                                     </Button>
                                     <Button
@@ -346,18 +344,18 @@ export default function SOPHistoryPage() {
                                             setViewMode("individual");
                                             setCurrentPage(1);
                                         }}
-                                        className={viewMode === "individual" ? "rounded-l-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-l-none"}
+                                        className={`rounded-md text-xs md:text-sm ${viewMode === "individual" ? "bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : ""}`}
                                     >
-                                        <List className="h-4 w-4 mr-2" />
+                                        <List className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5 md:mr-2" />
                                         All Versions
                                     </Button>
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-base text-muted-foreground">Filter:</span>
-                                    <div className="flex border rounded-md">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 min-w-0">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+                                    <span className="text-xs text-muted-foreground shrink-0 md:text-base">Filter:</span>
+                                    <div className="flex flex-wrap gap-1">
                                         <Button
                                             variant={draftFilter === "all" ? "default" : "ghost"}
                                             size="sm"
@@ -365,7 +363,7 @@ export default function SOPHistoryPage() {
                                                 setDraftFilter("all");
                                                 setCurrentPage(1);
                                             }}
-                                            className={draftFilter === "all" ? "rounded-r-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-r-none"}
+                                            className={`rounded-md text-xs md:text-sm ${draftFilter === "all" ? "bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : ""}`}
                                         >
                                             All
                                         </Button>
@@ -376,7 +374,7 @@ export default function SOPHistoryPage() {
                                                 setDraftFilter("drafts");
                                                 setCurrentPage(1);
                                             }}
-                                            className={draftFilter === "drafts" ? "rounded-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-none"}
+                                            className={`rounded-md text-xs md:text-sm ${draftFilter === "drafts" ? "bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : ""}`}
                                         >
                                             Drafts
                                         </Button>
@@ -387,15 +385,15 @@ export default function SOPHistoryPage() {
                                                 setDraftFilter("published");
                                                 setCurrentPage(1);
                                             }}
-                                            className={draftFilter === "published" ? "rounded-l-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-l-none"}
+                                            className={`rounded-md text-xs md:text-sm ${draftFilter === "published" ? "bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : ""}`}
                                         >
                                             Published
                                         </Button>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-2">
-                                    <span className="text-base text-muted-foreground">Sort by:</span>
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 min-w-0">
+                                    <span className="text-xs text-muted-foreground shrink-0 md:text-base">Sort by:</span>
                                     <Select
                                         value={sortBy}
                                         onValueChange={(value: "recent" | "oldest") => {
@@ -403,7 +401,7 @@ export default function SOPHistoryPage() {
                                             setCurrentPage(1);
                                         }}
                                     >
-                                        <SelectTrigger className="w-[140px]">
+                                        <SelectTrigger className="w-full sm:w-[140px]">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -415,13 +413,13 @@ export default function SOPHistoryPage() {
                             </div>
                         </div>
 
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <div className="relative min-w-0">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground pointer-events-none" />
                             <Input
                                 placeholder="Search SOPs by title..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10"
+                                className="pl-9 text-sm md:pl-10 md:text-base"
                             />
                         </div>
                     </div>
@@ -429,9 +427,9 @@ export default function SOPHistoryPage() {
                     <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
                     {isLoading && (
                         <Card>
-                            <CardContent className="flex items-center justify-center gap-3 py-12">
-                                <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                                <p className="text-base font-medium">Loading SOPs...</p>
+                            <CardContent className="flex items-center justify-center gap-2 py-8 md:gap-3 md:py-12">
+                                <Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin text-primary" />
+                                <p className="text-sm font-medium md:text-base">Loading SOPs...</p>
                             </CardContent>
                         </Card>
                     )}
@@ -439,24 +437,24 @@ export default function SOPHistoryPage() {
                     {!isLoading &&
                         ((viewMode === "grouped" && filteredGroups.length === 0) ||
                             (viewMode === "individual" && filteredSOPs.length === 0)) && (
-                            <div className="py-16 space-y-6 text-center">
-                                <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
-                                    <ClipboardDocumentCheckIcon className="h-12 w-12 text-[color:var(--accent-strong)]" />
+                            <div className="py-10 px-4 space-y-4 text-center md:py-16 md:space-y-6">
+                                <div className="mx-auto flex h-20 w-20 md:h-24 md:w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                                    <ClipboardDocumentCheckIcon className="h-10 w-10 md:h-12 md:w-12 text-[color:var(--accent-strong)]" />
                                 </div>
-                                <div className="space-y-3 max-w-2xl mx-auto">
-                                    <h3 className="text-2xl font-semibold">No SOPs found</h3>
-                                    <p className="text-base text-muted-foreground">
+                                <div className="space-y-2 max-w-2xl mx-auto md:space-y-3">
+                                    <h3 className="text-xl font-semibold md:text-2xl">No SOPs found</h3>
+                                    <p className="text-sm text-muted-foreground md:text-base">
                                         {searchQuery
                                             ? "No SOPs match your search criteria."
                                             : "You haven't generated any SOPs yet. Generate your first SOP to see it here."}
                                     </p>
                                 </div>
                                 {!searchQuery && (
-                                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                                    <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3">
                                         <Button
                                             onClick={() => router.push("/dashboard/process-builder")}
                                             size="lg"
-                                            className="inline-flex items-center gap-2 bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                            className="w-full sm:w-auto inline-flex items-center gap-2 bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-sm md:text-base"
                                         >
                                             <Plus className="h-4 w-4" />
                                             Generate Your First SOP
@@ -468,7 +466,7 @@ export default function SOPHistoryPage() {
 
                     {!isLoading && viewMode === "grouped" && filteredGroups.length > 0 && (
                         <>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4 md:gap-4 md:mb-6">
                                 {filteredGroups.map((group, index) => {
                                     const isExpanded = expandedGroups.has(group.rootSOPId);
                                     const currentVersion = group.currentVersion;
@@ -483,7 +481,7 @@ export default function SOPHistoryPage() {
                                             className="group transition-all duration-200 hover:shadow-lg hover:border-primary/50"
                                         >
                                             <CardHeader className="pb-3">
-                                                <div className="flex items-start justify-between gap-2">
+                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                                     <div className="flex-1 min-w-0">
                                                         <CardTitle className="text-lg mb-2 line-clamp-2 group-hover:text-primary transition-colors">
                                                             {group.title}
@@ -639,22 +637,23 @@ export default function SOPHistoryPage() {
                             </div>
 
                             {totalPages > 1 && (
-                                <div className="flex items-center justify-between">
-                                    <div className="text-base text-muted-foreground">
+                                <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="text-xs text-muted-foreground md:text-base order-2 sm:order-1">
                                         Showing {(currentPage - 1) * limit + 1} to{" "}
                                         {Math.min(currentPage * limit, total)} of {total} SOP groups
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center justify-center gap-2 order-1 sm:order-2">
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                                             disabled={currentPage === 1 || isLoading}
+                                            className="text-xs md:text-sm"
                                         >
                                             <ChevronLeft className="h-4 w-4" />
                                             Previous
                                         </Button>
-                                        <div className="text-base text-muted-foreground">
+                                        <div className="text-xs text-muted-foreground md:text-base min-w-[80px] text-center">
                                             Page {currentPage} of {totalPages}
                                         </div>
                                         <Button
@@ -664,6 +663,7 @@ export default function SOPHistoryPage() {
                                                 setCurrentPage((p) => Math.min(totalPages, p + 1))
                                             }
                                             disabled={currentPage === totalPages || isLoading}
+                                            className="text-xs md:text-sm"
                                         >
                                             Next
                                             <ChevronRight className="h-4 w-4" />
@@ -676,7 +676,7 @@ export default function SOPHistoryPage() {
 
                     {!isLoading && viewMode === "individual" && filteredSOPs.length > 0 && (
                         <>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4 md:gap-4 md:mb-6">
                                 {filteredSOPs.map((sop, index) => (
                                     <div
                                         key={sop.id}
@@ -688,7 +688,7 @@ export default function SOPHistoryPage() {
                                         onClick={() => handleViewSOP(sop.id)}
                                     >
                                         <CardHeader className="pb-3">
-                                            <div className="flex items-start justify-between gap-2">
+                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                                 <div className="flex-1 min-w-0">
                                                     <CardTitle className="text-lg mb-2 line-clamp-2 group-hover:text-primary transition-colors">
                                                         {sop.title}
@@ -734,22 +734,23 @@ export default function SOPHistoryPage() {
                             </div>
 
                             {totalPages > 1 && (
-                                <div className="flex items-center justify-between">
-                                    <div className="text-base text-muted-foreground">
+                                <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="text-xs text-muted-foreground md:text-base order-2 sm:order-1">
                                         Showing {(currentPage - 1) * limit + 1} to{" "}
                                         {Math.min(currentPage * limit, total)} of {total} SOPs
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center justify-center gap-2 order-1 sm:order-2">
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                                             disabled={currentPage === 1 || isLoading}
+                                            className="text-xs md:text-sm"
                                         >
                                             <ChevronLeft className="h-4 w-4" />
                                             Previous
                                         </Button>
-                                        <div className="text-base text-muted-foreground">
+                                        <div className="text-xs text-muted-foreground md:text-base min-w-[80px] text-center">
                                             Page {currentPage} of {totalPages}
                                         </div>
                                         <Button
@@ -759,6 +760,7 @@ export default function SOPHistoryPage() {
                                                 setCurrentPage((p) => Math.min(totalPages, p + 1))
                                             }
                                             disabled={currentPage === totalPages || isLoading}
+                                            className="text-xs md:text-sm"
                                         >
                                             Next
                                             <ChevronRight className="h-4 w-4" />
@@ -773,20 +775,21 @@ export default function SOPHistoryPage() {
                         ((viewMode === "grouped" && sopGroups.length > 0 && filteredGroups.length === 0) ||
                             (viewMode === "individual" && sops.length > 0 && filteredSOPs.length === 0)) && (
                             <Card className="text-center">
-                                <CardContent className="py-12 space-y-4">
-                                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                                        <Search className="h-6 w-6 text-muted-foreground" />
+                                <CardContent className="py-8 px-4 space-y-3 md:py-12 md:space-y-4">
+                                    <div className="mx-auto flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-full bg-muted">
+                                        <Search className="h-5 w-5 md:h-6 md:w-6 text-muted-foreground" />
                                     </div>
-                                    <div className="space-y-2">
-                                        <h3 className="text-lg font-semibold">No Results Found</h3>
-                                        <p className="text-base text-muted-foreground">
-                                            No SOPs match your search query: "{searchQuery}"
+                                    <div className="space-y-1 md:space-y-2">
+                                        <h3 className="text-base font-semibold md:text-lg">No Results Found</h3>
+                                        <p className="text-sm text-muted-foreground md:text-base">
+                                            No SOPs match your search query: &quot;{searchQuery}&quot;
                                         </p>
                                     </div>
                                     <Button
                                         variant="outline"
+                                        size="sm"
                                         onClick={() => setSearchQuery("")}
-                                        className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white border-[var(--primary-dark)]"
+                                        className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white border-[var(--primary-dark)] text-sm"
                                     >
                                         Clear Search
                                     </Button>

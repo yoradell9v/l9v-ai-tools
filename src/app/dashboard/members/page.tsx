@@ -341,57 +341,38 @@ export default function TenantMembers() {
         if (activeMembers.length === 0) {
             return (
                 <Card>
-                    <CardContent className="py-10 text-center text-base text-muted-foreground">
+                    <CardContent className="py-8 md:py-10 text-center text-sm text-muted-foreground md:text-base">
                         No active members yet.
                     </CardContent>
                 </Card>
             );
         }
+        const roleBadge = (role: "ADMIN" | "MEMBER") => (
+            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${role === "ADMIN" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                {role}
+            </span>
+        );
         return (
             <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle>Active Members</CardTitle>
-                    <CardDescription>Manage roles and access</CardDescription>
+                <CardHeader className="pb-2 px-4 pt-4 md:px-6 md:pt-6">
+                    <CardTitle className="text-base md:text-lg">Active Members</CardTitle>
+                    <CardDescription className="text-sm">Manage roles and access</CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Email</TableHead>
-                                <TableHead>Role</TableHead>
-                                <TableHead>Joined</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {activeMembers.map((member) => (
-                                <TableRow key={member.id}>
-                                    <TableCell className="font-medium">
-                                        {member.firstname} {member.lastname}
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">
-                                        {member.email}
-                                    </TableCell>
-                                    <TableCell>
-                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${member.role === "ADMIN"
-                                            ? "bg-amber-100 text-amber-700"
-                                            : "bg-blue-100 text-blue-700"
-                                            }`}>
-                                            {member.role}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">
-                                        {new Date(member.joinedAt).toLocaleDateString("en-US", {
-                                            month: "short",
-                                            day: "numeric",
-                                            year: "numeric",
-                                        })}
-                                    </TableCell>
-                                    <TableCell className="text-right">
+                <CardContent className="px-4 md:px-6">
+                    {/* Mobile: stacked cards */}
+                    <div className="md:hidden space-y-2">
+                        {activeMembers.map((member) => (
+                            <div key={member.id} className="rounded-lg border p-3 space-y-1.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-medium text-sm truncate">{member.firstname} {member.lastname}</p>
+                                        <p className="text-xs text-muted-foreground truncate" title={member.email}>{member.email}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        {roleBadge(member.role)}
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon">
+                                                <Button variant="ghost" size="icon" className="h-8 w-8">
                                                     <MoreVertical className="h-4 w-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
@@ -410,11 +391,73 @@ export default function TenantMembers() {
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
-                                    </TableCell>
+                                    </div>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground">
+                                    Joined {new Date(member.joinedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                    {/* Desktop: table */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Email</TableHead>
+                                    <TableHead>Role</TableHead>
+                                    <TableHead>Joined</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {activeMembers.map((member) => (
+                                    <TableRow key={member.id}>
+                                        <TableCell className="font-medium">
+                                            {member.firstname} {member.lastname}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            {member.email}
+                                        </TableCell>
+                                        <TableCell>
+                                            {roleBadge(member.role)}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            {new Date(member.joinedAt).toLocaleDateString("en-US", {
+                                                month: "short",
+                                                day: "numeric",
+                                                year: "numeric",
+                                            })}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon">
+                                                        <MoreVertical className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        className="text-destructive"
+                                                        onClick={() => {
+                                                            setMemberToDeactivate(member);
+                                                            setShowDeactivateModal(true);
+                                                        }}
+                                                    >
+                                                        <PowerOff className="h-4 w-4 mr-2" />
+                                                        Deactivate
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </CardContent>
             </Card>
         );
@@ -426,62 +469,41 @@ export default function TenantMembers() {
         if (deactivatedMembers.length === 0) {
             return (
                 <Card>
-                    <CardContent className="py-16 text-center">
-                        <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20 mb-4">
-                            <UserPlusIcon className="h-12 w-12 text-[var(--primary-dark)]" />
+                    <CardContent className="py-10 md:py-16 text-center px-4">
+                        <div className="mx-auto flex h-16 w-16 md:h-24 md:w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20 mb-3 md:mb-4">
+                            <UserPlusIcon className="h-8 w-8 md:h-12 md:w-12 text-[var(--primary-dark)]" />
                         </div>
-                        <p className="text-base text-muted-foreground">No deactivated members.</p>
+                        <p className="text-sm text-muted-foreground md:text-base">No deactivated members.</p>
                     </CardContent>
                 </Card>
             );
         }
+        const roleBadgeDeact = (role: "ADMIN" | "MEMBER") => (
+            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${role === "ADMIN" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                {role}
+            </span>
+        );
         return (
             <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle>Deactivated Members</CardTitle>
-                    <CardDescription>Restore access when needed</CardDescription>
+                <CardHeader className="pb-2 px-4 pt-4 md:px-6 md:pt-6">
+                    <CardTitle className="text-base md:text-lg">Deactivated Members</CardTitle>
+                    <CardDescription className="text-sm">Restore access when needed</CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Email</TableHead>
-                                <TableHead>Role</TableHead>
-                                <TableHead>Deactivated</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {deactivatedMembers.map((member) => (
-                                <TableRow key={member.id} className="opacity-80">
-                                    <TableCell className="font-medium">
-                                        {member.firstname} {member.lastname}
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">
-                                        {member.email}
-                                    </TableCell>
-                                    <TableCell>
-                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${member.role === "ADMIN"
-                                            ? "bg-amber-100 text-amber-700"
-                                            : "bg-blue-100 text-blue-700"
-                                            }`}>
-                                            {member.role}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">
-                                        {member.deactivatedAt
-                                            ? new Date(member.deactivatedAt).toLocaleDateString("en-US", {
-                                                month: "short",
-                                                day: "numeric",
-                                                year: "numeric",
-                                            })
-                                            : "-"}
-                                    </TableCell>
-                                    <TableCell className="text-right">
+                <CardContent className="px-4 md:px-6">
+                    {/* Mobile: stacked cards */}
+                    <div className="md:hidden space-y-2">
+                        {deactivatedMembers.map((member) => (
+                            <div key={member.id} className="rounded-lg border p-3 space-y-1.5 opacity-90">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-medium text-sm truncate">{member.firstname} {member.lastname}</p>
+                                        <p className="text-xs text-muted-foreground truncate" title={member.email}>{member.email}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        {roleBadgeDeact(member.role)}
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon">
+                                                <Button variant="ghost" size="icon" className="h-8 w-8">
                                                     <MoreVertical className="h-4 w-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
@@ -500,11 +522,75 @@ export default function TenantMembers() {
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
-                                    </TableCell>
+                                    </div>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground">
+                                    Deactivated {member.deactivatedAt ? new Date(member.deactivatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "-"}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                    {/* Desktop: table */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Email</TableHead>
+                                    <TableHead>Role</TableHead>
+                                    <TableHead>Deactivated</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {deactivatedMembers.map((member) => (
+                                    <TableRow key={member.id} className="opacity-80">
+                                        <TableCell className="font-medium">
+                                            {member.firstname} {member.lastname}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            {member.email}
+                                        </TableCell>
+                                        <TableCell>
+                                            {roleBadgeDeact(member.role)}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            {member.deactivatedAt
+                                                ? new Date(member.deactivatedAt).toLocaleDateString("en-US", {
+                                                    month: "short",
+                                                    day: "numeric",
+                                                    year: "numeric",
+                                                })
+                                                : "-"}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon">
+                                                        <MoreVertical className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        className="text-green-600"
+                                                        onClick={() => {
+                                                            setMemberToActivate(member);
+                                                            setShowActivateModal(true);
+                                                        }}
+                                                    >
+                                                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                                                        Activate
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </CardContent>
             </Card>
         );
@@ -516,83 +602,117 @@ export default function TenantMembers() {
         if (invites.length === 0) {
             return (
                 <Card>
-                    <CardContent className="py-16 text-center">
-                        <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20 mb-4">
-                            <InboxIcon className="h-12 w-12 text-[var(--primary-dark)]" />
+                    <CardContent className="py-10 md:py-16 text-center px-4">
+                        <div className="mx-auto flex h-16 w-16 md:h-24 md:w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20 mb-3 md:mb-4">
+                            <InboxIcon className="h-8 w-8 md:h-12 md:w-12 text-[var(--primary-dark)]" />
                         </div>
-                        <p className="text-base text-muted-foreground">No pending invites.</p>
+                        <p className="text-sm text-muted-foreground md:text-base">No pending invites.</p>
                     </CardContent>
                 </Card>
             );
         }
+        const inviteRoleBadge = (role: "ADMIN" | "MEMBER") => (
+            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${role === "ADMIN" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                {role}
+            </span>
+        );
         return (
             <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle>Pending Invites</CardTitle>
-                    <CardDescription>Manage invitations</CardDescription>
+                <CardHeader className="pb-2 px-4 pt-4 md:px-6 md:pt-6">
+                    <CardTitle className="text-base md:text-lg">Pending Invites</CardTitle>
+                    <CardDescription className="text-sm">Manage invitations</CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Email</TableHead>
-                                <TableHead>Role</TableHead>
-                                <TableHead>Sent</TableHead>
-                                <TableHead>Expires</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {invites.map((invite) => (
-                                <TableRow key={invite.id}>
-                                    <TableCell className="font-medium">{invite.email}</TableCell>
-                                    <TableCell>
-                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${invite.role === "ADMIN"
-                                            ? "bg-amber-100 text-amber-700"
-                                            : "bg-blue-100 text-blue-700"
-                                            }`}>
-                                            {invite.role}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">
-                                        {new Date(invite.createdAt).toLocaleDateString("en-US", {
-                                            month: "short",
-                                            day: "numeric",
-                                            year: "numeric",
-                                        })}
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">
-                                        {new Date(invite.expiresAt).toLocaleDateString("en-US", {
-                                            month: "short",
-                                            day: "numeric",
-                                            year: "numeric",
-                                        })}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleCancelInvite(invite.id)}
-                                            disabled={cancellingInviteId === invite.id}
-                                            className="text-destructive"
-                                        >
-                                            {cancellingInviteId === invite.id ? (
-                                                <>
-                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                    Cancelling...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Trash2 className="h-4 w-4 mr-2" />
-                                                    Cancel
-                                                </>
-                                            )}
-                                        </Button>
-                                    </TableCell>
+                <CardContent className="px-4 md:px-6">
+                    {/* Mobile: stacked cards */}
+                    <div className="md:hidden space-y-2">
+                        {invites.map((invite) => (
+                            <div key={invite.id} className="rounded-lg border p-3 space-y-1.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-medium text-sm truncate" title={invite.email}>{invite.email}</p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            {inviteRoleBadge(invite.role)}
+                                        </div>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleCancelInvite(invite.id)}
+                                        disabled={cancellingInviteId === invite.id}
+                                        className="text-destructive shrink-0 text-xs h-8"
+                                    >
+                                        {cancellingInviteId === invite.id ? (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        )}
+                                    </Button>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground">
+                                    Sent {new Date(invite.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} • Expires {new Date(invite.expiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                    {/* Desktop: table */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Email</TableHead>
+                                    <TableHead>Role</TableHead>
+                                    <TableHead>Sent</TableHead>
+                                    <TableHead>Expires</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {invites.map((invite) => (
+                                    <TableRow key={invite.id}>
+                                        <TableCell className="font-medium">{invite.email}</TableCell>
+                                        <TableCell>
+                                            {inviteRoleBadge(invite.role)}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            {new Date(invite.createdAt).toLocaleDateString("en-US", {
+                                                month: "short",
+                                                day: "numeric",
+                                                year: "numeric",
+                                            })}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            {new Date(invite.expiresAt).toLocaleDateString("en-US", {
+                                                month: "short",
+                                                day: "numeric",
+                                                year: "numeric",
+                                            })}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleCancelInvite(invite.id)}
+                                                disabled={cancellingInviteId === invite.id}
+                                                className="text-destructive"
+                                            >
+                                                {cancellingInviteId === invite.id ? (
+                                                    <>
+                                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                        Cancelling...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Trash2 className="h-4 w-4 mr-2" />
+                                                        Cancel
+                                                    </>
+                                                )}
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </CardContent>
             </Card>
         );
@@ -600,21 +720,21 @@ export default function TenantMembers() {
 
     return (
         <>
-            <div className="flex items-center gap-2 p-4 border-b">
+            <div className="flex items-center gap-2 p-3 border-b md:p-4">
                 <SidebarTrigger />
             </div>
-            <div className="min-h-screen py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 space-y-6">
+            <div className="min-h-screen py-6 px-4 space-y-4 md:py-10 md:px-8 md:space-y-6 lg:px-16 xl:px-24 2xl:px-32">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="space-y-1">
-                        <h1 className="text-2xl font-semibold">
+                    <div className="space-y-0.5 min-w-0">
+                        <h1 className="text-xl font-semibold truncate sm:text-2xl">
                             {selectedOrganization ? selectedOrganization.organization.name : "Tenant Members"}
                         </h1>
-                        <p className="text-base text-muted-foreground">
+                        <p className="text-sm text-muted-foreground md:text-base">
                             Manage members of your organization
                         </p>
                     </div>
                     {selectedOrganization && (
-                        <Button onClick={() => setIsInviteModalOpen(true)} className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
+                        <Button onClick={() => setIsInviteModalOpen(true)} className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-sm md:text-base flex-shrink-0">
                             <Plus className="h-4 w-4 mr-2" />
                             Invite Member
                         </Button>
@@ -623,9 +743,9 @@ export default function TenantMembers() {
 
                 {error && (
                     <Card className="border-destructive/30 bg-destructive/10">
-                        <CardContent className="py-4 flex items-center gap-3">
-                            <AlertCircle className="h-5 w-5 text-destructive" />
-                            <p className="text-base text-destructive">{error}</p>
+                        <CardContent className="py-3 px-4 md:py-4 flex items-center gap-2 md:gap-3">
+                            <AlertCircle className="h-4 w-4 md:h-5 md:w-5 text-destructive shrink-0" />
+                            <p className="text-sm text-destructive md:text-base">{error}</p>
                         </CardContent>
                     </Card>
                 )}
@@ -634,25 +754,25 @@ export default function TenantMembers() {
                     <>
                         {isLoading ? (
                             <Card>
-                                <CardContent className="py-12 flex items-center justify-center gap-3 text-base text-muted-foreground">
+                                <CardContent className="py-8 md:py-12 flex items-center justify-center gap-3 text-sm md:text-base text-muted-foreground">
                                     <Loader2 className="h-5 w-5 animate-spin" />
                                     Loading...
                                 </CardContent>
                             </Card>
                         ) : !selectedOrganization ? (
-                            <div className="py-16 space-y-6 text-center">
-                                <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
-                                    <Users className="h-12 w-12 text-[var(--primary-dark)]" />
+                            <div className="py-10 md:py-16 space-y-4 md:space-y-6 text-center px-4">
+                                <div className="mx-auto flex h-16 w-16 md:h-24 md:w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                                    <Users className="h-8 w-8 md:h-12 md:w-12 text-[var(--primary-dark)]" />
                                 </div>
-                                <div className="space-y-3 max-w-2xl mx-auto">
-                                    <p className="text-2xl font-semibold">No organizations found</p>
-                                    <p className="text-base text-muted-foreground">
+                                <div className="space-y-2 md:space-y-3 max-w-2xl mx-auto">
+                                    <p className="text-lg font-semibold md:text-2xl">No organizations found</p>
+                                    <p className="text-sm text-muted-foreground md:text-base">
                                         You need to be a tenant admin to view and manage members. Ask your admin to grant you access.
                                     </p>
                                 </div>
                             </div>
                         ) : (
-                            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className=" space-y-4">
+                            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="space-y-4">
                                 <TabsList className="inline-flex">
                                     <TabsTrigger value="members">Active Members</TabsTrigger>
                                     <TabsTrigger value="invites">Pending Invites</TabsTrigger>

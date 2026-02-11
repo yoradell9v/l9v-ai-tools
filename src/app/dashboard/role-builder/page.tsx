@@ -943,31 +943,29 @@ export default function JdBuilderPage() {
     return (
         <>
             <div className="w-full max-w-screen overflow-x-hidden h-screen flex flex-col">
-                <div className="flex items-center gap-2 p-4 border-b flex-shrink-0">
-                    <SidebarTrigger />
-                </div>
                 <div
                     className="transition-all duration-300 ease-in-out flex-1 min-h-0 flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full"
                 >
-                    <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col flex-1 min-h-0">
-                        <div className="flex-shrink-0 p-2">
-                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
-                                <div className="space-y-1">
-                                    <h1 className="text-2xl font-semibold mb-1">
+                    <div className="w-full max-w-full py-6 px-4 flex flex-col flex-1 min-h-0 md:py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
+                        <div className="flex-shrink-0 p-1 md:p-2">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3 md:mb-4">
+                                <div className="space-y-0.5 min-w-0 md:space-y-1">
+                                    <h1 className="text-xl font-semibold mb-0 md:mb-1 md:text-2xl truncate">
                                         Role Builder
                                     </h1>
-                                    <p className="text-base text-muted-foreground">
+                                    <p className="text-sm text-muted-foreground md:text-base">
                                         Create comprehensive job descriptions with AI-powered analysis
                                     </p>
                                 </div>
-                                <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-4 mt-1 md:mt-0">
+                                <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-4 mt-0 md:mt-0 flex-shrink-0">
                                     {!isProcessing && (
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
+                                                <Button className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-sm md:text-base">
                                                     <Plus className="h-4 w-4" />
-                                                    <span>{analysisResult ? "New Analysis" : "Start Analysis"}</span>
-                                                    <ChevronDown className="h-4 w-4 ml-2" />
+                                                    <span className="sm:hidden">{analysisResult ? "New" : "Start"}</span>
+                                                    <span className="hidden sm:inline">{analysisResult ? "New Analysis" : "Start Analysis"}</span>
+                                                    <ChevronDown className="h-4 w-4 ml-1 md:ml-2" />
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
@@ -984,28 +982,29 @@ export default function JdBuilderPage() {
                                     )}
                                     <Button
                                         variant="outline"
+                                        size="sm"
                                         onClick={() => router.push("/dashboard/role-builder/history")}
-                                        className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10"
+                                        className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10 text-sm"
                                     >
                                         <History className="h-4 w-4" />
                                         History
                                     </Button>
+                                    <SidebarTrigger className="flex-shrink-0" />
                                 </div>
                             </div>
-                            <Separator />
                         </div>
 
                         <div className="flex-1 min-h-0 overflow-hidden">
                             {analysisError && !isProcessing && (
-                                <div className="flex flex-col items-center justify-center py-16 px-6">
+                                <div className="flex flex-col items-center justify-center py-10 px-4 md:py-16 md:px-6">
                                     <div className="max-w-md w-full">
-                                        <Alert variant="destructive">
-                                            <AlertCircle className="h-4 w-4" />
-                                            <AlertTitle>Analysis Failed</AlertTitle>
-                                            <AlertDescription className="mb-4">
+                                        <Alert variant="destructive" className="p-3 md:p-4">
+                                            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                                            <AlertTitle className="text-sm md:text-base">Analysis Failed</AlertTitle>
+                                            <AlertDescription className="mb-3 text-sm md:mb-4 md:text-base">
                                                 {analysisError}
                                             </AlertDescription>
-                                            <div className="flex gap-3 mt-4">
+                                            <div className="flex flex-col gap-2 sm:flex-row sm:gap-3 mt-3 sm:mt-4">
                                                 <Button
                                                     variant="destructive"
                                                     onClick={() => {
@@ -1028,15 +1027,15 @@ export default function JdBuilderPage() {
                             )}
 
                             {isProcessing && !analysisError && !isDownloading && (
-                                <div className="flex flex-col items-center justify-center py-16 px-4">
-                                    <Loader2 className="h-8 w-8 mb-3 animate-spin text-primary" />
-                                    <h3 className="text-lg font-semibold mb-1 text-center">
+                                <div className="flex flex-col items-center justify-center py-10 px-4 md:py-16">
+                                    <Loader2 className="h-6 w-6 md:h-8 md:w-8 mb-2 md:mb-3 animate-spin text-primary" />
+                                    <h3 className="text-base font-semibold mb-1 text-center md:text-lg">
                                         {currentStage || "Processing your analysis"}
                                     </h3>
-                                    <p className="text-base text-muted-foreground text-center mb-6">
+                                    <p className="text-sm text-muted-foreground text-center mb-4 md:mb-6 md:text-base">
                                         This usually takes 1–2 minutes. We&apos;re analyzing your role and building recommendations.
                                     </p>
-                                    <div className="flex flex-wrap justify-center gap-2">
+                                    <div className="flex flex-wrap justify-center gap-1.5 md:gap-2">
                                         {[
                                             "Deep discovery",
                                             "Service type",
@@ -1092,23 +1091,23 @@ export default function JdBuilderPage() {
                             )}
 
                             {!analysisResult && !isProcessing && !isDownloading && !isLoadingLatest && hasNoSavedAnalyses && (
-                                <div className="py-16 space-y-6 text-center">
-                                    <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
-                                        <BriefcaseIcon className="h-12 w-12 text-[color:var(--accent-strong)]" />
+                                <div className="py-10 px-4 space-y-4 text-center md:py-16 md:space-y-6">
+                                    <div className="mx-auto flex h-20 w-20 md:h-24 md:w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                                        <BriefcaseIcon className="h-10 w-10 md:h-12 md:w-12 text-[color:var(--accent-strong)]" />
                                     </div>
-                                    <div className="space-y-3 max-w-2xl mx-auto">
-                                        <h3 className="text-2xl font-semibold">
+                                    <div className="space-y-2 max-w-2xl mx-auto md:space-y-3">
+                                        <h3 className="text-xl font-semibold md:text-2xl">
                                             {getCurrentGreeting()}
                                         </h3>
-                                        <p className="text-base text-muted-foreground">
+                                        <p className="text-sm text-muted-foreground md:text-base">
                                             Let's find your perfect virtual assistant. Start by creating a new analysis.
                                         </p>
                                     </div>
-                                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                                    <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3">
                                         <Button
                                             onClick={() => setIsModalOpen(true)}
                                             size="lg"
-                                            className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                            className="w-full sm:w-auto bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-sm md:text-base"
                                         >
                                             <Plus className="h-4 w-4 mr-2" />
                                             <span>Create New Role</span>
@@ -1120,21 +1119,21 @@ export default function JdBuilderPage() {
                             {analysisResult && !isProcessing && !isDownloading && (
                                 <div className="w-full max-w-full flex flex-col h-full overflow-hidden animate-analysis-in">
 
-                                    <div id="analysis-display" className="flex-shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b p-4 mb-6 transition-shadow duration-300">
-                                        <div className="flex items-start justify-between gap-4">
-                                            <div className="flex-1 space-y-4">
-                                                <div>
-                                                    <h2 className="text-2xl font-semibold mb-1">
+                                    <div id="analysis-display" className="flex-shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b p-3 mb-4 transition-shadow duration-300 md:p-4 md:mb-6 overflow-hidden">
+                                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
+                                            <div className="flex-1 space-y-3 min-w-0 md:space-y-4">
+                                                <div className="min-w-0">
+                                                    <h2 className="text-lg font-semibold mb-1 truncate md:text-2xl">
                                                         {analysisResult.preview.service_type || 'Your Recommendations'}
                                                     </h2>
                                                     {analysisResult.preview.service_reasoning && (
-                                                        <p className="text-base text-muted-foreground mt-1">
+                                                        <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2 md:mt-1 md:text-base md:line-clamp-none">
                                                             {analysisResult.preview.service_reasoning}
                                                         </p>
                                                     )}
                                                 </div>
 
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
 
                                                     {(analysisResult.preview.service_type === "Dedicated VA" && analysisResult.preview.role_title) ||
                                                         (analysisResult.preview.service_type === "Unicorn VA Service" && analysisResult.preview.core_va_title) ||
@@ -1235,12 +1234,13 @@ export default function JdBuilderPage() {
                                                     </div>
                                                 )}
                                             </div>
-                                            <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="outline" size="icon" className="flex-shrink-0 border-[var(--accent-strong)] text-[var(--accent-strong)] hover:bg-[var(--accent-strong)]/10">
-                                                        <MoreVertical className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
+                                            <div className="flex justify-end md:block">
+                                                <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="outline" size="icon" className="flex-shrink-0 border-[var(--accent-strong)] text-[var(--accent-strong)] hover:bg-[var(--accent-strong)]/10 h-9 w-9 md:h-10 md:w-10">
+                                                            <MoreVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-48">
                                                     <DropdownMenuItem onClick={async () => {
                                                         setActionsMenuOpen(false);
@@ -1335,12 +1335,13 @@ export default function JdBuilderPage() {
                                             </DropdownMenu>
                                         </div>
                                     </div>
+                                    </div>
 
                                     <ScrollArea className="flex-1 min-h-0">
-                                        <div className="pr-4">
-                                            <Accordion type="multiple" defaultValue={["role-details", "skills-requirements", "what-you-told-us"]} className="w-full space-y-4">
+                                        <div className="pr-2 md:pr-4">
+                                            <Accordion type="multiple" defaultValue={["role-details", "skills-requirements", "what-you-told-us"]} className="w-full space-y-3 md:space-y-4">
 
-                                                <AccordionItem value="role-details" className="rounded-lg px-4 bg-card">
+                                                <AccordionItem value="role-details" className="rounded-lg px-3 bg-card md:px-4">
                                                     <AccordionTrigger className="hover:no-underline">
                                                         <div className="flex items-center gap-3">
                                                             <Briefcase className="w-5 h-5 text-primary" />
@@ -1462,7 +1463,7 @@ export default function JdBuilderPage() {
                                                     </AccordionContent>
                                                 </AccordionItem>
 
-                                                <AccordionItem value="skills-requirements" className="rounded-lg px-4 bg-card">
+                                                <AccordionItem value="skills-requirements" className="rounded-lg px-3 bg-card md:px-4">
                                                     <AccordionTrigger className="hover:no-underline">
                                                         <div className="flex items-center gap-3">
                                                             <Target className="w-5 h-5 text-primary" />
@@ -1549,7 +1550,7 @@ export default function JdBuilderPage() {
                                                 </AccordionItem>
 
                                                 {summary && (
-                                                    <AccordionItem value="what-you-told-us" className="rounded-lg px-4 bg-card">
+                                                    <AccordionItem value="what-you-told-us" className="rounded-lg px-3 bg-card md:px-4">
                                                         <AccordionTrigger className="hover:no-underline">
                                                             <div className="flex items-center gap-3">
                                                                 <Sparkles className="w-5 h-5 text-primary" />
@@ -1642,7 +1643,7 @@ export default function JdBuilderPage() {
                                                 )}
 
                                                 {implementationPlan && (
-                                                    <AccordionItem value="implementation" className="rounded-lg px-4 bg-card">
+                                                    <AccordionItem value="implementation" className="rounded-lg px-3 bg-card md:px-4">
                                                         <AccordionTrigger className="hover:no-underline">
                                                             <div className="flex items-center gap-3">
                                                                 <FileText className="w-5 h-5 text-primary" />

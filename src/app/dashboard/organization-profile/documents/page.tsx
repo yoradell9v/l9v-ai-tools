@@ -102,8 +102,9 @@ export default function DocumentsPage() {
     if (isLoading) {
         return (
             <>
-                <div className="flex items-center gap-2 p-4 border-b">
-                    <SidebarTrigger />
+                <div className="flex items-center justify-between gap-3 py-6 px-4 md:py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
+                    <h1 className="text-xl font-semibold truncate min-w-0 md:text-2xl">Documents</h1>
+                    <SidebarTrigger className="flex-shrink-0" />
                 </div>
                 <div className="flex items-center justify-center min-h-screen">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -114,39 +115,37 @@ export default function DocumentsPage() {
 
     return (
         <>
-            <div className="flex items-center gap-2 p-4 border-b">
-                <SidebarTrigger />
-            </div>
             <div className="h-[calc(100vh-64px)] overflow-hidden">
-                <div className="w-full max-w-full h-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col min-h-0">
+                <div className="w-full max-w-full h-full py-6 px-4 flex flex-col min-h-0 md:py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
                     <div className="flex-shrink-0">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-6 animate-section-in opacity-0">
-                            <div>
-                                <h1 className="text-2xl font-semibold mb-2">Documents</h1>
-                                <p className="text-base text-muted-foreground">
+                        <div className="flex items-center justify-between gap-3 mb-4 animate-section-in opacity-0 md:mb-6">
+                            <div className="min-w-0">
+                                <h1 className="text-xl font-semibold mb-1 truncate md:text-2xl md:mb-2">Documents</h1>
+                                <p className="text-sm text-muted-foreground md:text-base">
                                     Manage all your organization's uploaded documents
                                 </p>
                             </div>
+                            <SidebarTrigger className="flex-shrink-0" />
                         </div>
 
                         {error && (
-                            <Card className="mb-6 border-border bg-card py-2 animate-section-in opacity-0 transition-shadow duration-300" style={{ animationDelay: "60ms" }}>
-                                <CardContent className="py-4">
-                                    <p className="text-base text-muted-foreground">{error}</p>
+                            <Card className="mb-4 border-border bg-card py-2 animate-section-in opacity-0 transition-shadow duration-300 md:mb-6" style={{ animationDelay: "60ms" }}>
+                                <CardContent className="py-3 px-4 md:py-4">
+                                    <p className="text-sm text-muted-foreground md:text-base">{error}</p>
                                 </CardContent>
                             </Card>
                         )}
 
-                        <div className="mb-6 space-y-4 animate-section-in opacity-0" style={{ animationDelay: "100ms" }}>
-                            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-base text-muted-foreground">Filter:</span>
-                                    <div className="flex border rounded-md">
+                        <div className="mb-4 space-y-3 animate-section-in opacity-0 md:mb-6 md:space-y-4" style={{ animationDelay: "100ms" }}>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                                <div className="flex flex-col gap-2 min-w-0 sm:flex-row sm:items-center sm:gap-2">
+                                    <span className="text-xs text-muted-foreground shrink-0 md:text-base">Filter:</span>
+                                    <div className="flex flex-wrap gap-1">
                                         <Button
                                             variant={statusFilter === "all" ? "default" : "ghost"}
                                             size="sm"
                                             onClick={() => setStatusFilter("all")}
-                                            className={statusFilter === "all" ? "rounded-r-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-r-none"}
+                                            className={`rounded-md text-xs md:text-sm ${statusFilter === "all" ? "bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : ""}`}
                                         >
                                             All
                                         </Button>
@@ -154,7 +153,7 @@ export default function DocumentsPage() {
                                             variant={statusFilter === "completed" ? "default" : "ghost"}
                                             size="sm"
                                             onClick={() => setStatusFilter("completed")}
-                                            className={statusFilter === "completed" ? "rounded-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-none"}
+                                            className={`rounded-md text-xs md:text-sm ${statusFilter === "completed" ? "bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : ""}`}
                                         >
                                             Completed
                                         </Button>
@@ -162,7 +161,7 @@ export default function DocumentsPage() {
                                             variant={statusFilter === "processing" ? "default" : "ghost"}
                                             size="sm"
                                             onClick={() => setStatusFilter("processing")}
-                                            className={statusFilter === "processing" ? "rounded-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-none"}
+                                            className={`rounded-md text-xs md:text-sm ${statusFilter === "processing" ? "bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : ""}`}
                                         >
                                             Processing
                                         </Button>
@@ -170,7 +169,7 @@ export default function DocumentsPage() {
                                             variant={statusFilter === "pending" ? "default" : "ghost"}
                                             size="sm"
                                             onClick={() => setStatusFilter("pending")}
-                                            className={statusFilter === "pending" ? "rounded-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-none"}
+                                            className={`rounded-md text-xs md:text-sm ${statusFilter === "pending" ? "bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : ""}`}
                                         >
                                             Pending
                                         </Button>
@@ -178,17 +177,17 @@ export default function DocumentsPage() {
                                             variant={statusFilter === "failed" ? "default" : "ghost"}
                                             size="sm"
                                             onClick={() => setStatusFilter("failed")}
-                                            className={statusFilter === "failed" ? "rounded-l-none bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : "rounded-l-none"}
+                                            className={`rounded-md text-xs md:text-sm ${statusFilter === "failed" ? "bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white" : ""}`}
                                         >
                                             Failed
                                         </Button>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-2">
-                                    <span className="text-base text-muted-foreground">Sort:</span>
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 min-w-0">
+                                    <span className="text-xs text-muted-foreground shrink-0 md:text-base">Sort:</span>
                                     <Select value={sortBy} onValueChange={(v: "recent" | "oldest") => setSortBy(v)}>
-                                        <SelectTrigger className="w-[170px]">
+                                        <SelectTrigger className="w-full min-w-0 sm:w-[170px]">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -199,13 +198,13 @@ export default function DocumentsPage() {
                                 </div>
                             </div>
 
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <div className="relative min-w-0">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground pointer-events-none" />
                                 <Input
                                     placeholder="Search documents by name..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10"
+                                    className="pl-9 text-sm md:pl-10 md:text-base"
                                 />
                             </div>
                         </div>
