@@ -91,9 +91,8 @@ export async function createKBStateSnapshot(
         topObjection: kb.topObjection,
         coreOffer: kb.coreOffer,
         toolStack: kb.toolStack,
-        // Extracted knowledge (without snapshots and auditLog to prevent circular references)
         extractedKnowledge: clonedExtractedKnowledge,
-        // Other relevant fields
+        
         idealCustomer: kb.idealCustomer,
         primaryGoal: kb.primaryGoal,
       },
@@ -101,13 +100,11 @@ export async function createKBStateSnapshot(
       eventIds,
     };
 
-    // Store snapshot in extractedKnowledge
     if (!extractedKnowledge.snapshots) {
       extractedKnowledge.snapshots = [];
     }
     extractedKnowledge.snapshots.push(snapshot);
 
-    // Keep only last 50 snapshots
     if (extractedKnowledge.snapshots.length > 50) {
       extractedKnowledge.snapshots = extractedKnowledge.snapshots.slice(-50);
     }
@@ -124,22 +121,16 @@ export async function createKBStateSnapshot(
   }
 }
 
-/**
- * Rebuild KB state from events up to a specific point in time
- */
 export async function rebuildKBStateFromEvents(
   knowledgeBaseId: string,
   upToDate?: Date
 ): Promise<any | null> {
   try {
-    // Get base KB
     const kb = await prisma.organizationKnowledgeBase.findUnique({
       where: { id: knowledgeBaseId },
     });
 
     if (!kb) return null;
-
-    // Start with initial state (empty or current state)
     const rebuiltState: any = {
       businessName: kb.businessName,
       industry: kb.industry,
@@ -150,7 +141,6 @@ export async function rebuildKBStateFromEvents(
       extractedKnowledge: {},
     };
 
-    // Fetch all applied events (or up to a specific date)
     const whereClause: any = {
       knowledgeBaseId,
       applied: true,
@@ -169,12 +159,9 @@ export async function rebuildKBStateFromEvents(
       },
     });
 
-    // Replay events to rebuild state
-    // This is a simplified version - full implementation would use mapInsightToKBField
     for (const event of appliedEvents) {
       const metadata = (event.metadata as Record<string, any>) || {};
 
-      // Apply event to state (simplified - would need full mapping logic)
       if (metadata.bottleneck && !rebuiltState.biggestBottleNeck) {
         rebuiltState.biggestBottleNeck = metadata.bottleneck;
       }
@@ -188,12 +175,10 @@ export async function rebuildKBStateFromEvents(
         }
       }
 
-      // Add to extractedKnowledge arrays
       if (!rebuiltState.extractedKnowledge) {
         rebuiltState.extractedKnowledge = {};
       }
 
-      // Handle various extracted knowledge fields
       if (metadata.companyStage) {
         if (!rebuiltState.extractedKnowledge.companyStages) {
           rebuiltState.extractedKnowledge.companyStages = [];
@@ -211,9 +196,6 @@ export async function rebuildKBStateFromEvents(
   }
 }
 
-/**
- * Get audit log for a knowledge base
- */
 export async function getAuditLog(
   knowledgeBaseId: string,
   limit: number = 100
@@ -229,7 +211,6 @@ export async function getAuditLog(
     const extractedKnowledge = (kb.extractedKnowledge as Record<string, any>) || {};
     const auditLog = extractedKnowledge.auditLog || [];
 
-    // Return most recent entries
     return auditLog.slice(-limit).reverse();
   } catch (error) {
     console.error("Error getting audit log:", error);
@@ -237,9 +218,6 @@ export async function getAuditLog(
   }
 }
 
-/**
- * Get snapshots for a knowledge base
- */
 export async function getSnapshots(
   knowledgeBaseId: string
 ): Promise<KBStateSnapshot[]> {

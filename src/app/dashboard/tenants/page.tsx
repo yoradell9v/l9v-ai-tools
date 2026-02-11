@@ -633,16 +633,16 @@ export default function TenantsPage() {
     return (
         <>
             <Toaster />
-            <div className="flex-1 space-y-4 py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
-                <div className="flex items-center justify-between space-y-2">
-                    <div>
-                        <h2 className="text-3xl font-bold tracking-tight">Tenants</h2>
-                        <p className="text-muted-foreground">Manage your organizations</p>
+            <div className="flex-1 space-y-4 py-6 px-4 md:py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
+                <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <h2 className="text-xl font-bold tracking-tight sm:text-2xl md:text-3xl truncate">Tenants</h2>
+                        <p className="text-sm text-muted-foreground md:text-base">Manage your organizations</p>
                     </div>
-                    <SidebarTrigger />
+                    <SidebarTrigger className="flex-shrink-0" />
                 </div>
                 <div className="flex items-center justify-between">
-                    <Button onClick={() => setIsModalOpen(true)} className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
+                    <Button onClick={() => setIsModalOpen(true)} className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-sm md:text-base">
                         <PlusIcon className="h-4 w-4 mr-2" />
                         Add Tenant
                     </Button>
@@ -657,294 +657,294 @@ export default function TenantsPage() {
 
                     <TabsContent value={activeTab} className="space-y-4 mt-0">
                         <div key={activeTab} className="animate-tenants-tab-in">
-                        <Card className="transition-shadow duration-300">
-                            <CardContent className="pt-6">
-                                {isLoading ? (
-                                    <div className="flex flex-col items-center justify-center py-16 space-y-4">
-                                        <Skeleton className="h-8 w-8 rounded-full" />
-                                        <Skeleton className="h-4 w-32" />
-                                    </div>
-                                ) : (() => {
+                            <Card className="transition-shadow duration-300 pt-0">
+                                <CardContent className="pt-4 px-4 md:pt-6 md:px-6">
+                                    {isLoading ? (
+                                        <div className="flex flex-col items-center justify-center py-16 space-y-4">
+                                            <Skeleton className="h-8 w-8 rounded-full" />
+                                            <Skeleton className="h-4 w-32" />
+                                        </div>
+                                    ) : (() => {
 
-                                    // Current Organization tab
-                                    if (activeTab === "current") {
-                                        if (!currentTenantId) {
-                                            return (
-                                                <div className="animate-section-in opacity-0 flex flex-col items-center justify-center py-12 px-6 text-center">
-                                                    <div className="p-4 rounded-xl mb-4 bg-muted transition-transform duration-300">
-                                                        <BuildingOffice2Icon className="h-10 w-10 text-muted-foreground" />
+                                        // Current Organization tab
+                                        if (activeTab === "current") {
+                                            if (!currentTenantId) {
+                                                return (
+                                                    <div className="animate-section-in opacity-0 flex flex-col items-center justify-center py-12 px-6 text-center">
+                                                        <div className="p-4 rounded-xl mb-4 bg-muted transition-transform duration-300">
+                                                            <BuildingOffice2Icon className="h-10 w-10 text-muted-foreground" />
+                                                        </div>
+                                                        <h3 className="text-lg font-semibold mb-1">No current organization detected</h3>
+                                                        <p className="text-base text-muted-foreground mb-4 max-w-sm">
+                                                            You are not currently associated with an organization.
+                                                        </p>
                                                     </div>
-                                                    <h3 className="text-lg font-semibold mb-1">No current organization detected</h3>
-                                                    <p className="text-base text-muted-foreground mb-4 max-w-sm">
-                                                        You are not currently associated with an organization.
-                                                    </p>
+                                                );
+                                            }
+
+                                            if (isLoadingCurrentTenant || !currentTenantDetails) {
+                                                return (
+                                                    <div className="space-y-4 animate-section-in opacity-0">
+                                                        <Skeleton className="h-8 w-48" />
+                                                        <Skeleton className="h-64 w-full" />
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <div className="space-y-4 md:space-y-6 animate-section-in opacity-0">
+                                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                                        <div className="min-w-0">
+                                                            <h2 className="text-base font-semibold truncate md:text-lg">{currentTenantDetails.name}</h2>
+                                                            <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate md:mt-1">
+                                                                {currentTenantDetails.slug}
+                                                            </p>
+                                                        </div>
+                                                        <Badge className="w-fit text-xs md:text-sm">Your organization</Badge>
+                                                    </div>
+
+                                                    <div>
+                                                        <h3 className="text-sm font-medium mb-2 md:text-base md:mb-3">Members</h3>
+                                                        {currentTenantDetails.collaborators.length === 0 ? (
+                                                            <div className="py-8 md:py-12 space-y-4 text-center px-2">
+                                                                <div className="mx-auto flex h-16 w-16 md:h-24 md:w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                                                                    <Users className="h-8 w-8 md:h-12 md:w-12 text-[color:var(--accent-strong)]" />
+                                                                </div>
+                                                                <div className="space-y-2 max-w-md mx-auto">
+                                                                    <p className="text-base font-semibold md:text-lg">No members yet</p>
+                                                                    <p className="text-sm text-muted-foreground md:text-base">
+                                                                        Invite your team to collaborate on roles, SOPs, and your organization profile.
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="space-y-3 md:space-y-4">
+                                                                {/* Mobile layout: stacked cards instead of wide table */}
+                                                                <div className="md:hidden space-y-2">
+                                                                    {currentTenantDetails.collaborators.map((collaborator) => (
+                                                                        <div
+                                                                            key={collaborator.id}
+                                                                            className="rounded-lg border px-3 py-2.5 space-y-1"
+                                                                        >
+                                                                            <div className="flex items-center justify-between gap-2">
+                                                                                <div className="font-medium truncate text-sm">
+                                                                                    {collaborator.firstname} {collaborator.lastname}
+                                                                                </div>
+                                                                                <Badge
+                                                                                    className={`shrink-0 text-[10px] px-1.5 py-0 md:text-xs ${collaborator.role === "ADMIN"
+                                                                                        ? "bg-[var(--primary-dark)] text-white"
+                                                                                        : "border-[var(--primary-dark)] text-[var(--primary-dark)] bg-transparent"
+                                                                                        }`}
+                                                                                >
+                                                                                    {collaborator.role}
+                                                                                </Badge>
+                                                                            </div>
+                                                                            <div className="text-xs text-muted-foreground truncate" title={collaborator.email}>
+                                                                                {collaborator.email}
+                                                                            </div>
+                                                                            <div className="text-[10px] text-muted-foreground md:text-xs">
+                                                                                Joined{" "}
+                                                                                {new Date(collaborator.joinedAt).toLocaleDateString("en-US", {
+                                                                                    month: "short",
+                                                                                    day: "numeric",
+                                                                                    year: "numeric",
+                                                                                })}
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+
+                                                                {/* Desktop / tablet layout: table */}
+                                                                <div className="hidden md:block rounded-lg border">
+                                                                    <Table className="w-full text-base">
+                                                                        <TableHeader>
+                                                                            <TableRow>
+                                                                                <TableHead>Name</TableHead>
+                                                                                <TableHead>Email</TableHead>
+                                                                                <TableHead>Role</TableHead>
+                                                                                <TableHead>Joined</TableHead>
+                                                                            </TableRow>
+                                                                        </TableHeader>
+                                                                        <TableBody>
+                                                                            {currentTenantDetails.collaborators.map((collaborator) => (
+                                                                                <TableRow key={collaborator.id}>
+                                                                                    <TableCell className="font-medium">
+                                                                                        {collaborator.firstname} {collaborator.lastname}
+                                                                                    </TableCell>
+                                                                                    <TableCell className="max-w-xs truncate" title={collaborator.email}>
+                                                                                        {collaborator.email}
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        <Badge
+                                                                                            className={
+                                                                                                collaborator.role === "ADMIN"
+                                                                                                    ? "bg-[var(--primary-dark)] text-white"
+                                                                                                    : "border-[var(--primary-dark)] text-[var(--primary-dark)] bg-transparent"
+                                                                                            }
+                                                                                        >
+                                                                                            {collaborator.role}
+                                                                                        </Badge>
+                                                                                    </TableCell>
+                                                                                    <TableCell className="text-muted-foreground">
+                                                                                        {new Date(collaborator.joinedAt).toLocaleDateString("en-US", {
+                                                                                            month: "short",
+                                                                                            day: "numeric",
+                                                                                            year: "numeric",
+                                                                                        })}
+                                                                                    </TableCell>
+                                                                                </TableRow>
+                                                                            ))}
+                                                                        </TableBody>
+                                                                    </Table>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             );
                                         }
 
-                                        if (isLoadingCurrentTenant || !currentTenantDetails) {
+                                        const filteredTenants = tenants.filter((tenant: Tenant) =>
+                                            tenant.id !== currentTenantId && (activeTab === "active"
+                                                ? !tenant.deactivatedAt
+                                                : tenant.deactivatedAt !== null)
+                                        );
+
+                                        if (filteredTenants.length === 0) {
                                             return (
-                                                <div className="space-y-4 animate-section-in opacity-0">
-                                                    <Skeleton className="h-8 w-48" />
-                                                    <Skeleton className="h-64 w-full" />
+                                                <div className="animate-section-in opacity-0 flex flex-col items-center justify-center py-8 md:py-12 px-4 md:px-6 text-center">
+                                                    <div className="p-3 md:p-4 rounded-xl mb-3 md:mb-4 bg-muted">
+                                                        <BuildingOffice2Icon className="h-8 w-8 md:h-10 md:w-10 text-muted-foreground" />
+                                                    </div>
+                                                    <h3 className="text-base font-semibold mb-1 md:text-lg">
+                                                        {activeTab === "active" ? "No active tenants" : "No inactive tenants"}
+                                                    </h3>
+                                                    <p className="text-sm text-muted-foreground mb-4 max-w-sm md:text-base">
+                                                        {activeTab === "active"
+                                                            ? "Create your first organization tenant to get started."
+                                                            : "No deactivated tenants yet."}
+                                                    </p>
+                                                    {activeTab === "active" && (
+                                                        <Button onClick={() => setIsModalOpen(true)} className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-sm">
+                                                            <PlusIcon className="h-4 w-4 mr-2" />
+                                                            Add Tenant
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             );
                                         }
 
                                         return (
-                                            <div className="space-y-6 animate-section-in opacity-0">
-                                                <div className="flex items-center justify-between">
-                                                    <div>
-                                                        <h2 className="text-lg font-semibold">{currentTenantDetails.name}</h2>
-                                                        <p className="text-xs text-muted-foreground font-mono mt-1">
-                                                            {currentTenantDetails.slug}
-                                                        </p>
-                                                    </div>
-                                                    <Badge>Your organization</Badge>
-                                                </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                                                {filteredTenants.map((tenant: Tenant, index: number) => {
+                                                    const isCurrentTenant = tenant.id === currentTenantId;
 
-                                                <div>
-                                                    <h3 className="text-base font-medium mb-3">Members</h3>
-                                                    {currentTenantDetails.collaborators.length === 0 ? (
-                                                        <div className="py-12 space-y-4 text-center">
-                                                            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
-                                                                <Users className="h-12 w-12 text-[color:var(--accent-strong)]" />
-                                                            </div>
-                                                            <div className="space-y-2 max-w-md mx-auto">
-                                                                <p className="text-lg font-semibold">No members yet</p>
-                                                                <p className="text-base text-muted-foreground">
-                                                                    Invite your team to collaborate on roles, SOPs, and your organization profile.
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="space-y-4">
-                                                            {/* Mobile layout: stacked cards instead of wide table */}
-                                                            <div className="md:hidden space-y-2">
-                                                                {currentTenantDetails.collaborators.map((collaborator) => (
-                                                                    <div
-                                                                        key={collaborator.id}
-                                                                        className="rounded-lg border px-3 py-2 space-y-1"
-                                                                    >
-                                                                        <div className="flex items-center justify-between gap-2">
-                                                                            <div className="font-medium truncate text-base">
-                                                                                {collaborator.firstname} {collaborator.lastname}
+                                                    return (
+                                                        <Card
+                                                            key={tenant.id}
+                                                            onClick={() => !tenant.deactivatedAt && handleTenantClick(tenant)}
+                                                            className={`animate-section-in opacity-0 group transition-all duration-300 ${isCurrentTenant ? "ring-2 ring-primary shadow-md" : ""} ${tenant.deactivatedAt ? "opacity-60" : "hover:shadow-lg hover:border-primary/50 cursor-pointer"}`}
+                                                            style={{ animationDelay: `${index * 60}ms` }}
+                                                        >
+                                                            <CardHeader className="pb-3">
+                                                                <div className="flex items-start justify-between gap-3">
+                                                                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                                                                        <div className="p-2.5 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors shrink-0">
+                                                                            <BuildingOffice2Icon className="h-5 w-5 text-primary" />
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0 space-y-1">
+                                                                            <div className="flex items-start gap-2">
+                                                                                <CardTitle className="text-base font-semibold leading-tight truncate" title={tenant.name}>
+                                                                                    {tenant.name}
+                                                                                </CardTitle>
+                                                                                {isCurrentTenant && (
+                                                                                    <Badge variant="default" className="shrink-0 text-xs">Current</Badge>
+                                                                                )}
                                                                             </div>
-                                                                            <Badge
-                                                                                className={`shrink-0 ${collaborator.role === "ADMIN"
-                                                                                    ? "bg-[var(--primary-dark)] text-white"
-                                                                                    : "border-[var(--primary-dark)] text-[var(--primary-dark)] bg-transparent"
-                                                                                    }`}
-                                                                            >
-                                                                                {collaborator.role}
-                                                                            </Badge>
+                                                                            <p className="text-xs font-mono truncate text-muted-foreground" title={tenant.slug}>
+                                                                                {tenant.slug}
+                                                                            </p>
                                                                         </div>
-                                                                        <div className="text-base text-muted-foreground truncate" title={collaborator.email}>
-                                                                            {collaborator.email}
-                                                                        </div>
-                                                                        <div className="text-xs text-muted-foreground">
-                                                                            Joined{" "}
-                                                                            {new Date(collaborator.joinedAt).toLocaleDateString("en-US", {
+                                                                    </div>
+                                                                    {!isCurrentTenant && (
+                                                                        <DropdownMenu>
+                                                                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                                                                >
+                                                                                    <EllipsisVerticalIcon className="h-4 w-4" />
+                                                                                </Button>
+                                                                            </DropdownMenuTrigger>
+                                                                            <DropdownMenuContent align="end">
+                                                                                {!tenant.deactivatedAt ? (
+                                                                                    <DropdownMenuItem
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setTenantToDeactivate(tenant);
+                                                                                            setShowDeactivateModal(true);
+                                                                                        }}
+                                                                                        className="text-destructive"
+                                                                                    >
+                                                                                        <PowerIcon className="h-4 w-4 mr-2" />
+                                                                                        Deactivate
+                                                                                    </DropdownMenuItem>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        <DropdownMenuItem
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                setTenantToActivate(tenant);
+                                                                                                setShowActivateModal(true);
+                                                                                            }}
+                                                                                        >
+                                                                                            <CheckCircleIcon className="h-4 w-4 mr-2" />
+                                                                                            Activate
+                                                                                        </DropdownMenuItem>
+                                                                                        <DropdownMenuItem
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                setTenantToDelete(tenant);
+                                                                                                setShowDeleteModal(true);
+                                                                                            }}
+                                                                                            className="text-destructive"
+                                                                                        >
+                                                                                            <TrashIcon className="h-4 w-4 mr-2" />
+                                                                                            Delete
+                                                                                        </DropdownMenuItem>
+                                                                                    </>
+                                                                                )}
+                                                                            </DropdownMenuContent>
+                                                                        </DropdownMenu>
+                                                                    )}
+                                                                </div>
+                                                            </CardHeader>
+                                                            <CardContent className="pt-0">
+                                                                <div className="flex items-center justify-between text-xs pt-3 border-t">
+                                                                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                                                                        <span>Created</span>
+                                                                        <span className="font-medium">
+                                                                            {new Date(tenant.createdAt).toLocaleDateString("en-US", {
                                                                                 month: "short",
                                                                                 day: "numeric",
                                                                                 year: "numeric",
                                                                             })}
-                                                                        </div>
+                                                                        </span>
                                                                     </div>
-                                                                ))}
-                                                            </div>
-
-                                                            {/* Desktop / tablet layout: table */}
-                                                            <div className="hidden md:block rounded-lg border">
-                                                                <Table className="w-full text-base">
-                                                                    <TableHeader>
-                                                                        <TableRow>
-                                                                            <TableHead>Name</TableHead>
-                                                                            <TableHead>Email</TableHead>
-                                                                            <TableHead>Role</TableHead>
-                                                                            <TableHead>Joined</TableHead>
-                                                                        </TableRow>
-                                                                    </TableHeader>
-                                                                    <TableBody>
-                                                                        {currentTenantDetails.collaborators.map((collaborator) => (
-                                                                            <TableRow key={collaborator.id}>
-                                                                                <TableCell className="font-medium">
-                                                                                    {collaborator.firstname} {collaborator.lastname}
-                                                                                </TableCell>
-                                                                                <TableCell className="max-w-xs truncate" title={collaborator.email}>
-                                                                                    {collaborator.email}
-                                                                                </TableCell>
-                                                                                <TableCell>
-                                                                                    <Badge
-                                                                                        className={
-                                                                                            collaborator.role === "ADMIN"
-                                                                                                ? "bg-[var(--primary-dark)] text-white"
-                                                                                                : "border-[var(--primary-dark)] text-[var(--primary-dark)] bg-transparent"
-                                                                                        }
-                                                                                    >
-                                                                                        {collaborator.role}
-                                                                                    </Badge>
-                                                                                </TableCell>
-                                                                                <TableCell className="text-muted-foreground">
-                                                                                    {new Date(collaborator.joinedAt).toLocaleDateString("en-US", {
-                                                                                        month: "short",
-                                                                                        day: "numeric",
-                                                                                        year: "numeric",
-                                                                                    })}
-                                                                                </TableCell>
-                                                                            </TableRow>
-                                                                        ))}
-                                                                    </TableBody>
-                                                                </Table>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                                    {tenant.deactivatedAt && (
+                                                                        <Badge variant="destructive" className="text-xs">Inactive</Badge>
+                                                                    )}
+                                                                </div>
+                                                            </CardContent>
+                                                        </Card>
+                                                    );
+                                                })}
                                             </div>
                                         );
-                                    }
-
-                                    const filteredTenants = tenants.filter((tenant: Tenant) =>
-                                        tenant.id !== currentTenantId && (activeTab === "active"
-                                            ? !tenant.deactivatedAt
-                                            : tenant.deactivatedAt !== null)
-                                    );
-
-                                    if (filteredTenants.length === 0) {
-                                        return (
-                                            <div className="animate-section-in opacity-0 flex flex-col items-center justify-center py-12 px-6 text-center">
-                                                <div className="p-4 rounded-xl mb-4 bg-muted">
-                                                    <BuildingOffice2Icon className="h-10 w-10 text-muted-foreground" />
-                                                </div>
-                                                <h3 className="text-lg font-semibold mb-1">
-                                                    {activeTab === "active" ? "No active tenants" : "No inactive tenants"}
-                                                </h3>
-                                                <p className="text-base text-muted-foreground mb-4 max-w-sm">
-                                                    {activeTab === "active"
-                                                        ? "Create your first organization tenant to get started."
-                                                        : "No deactivated tenants yet."}
-                                                </p>
-                                                {activeTab === "active" && (
-                                                    <Button onClick={() => setIsModalOpen(true)} className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
-                                                        <PlusIcon className="h-4 w-4 mr-2" />
-                                                        Add Tenant
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        );
-                                    }
-
-                                    return (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                            {filteredTenants.map((tenant: Tenant, index: number) => {
-                                                const isCurrentTenant = tenant.id === currentTenantId;
-
-                                                return (
-                                                    <Card
-                                                        key={tenant.id}
-                                                        onClick={() => !tenant.deactivatedAt && handleTenantClick(tenant)}
-                                                        className={`animate-section-in opacity-0 group transition-all duration-300 ${isCurrentTenant ? "ring-2 ring-primary shadow-md" : ""} ${tenant.deactivatedAt ? "opacity-60" : "hover:shadow-lg hover:border-primary/50 cursor-pointer"}`}
-                                                        style={{ animationDelay: `${index * 60}ms` }}
-                                                    >
-                                                        <CardHeader className="pb-3">
-                                                            <div className="flex items-start justify-between gap-3">
-                                                                <div className="flex items-start gap-3 flex-1 min-w-0">
-                                                                    <div className="p-2.5 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors shrink-0">
-                                                                        <BuildingOffice2Icon className="h-5 w-5 text-primary" />
-                                                                    </div>
-                                                                    <div className="flex-1 min-w-0 space-y-1">
-                                                                        <div className="flex items-start gap-2">
-                                                                            <CardTitle className="text-base font-semibold leading-tight truncate" title={tenant.name}>
-                                                                                {tenant.name}
-                                                                            </CardTitle>
-                                                                            {isCurrentTenant && (
-                                                                                <Badge variant="default" className="shrink-0 text-xs">Current</Badge>
-                                                                            )}
-                                                                        </div>
-                                                                        <p className="text-xs font-mono truncate text-muted-foreground" title={tenant.slug}>
-                                                                            {tenant.slug}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                                {!isCurrentTenant && (
-                                                                    <DropdownMenu>
-                                                                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                                                            <Button
-                                                                                variant="ghost"
-                                                                                size="icon"
-                                                                                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                                                                            >
-                                                                                <EllipsisVerticalIcon className="h-4 w-4" />
-                                                                            </Button>
-                                                                        </DropdownMenuTrigger>
-                                                                        <DropdownMenuContent align="end">
-                                                                            {!tenant.deactivatedAt ? (
-                                                                                <DropdownMenuItem
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        setTenantToDeactivate(tenant);
-                                                                                        setShowDeactivateModal(true);
-                                                                                    }}
-                                                                                    className="text-destructive"
-                                                                                >
-                                                                                    <PowerIcon className="h-4 w-4 mr-2" />
-                                                                                    Deactivate
-                                                                                </DropdownMenuItem>
-                                                                            ) : (
-                                                                                <>
-                                                                                    <DropdownMenuItem
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            setTenantToActivate(tenant);
-                                                                                            setShowActivateModal(true);
-                                                                                        }}
-                                                                                    >
-                                                                                        <CheckCircleIcon className="h-4 w-4 mr-2" />
-                                                                                        Activate
-                                                                                    </DropdownMenuItem>
-                                                                                    <DropdownMenuItem
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            setTenantToDelete(tenant);
-                                                                                            setShowDeleteModal(true);
-                                                                                        }}
-                                                                                        className="text-destructive"
-                                                                                    >
-                                                                                        <TrashIcon className="h-4 w-4 mr-2" />
-                                                                                        Delete
-                                                                                    </DropdownMenuItem>
-                                                                                </>
-                                                                            )}
-                                                                        </DropdownMenuContent>
-                                                                    </DropdownMenu>
-                                                                )}
-                                                            </div>
-                                                        </CardHeader>
-                                                        <CardContent className="pt-0">
-                                                            <div className="flex items-center justify-between text-xs pt-3 border-t">
-                                                                <div className="flex items-center gap-1.5 text-muted-foreground">
-                                                                    <span>Created</span>
-                                                                    <span className="font-medium">
-                                                                        {new Date(tenant.createdAt).toLocaleDateString("en-US", {
-                                                                            month: "short",
-                                                                            day: "numeric",
-                                                                            year: "numeric",
-                                                                        })}
-                                                                    </span>
-                                                                </div>
-                                                                {tenant.deactivatedAt && (
-                                                                    <Badge variant="destructive" className="text-xs">Inactive</Badge>
-                                                                )}
-                                                            </div>
-                                                        </CardContent>
-                                                    </Card>
-                                                );
-                                            })}
-                                        </div>
-                                    );
-                                })()}
-                            </CardContent>
-                        </Card>
+                                    })()}
+                                </CardContent>
+                            </Card>
                         </div>
                     </TabsContent>
                 </Tabs>
@@ -1170,14 +1170,14 @@ export default function TenantsPage() {
 
                 <Sheet open={isPanelOpen} onOpenChange={handleClosePanel}>
                     <SheetContent className="w-full sm:max-w-md flex flex-col p-0 h-full overflow-hidden">
-                        <SheetHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-                            <div className="flex items-start gap-3">
-                                <div className="p-2 rounded-lg bg-muted">
-                                    <BuildingOffice2Icon className="h-5 w-5" />
+                        <SheetHeader className="px-4 pt-4 pb-3 border-b shrink-0 md:px-6 md:pt-6 md:pb-4">
+                            <div className="flex items-start gap-2 md:gap-3">
+                                <div className="p-1.5 md:p-2 rounded-lg bg-muted shrink-0">
+                                    <BuildingOffice2Icon className="h-4 w-4 md:h-5 md:w-5" />
                                 </div>
-                                <div>
-                                    <SheetTitle className="text-2xl">Tenant Details</SheetTitle>
-                                    <SheetDescription className="mt-1">
+                                <div className="min-w-0">
+                                    <SheetTitle className="text-lg md:text-2xl">Tenant Details</SheetTitle>
+                                    <SheetDescription className="mt-0.5 text-sm md:mt-1 md:text-base">
                                         Manage collaborators and invitations for this organization
                                     </SheetDescription>
                                 </div>
@@ -1185,15 +1185,15 @@ export default function TenantsPage() {
                         </SheetHeader>
                         <div className="flex-1 min-h-0 overflow-hidden">
                             <ScrollArea className="h-full">
-                                <div className="px-6">
+                                <div className="px-4 md:px-6">
                                     {isLoadingTenantDetails ? (
                                         <div className="flex items-center justify-center py-12">
                                             <Skeleton className="h-8 w-8 rounded-full" />
                                         </div>
                                     ) : selectedTenant ? (
-                                        <div className="space-y-6 py-6">
+                                        <div className="space-y-4 md:space-y-6 py-4 md:py-6">
                                             <div>
-                                                <h3 className="text-lg font-semibold mb-1">{selectedTenant.name}</h3>
+                                                <h3 className="text-base font-semibold mb-1 md:text-lg">{selectedTenant.name}</h3>
                                                 <p className="text-xs text-muted-foreground">
                                                     Created {new Date(selectedTenant.createdAt).toLocaleDateString('en-US', {
                                                         year: 'numeric',
@@ -1205,8 +1205,8 @@ export default function TenantsPage() {
                                             <Separator />
 
                                             <div>
-                                                <h4 className="text-base font-medium mb-3">Invite a collaborator</h4>
-                                                <div className="space-y-3">
+                                                <h4 className="text-sm font-medium mb-2 md:text-base md:mb-3">Invite a collaborator</h4>
+                                                <div className="space-y-2 md:space-y-3">
                                                     <div className="space-y-2">
                                                         <Label htmlFor="invite-email">Email</Label>
                                                         <Input
@@ -1252,9 +1252,9 @@ export default function TenantsPage() {
                                             <div className="border-t my-4" style={{ borderColor: "var(--border-color)" }} />
 
                                             <div>
-                                                <div className="flex items-center gap-2 mb-3">
-                                                    <EnvelopeIcon className="h-4 w-4" />
-                                                    <h4 className="text-base font-medium">Pending Invites</h4>
+                                                <div className="flex items-center gap-2 mb-2 md:mb-3">
+                                                    <EnvelopeIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                                    <h4 className="text-sm font-medium md:text-base">Pending Invites</h4>
                                                     {selectedTenant.pendingInvites && selectedTenant.pendingInvites.length > 0 && (
                                                         <Badge className="bg-[var(--primary-dark)] text-white">{selectedTenant.pendingInvites.length}</Badge>
                                                     )}
@@ -1311,9 +1311,9 @@ export default function TenantsPage() {
                                             <Separator />
 
                                             <div>
-                                                <div className="flex items-center gap-2 mb-3">
-                                                    <UserPlusIcon className="h-4 w-4" />
-                                                    <h4 className="text-base font-medium">Collaborators</h4>
+                                                <div className="flex items-center gap-2 mb-2 md:mb-3">
+                                                    <UserPlusIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                                    <h4 className="text-sm font-medium md:text-base">Collaborators</h4>
                                                     {selectedTenant.collaborators && selectedTenant.collaborators.length > 0 && (
                                                         <Badge className="bg-[var(--primary-dark)] text-white">{selectedTenant.collaborators.length}</Badge>
                                                     )}
@@ -1326,23 +1326,23 @@ export default function TenantsPage() {
                                                     <div className="space-y-2">
                                                         {selectedTenant.collaborators.map((collaborator) => (
                                                             <Card key={collaborator.id} className={`overflow-hidden w-full max-w-full ${collaborator.deactivatedAt ? "opacity-60" : ""}`}>
-                                                                <CardContent className="py-0 px-3">
-                                                                    <div className="flex items-center justify-between gap-2 w-full">
+                                                                <CardContent className="py-2 px-3 md:py-0 md:px-3">
+                                                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between w-full">
                                                                         <div className="flex-1 min-w-0">
-                                                                            <p className="font-medium text-base mb-0.5 truncate">
+                                                                            <p className="font-medium text-sm mb-0.5 truncate md:text-base">
                                                                                 {collaborator.firstname} {collaborator.lastname}
                                                                             </p>
-                                                                            <p className="text-base truncate text-muted-foreground" title={collaborator.email}>
+                                                                            <p className="text-xs truncate text-muted-foreground md:text-base" title={collaborator.email}>
                                                                                 {collaborator.email}
                                                                             </p>
-                                                                            <p className="text-xs mt-0.5 text-muted-foreground">
+                                                                            <p className="text-[10px] mt-0.5 text-muted-foreground md:text-xs">
                                                                                 {collaborator.deactivatedAt
                                                                                     ? `Deactivated ${new Date(collaborator.deactivatedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`
                                                                                     : `Joined ${new Date(collaborator.joinedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`
                                                                                 }
                                                                             </p>
                                                                         </div>
-                                                                        <div className="flex items-center gap-2 shrink-0">
+                                                                        <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
                                                                             <Badge
                                                                                 className={
                                                                                     collaborator.role === "ADMIN"

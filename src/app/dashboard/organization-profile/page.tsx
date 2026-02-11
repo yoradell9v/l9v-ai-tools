@@ -608,8 +608,9 @@ export default function OrganizationProfilePage() {
     if (isLoading) {
         return (
             <>
-                <div className="flex items-center gap-2 p-4 border-b">
-                    <SidebarTrigger />
+                <div className="flex items-center justify-between gap-3 py-6 px-4 md:py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
+                    <h1 className="text-xl font-semibold truncate min-w-0 md:text-2xl">Organization Knowledge Base</h1>
+                    <SidebarTrigger className="flex-shrink-0" />
                 </div>
                 <div className="flex items-center justify-center min-h-screen">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -621,14 +622,15 @@ export default function OrganizationProfilePage() {
     if (error && !profile) {
         return (
             <>
-                <div className="flex items-center gap-2 p-4 border-b">
-                    <SidebarTrigger />
+                <div className="flex items-center justify-between gap-3 py-6 px-4 md:py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
+                    <h1 className="text-xl font-semibold truncate min-w-0 md:text-2xl">Organization Knowledge Base</h1>
+                    <SidebarTrigger className="flex-shrink-0" />
                 </div>
                 <div className="min-h-screen">
-                    <div className="py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
+                    <div className="py-6 px-4 md:py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
                         <Card className="border-destructive/30 bg-destructive/10">
-                            <CardContent className="py-4">
-                                <p className="text-base text-destructive">{error}</p>
+                            <CardContent className="py-3 px-4 md:py-4">
+                                <p className="text-sm text-destructive md:text-base">{error}</p>
                             </CardContent>
                         </Card>
                     </div>
@@ -639,52 +641,49 @@ export default function OrganizationProfilePage() {
 
     return (
         <>
-            <div className="flex items-center gap-2 p-4 border-b">
-                <SidebarTrigger />
-            </div>
             <div className="min-h-screen">
-                <div className="py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 space-y-6">
-                    
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between animate-section-in opacity-0">
-                        <div>
-                            <h1 className="text-2xl font-semibold mb-2">Organization Knowledge Base</h1>
+                <div className="py-6 px-4 space-y-4 md:py-10 md:px-8 md:space-y-6 lg:px-16 xl:px-24 2xl:px-32">
+                    <div className="flex items-center justify-between gap-3 animate-section-in opacity-0">
+                        <div className="min-w-0">
+                            <h1 className="text-xl font-semibold mb-1 truncate md:text-2xl md:mb-2">Organization Knowledge Base</h1>
                         </div>
+                        <SidebarTrigger className="flex-shrink-0" />
                     </div>
 
                     {!profile && (
-                        <div className="py-16 space-y-8 animate-section-in opacity-0">
-                            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
-                                <RocketLaunchIcon className="h-12 w-12 text-[color:var(--accent-strong)] animate-pulse" />
+                        <div className="py-10 px-2 space-y-6 md:py-16 md:space-y-8 animate-section-in opacity-0">
+                            <div className="mx-auto flex h-20 w-20 md:h-24 md:w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                                <RocketLaunchIcon className="h-10 w-10 md:h-12 md:w-12 text-[color:var(--accent-strong)] animate-pulse" />
                             </div>
-                            <div className="space-y-4 text-center max-w-2xl mx-auto">
-                                <h1 className="text-3xl font-bold">Build Your AI Knowledge Base</h1>
-                                <p className="text-lg text-muted-foreground">
+                            <div className="space-y-3 text-center max-w-2xl mx-auto md:space-y-4">
+                                <h1 className="text-2xl font-bold md:text-3xl">Build Your AI Knowledge Base</h1>
+                                <p className="text-base text-muted-foreground md:text-lg">
                                     Create a single source of truth that powers all your AI tools. The more complete it is, the smarter your results become.
                                 </p>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-                                    <div className="p-4 rounded-lg border bg-card">
-                                        <BriefcaseIcon className="h-6 w-6 mb-2 text-primary" />
-                                        <p className="font-semibold text-sm">Job Descriptions</p>
-                                        <p className="text-xs text-muted-foreground mt-1">Generate role-specific job descriptions</p>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-6 md:gap-4 md:mt-8">
+                                    <div className="p-3 rounded-lg border bg-card md:p-4">
+                                        <BriefcaseIcon className="h-5 w-5 md:h-6 md:w-6 mb-1.5 md:mb-2 text-primary" />
+                                        <p className="font-semibold text-xs md:text-sm">Job Descriptions</p>
+                                        <p className="text-[10px] text-muted-foreground mt-0.5 md:text-xs md:mt-1">Generate role-specific job descriptions</p>
                                     </div>
-                                    <div className="p-4 rounded-lg border bg-card">
-                                        <DocumentTextIcon className="h-6 w-6 mb-2 text-primary" />
-                                        <p className="font-semibold text-sm">SOPs</p>
-                                        <p className="text-xs text-muted-foreground mt-1">Create standard operating procedures</p>
+                                    <div className="p-3 rounded-lg border bg-card md:p-4">
+                                        <DocumentTextIcon className="h-5 w-5 md:h-6 md:w-6 mb-1.5 md:mb-2 text-primary" />
+                                        <p className="font-semibold text-xs md:text-sm">SOPs</p>
+                                        <p className="text-[10px] text-muted-foreground mt-0.5 md:text-xs md:mt-1">Create standard operating procedures</p>
                                     </div>
-                                    <div className="p-4 rounded-lg border bg-card">
-                                        <Brain className="h-6 w-6 mb-2 text-primary" />
-                                        <p className="font-semibold text-sm">Business Brain</p>
-                                        <p className="text-xs text-muted-foreground mt-1">AI-powered business conversations</p>
+                                    <div className="p-3 rounded-lg border bg-card md:p-4">
+                                        <Brain className="h-5 w-5 md:h-6 md:w-6 mb-1.5 md:mb-2 text-primary" />
+                                        <p className="font-semibold text-xs md:text-sm">Business Brain</p>
+                                        <p className="text-[10px] text-muted-foreground mt-0.5 md:text-xs md:mt-1">AI-powered business conversations</p>
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                                <Button onClick={() => setIsEditing(true)} size="lg" className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
+                            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3">
+                                <Button onClick={() => setIsEditing(true)} size="lg" className="w-full sm:w-auto bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-sm md:text-base">
                                     <RocketLaunchIcon className="h-5 w-5 mr-2" />
                                     Quick Start (5 min)
                                 </Button>
-                                <Button onClick={() => setIsEditing(true)} size="lg" variant="outline">
+                                <Button onClick={() => setIsEditing(true)} size="lg" variant="outline" className="w-full sm:w-auto text-sm md:text-base">
                                     Complete Setup (15 min)
                                 </Button>
                                 {/* Tell AI hidden when KB not set up — tool chat requires a knowledge base */}
@@ -693,10 +692,10 @@ export default function OrganizationProfilePage() {
                     )}
 
                     {profile && documents.some(doc => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING") && (
-                        <Alert className="border-blue-500/20 bg-blue-500/5 animate-section-in opacity-0 transition-opacity duration-300">
-                            <DocumentTextIcon className="h-4 w-4" />
-                            <AlertTitle>Documents Processing</AlertTitle>
-                            <AlertDescription>
+                        <Alert className="border-blue-500/20 bg-blue-500/5 animate-section-in opacity-0 transition-opacity duration-300 p-3 md:p-4">
+                            <DocumentTextIcon className="h-4 w-4 flex-shrink-0" />
+                            <AlertTitle className="text-sm md:text-base">Documents Processing</AlertTitle>
+                            <AlertDescription className="text-xs md:text-sm">
                                 {documents.filter(doc => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING").length} document{documents.filter(doc => doc.extractionStatus === "PENDING" || doc.extractionStatus === "PROCESSING").length > 1 ? 's' : ''} being processed. Fields will auto-fill when complete.
                             </AlertDescription>
                         </Alert>
@@ -709,14 +708,14 @@ export default function OrganizationProfilePage() {
                         const cta = getPrimaryCTA(qualityAnalysis, completionAnalysis);
 
                         return (
-                            <div className="relative p-6 rounded-lg border bg-gradient-to-br from-background to-muted/20 animate-section-in opacity-0">
-                                {/* Health Score Badge - Top Right: primary = quality when available, else "Not yet analyzed" */}
-                                <div className="absolute top-4 right-4">
+                            <div className="relative p-4 rounded-lg border bg-gradient-to-br from-background to-muted/20 animate-section-in opacity-0 md:p-6">
+                                {/* Health Score: on mobile centered above content; on desktop top-right */}
+                                <div className="flex justify-center mb-4 md:absolute md:top-4 md:right-4 md:mb-0">
                                     <TooltipProvider>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <div className="relative w-32 h-32">
-                                                    <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 100 100">
+                                                <div className="relative w-24 h-24 md:w-32 md:h-32">
+                                                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                                                         <defs>
                                                             <linearGradient id="healthGradientCompact" x1="0%" y1="0%" x2="100%" y2="0%">
                                                                 <stop offset="0%" stopColor="#f0b214" />
@@ -749,9 +748,9 @@ export default function OrganizationProfilePage() {
                                                     </svg>
                                                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                                                         {health.primaryScore !== null ? (
-                                                            <span className="text-2xl font-bold tabular-nums">{animatedHealthScore}%</span>
+                                                            <span className="text-lg font-bold tabular-nums md:text-2xl">{animatedHealthScore}%</span>
                                                         ) : (
-                                                            <span className="text-xs font-medium text-muted-foreground text-center px-1">Not yet analyzed</span>
+                                                            <span className="text-[10px] font-medium text-muted-foreground text-center px-0.5 md:text-xs md:px-1">Not yet analyzed</span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -766,14 +765,14 @@ export default function OrganizationProfilePage() {
                                     </TooltipProvider>
                                 </div>
 
-                                <div className="space-y-4 pr-20">
+                                <div className="space-y-3 pr-0 md:pr-40 md:space-y-4">
                                     {/* Tier + optional coverage */}
-                                    <div className="flex items-center gap-3 flex-wrap">
-                                        <Badge className={`${tier.bgColor} ${tier.color} ${tier.borderColor} border`}>
+                                    <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                                        <Badge className={`shrink-0 text-xs md:text-sm ${tier.bgColor} ${tier.color} ${tier.borderColor} border`}>
                                             {tier.label}
                                         </Badge>
                                         {health.coverageScore !== null && (
-                                            <span className="text-sm text-muted-foreground">
+                                            <span className="text-xs text-muted-foreground md:text-sm">
                                                 Profile coverage: <span className="font-medium">{health.coverageScore}%</span>
                                             </span>
                                         )}
@@ -781,26 +780,26 @@ export default function OrganizationProfilePage() {
 
                                     {/* Next Milestone: Business Brain only (Phase 4) */}
                                     {nextMilestone ? (
-                                        <div className="space-y-2">
-                                            <p className="text-2xl font-semibold">Keep building your AI Knowledge Base</p>
-                                            <p className="text-sm text-muted-foreground">
+                                        <div className="space-y-1 md:space-y-2">
+                                            <p className="text-lg font-semibold md:text-2xl">Keep building your AI Knowledge Base</p>
+                                            <p className="text-xs text-muted-foreground md:text-sm">
                                                 {nextMilestone.message}
                                             </p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-2">
-                                            <p className="text-2xl font-semibold">Business Brain ready 🎉</p>
-                                            <p className="text-sm text-muted-foreground">Your knowledge base quality supports strong AI conversations.</p>
+                                        <div className="space-y-1 md:space-y-2">
+                                            <p className="text-lg font-semibold md:text-2xl">Business Brain ready 🎉</p>
+                                            <p className="text-xs text-muted-foreground md:text-sm">Your knowledge base quality supports strong AI conversations.</p>
                                         </div>
                                     )}
 
-                                    {/* Primary CTA */}
-                                    <div className="flex flex-wrap items-center gap-3">
+                                    {/* Primary CTA: stack on mobile, wrap on desktop */}
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                                         <Button
                                             onClick={cta.action}
                                             size="lg"
                                             variant="outline"
-                                            className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white"
+                                            className="w-full sm:w-auto border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)] hover:text-white text-sm md:text-base"
                                             disabled={cta.label === "Run quality check" && isAnalyzingQuality}
                                         >
                                             {cta.label === "Run quality check" && isAnalyzingQuality ? (
@@ -817,7 +816,7 @@ export default function OrganizationProfilePage() {
                                             <DropdownMenuTrigger asChild>
                                                 <Button
                                                     size="lg"
-                                                    className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                    className="w-full sm:w-auto bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-sm md:text-base"
                                                 >
                                                     <SparklesIcon className="h-4 w-4 mr-2" />
                                                     Improve with AI
@@ -860,40 +859,40 @@ export default function OrganizationProfilePage() {
                         if (quickWins.length === 0) return null;
 
                         return (
-                            <div className="space-y-4 animate-section-in opacity-0" style={{ animationDelay: "80ms" }}>
+                            <div className="space-y-3 md:space-y-4 animate-section-in opacity-0" style={{ animationDelay: "80ms" }}>
                                 <div>
                                     <div className="flex items-center gap-2 mb-1">
-                                        <Zap className="h-5 w-5 text-amber-500" />
-                                        <h2 className="text-2xl font-semibold">Quick Wins</h2>
+                                        <Zap className="h-4 w-4 md:h-5 md:w-5 text-amber-500" />
+                                        <h2 className="text-xl font-semibold md:text-2xl">Quick Wins</h2>
                                     </div>
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="text-xs text-muted-foreground md:text-sm">
                                         Complete these in under 5 minutes to improve quality and coverage
                                     </p>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                                     {quickWins.map((rec, idx) => {
                                         const isCompletionRec = rec.type === 'completion';
                                         const fields = rec.fields || [];
                                         const fieldCount = fields.length;
                                         const description = isCompletionRec ? (rec as any).benefit : (rec as any).impact;
                                         return (
-                                            <div key={idx} className="p-4 rounded-lg border bg-card hover:shadow-md transition-shadow">
-                                                <div className="flex items-start justify-between gap-3 mb-3">
-                                                    <div className="flex-1">
-                                                        <p className="font-semibold mb-1">{rec.message}</p>
+                                            <div key={idx} className="p-3 rounded-lg border bg-card hover:shadow-md transition-shadow md:p-4 overflow-hidden">
+                                                <div className="flex items-start justify-between gap-2 mb-2 md:gap-3 md:mb-3">
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-sm mb-0.5 md:text-base md:mb-1 break-words">{rec.message}</p>
                                                         {description && (
-                                                            <p className="text-sm text-muted-foreground">{description}</p>
+                                                            <p className="text-xs text-muted-foreground md:text-sm break-words">{description}</p>
                                                         )}
                                                     </div>
                                                     <Badge
                                                         variant={rec.priority === 'high' ? 'destructive' : rec.priority === 'medium' ? 'default' : 'secondary'}
-                                                        className="text-xs flex-shrink-0"
+                                                        className="text-[10px] flex-shrink-0 md:text-xs"
                                                     >
                                                         {rec.priority === 'high' ? 'High' : rec.priority === 'medium' ? 'Medium' : 'Low'}
                                                     </Badge>
                                                 </div>
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                                    <div className="flex items-center gap-2 md:gap-3 text-[10px] text-muted-foreground md:text-xs">
                                                         <div className="flex items-center gap-1">
                                                             <Clock className="h-3 w-3" />
                                                             <span>~{rec.timeEstimate} min</span>
@@ -911,7 +910,7 @@ export default function OrganizationProfilePage() {
                                                                 setIsEditing(true);
                                                             }
                                                         }}
-                                                        className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                        className="w-full sm:w-auto bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-xs md:text-sm"
                                                     >
                                                         Complete This
                                                     </Button>
@@ -925,14 +924,14 @@ export default function OrganizationProfilePage() {
                     })()}
 
                     {profile && completionAnalysis && (
-                        <div className="space-y-4 animate-section-in opacity-0" style={{ animationDelay: "120ms" }}>
+                        <div className="space-y-3 md:space-y-4 animate-section-in opacity-0" style={{ animationDelay: "120ms" }}>
                             <div>
-                                <h2 className="text-2xl font-semibold mb-1">Completion Status</h2>
-                                <p className="text-sm text-muted-foreground">
+                                <h2 className="text-xl font-semibold mb-1 md:text-2xl">Completion Status</h2>
+                                <p className="text-xs text-muted-foreground md:text-sm">
                                     Track your progress across knowledge base tiers
                                 </p>
                             </div>
-                            <div className="flex flex-wrap gap-3">
+                            <div className="flex flex-wrap gap-2 md:gap-3">
                                 {[
                                     { name: "Basic Info", fields: completionAnalysis.tierStatus.tier1Essential, icon: User, tooltip: "Essential business information" },
                                     { name: "Business Details", fields: completionAnalysis.tierStatus.tier2Context, icon: BriefcaseIcon, tooltip: "Context and operational details" },
@@ -956,7 +955,7 @@ export default function OrganizationProfilePage() {
                                                             }
                                                         }}
                                                         disabled={step.name === "Quality Check" && !qualityAnalysis && isAnalyzingQuality}
-                                                        className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${isComplete
+                                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 transition-all text-xs md:gap-2 md:px-4 md:py-2 md:text-sm ${isComplete
                                                                 ? step.name === "Brand Voice"
                                                                     ? "bg-[color:var(--accent-strong)]/10 border-[color:var(--accent-strong)] text-[color:var(--accent-strong)] hover:bg-[color:var(--accent-strong)]/20"
                                                                     : "bg-[var(--primary-dark)]/10 border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/20"
@@ -998,38 +997,38 @@ export default function OrganizationProfilePage() {
                     )}
 
                     {profile && completionAnalysis && (
-                        <div className="space-y-4 animate-section-in opacity-0" style={{ animationDelay: "160ms" }}>
+                        <div className="space-y-3 md:space-y-4 animate-section-in opacity-0" style={{ animationDelay: "160ms" }}>
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
-                                    <BoltIcon className="h-5 w-5" />
-                                    <h2 className="text-2xl font-semibold">Tool Readiness</h2>
+                                    <BoltIcon className="h-4 w-4 md:h-5 md:w-5" />
+                                    <h2 className="text-xl font-semibold md:text-2xl">Tool Readiness</h2>
                                 </div>
-                                <p className="text-sm text-muted-foreground">
+                                <p className="text-xs text-muted-foreground md:text-sm">
                                     How ready your knowledge base is for each tool
                                 </p>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
                                 {/* Job Descriptions: use anytime; Enriched with AI when quality sufficient */}
                                 {(() => {
                                     const jdEnriched = isEnrichedWithAI(qualityAnalysis, "jobDescriptionBuilder");
                                     return (
-                                        <div className="p-6 rounded-lg border border-border/50 bg-card space-y-4 transition-all duration-300 hover:shadow-md">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <DocumentTextIcon className="h-5 w-5" />
-                                                    <span className="font-semibold">Job Descriptions</span>
+                                        <div className="p-4 rounded-lg border border-border/50 bg-card space-y-3 overflow-hidden transition-all duration-300 hover:shadow-md md:p-6 md:space-y-4">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <DocumentTextIcon className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0" />
+                                                    <span className="font-semibold text-sm truncate md:text-base">Job Descriptions</span>
                                                 </div>
                                                 {jdEnriched && (
-                                                    <Badge className="bg-[color:var(--accent-strong)]/20 text-[color:var(--accent-strong)] border-[color:var(--accent-strong)]/30">Enriched with AI</Badge>
+                                                    <Badge className="bg-[color:var(--accent-strong)]/20 text-[color:var(--accent-strong)] border-[color:var(--accent-strong)]/30 text-[10px] shrink-0 md:text-xs">Enriched with AI</Badge>
                                                 )}
                                             </div>
-                                            <div className="flex flex-col items-center justify-center space-y-2">
-                                                <p className="text-sm text-muted-foreground text-center">Use anytime. More profile data improves results.</p>
-                                                <Badge variant="secondary" className="text-xs">Use anytime</Badge>
+                                            <div className="flex flex-col items-center justify-center space-y-1.5 md:space-y-2">
+                                                <p className="text-xs text-muted-foreground text-center md:text-sm">Use anytime. More profile data improves results.</p>
+                                                <Badge variant="secondary" className="text-[10px] md:text-xs">Use anytime</Badge>
                                             </div>
                                             <Button
                                                 onClick={() => router.push("/dashboard/role-builder")}
-                                                className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-xs md:text-sm"
                                                 size="sm"
                                             >
                                                 Launch Job Descriptions
@@ -1042,23 +1041,23 @@ export default function OrganizationProfilePage() {
                                 {(() => {
                                     const sopEnriched = isEnrichedWithAI(qualityAnalysis, "sopGenerator");
                                     return (
-                                        <div className="p-6 rounded-lg border border-border/50 bg-card space-y-4 transition-all duration-300 hover:shadow-md">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <DocumentTextIcon className="h-5 w-5" />
-                                                    <span className="font-semibold">Process Builder</span>
+                                        <div className="p-4 rounded-lg border border-border/50 bg-card space-y-3 overflow-hidden transition-all duration-300 hover:shadow-md md:p-6 md:space-y-4">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <DocumentTextIcon className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0" />
+                                                    <span className="font-semibold text-sm truncate md:text-base">Process Builder</span>
                                                 </div>
                                                 {sopEnriched && (
-                                                    <Badge className="bg-[color:var(--accent-strong)]/20 text-[color:var(--accent-strong)] border-[color:var(--accent-strong)]/30">Enriched with AI</Badge>
+                                                    <Badge className="bg-[color:var(--accent-strong)]/20 text-[color:var(--accent-strong)] border-[color:var(--accent-strong)]/30 text-[10px] shrink-0 md:text-xs">Enriched with AI</Badge>
                                                 )}
                                             </div>
-                                            <div className="flex flex-col items-center justify-center space-y-2">
-                                                <p className="text-sm text-muted-foreground text-center">Use anytime. More profile data improves results.</p>
-                                                <Badge variant="secondary" className="text-xs">Use anytime</Badge>
+                                            <div className="flex flex-col items-center justify-center space-y-1.5 md:space-y-2">
+                                                <p className="text-xs text-muted-foreground text-center md:text-sm">Use anytime. More profile data improves results.</p>
+                                                <Badge variant="secondary" className="text-[10px] md:text-xs">Use anytime</Badge>
                                             </div>
                                             <Button
                                                 onClick={() => router.push("/dashboard/process-builder")}
-                                                className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-xs md:text-sm"
                                                 size="sm"
                                             >
                                                 Launch Process Builder
@@ -1072,17 +1071,17 @@ export default function OrganizationProfilePage() {
                                     const brain = getBusinessBrainReadiness(qualityAnalysis);
                                     const Icon = Brain;
                                     return (
-                                        <div className="p-6 rounded-lg border border-border/50 bg-card space-y-4 transition-all duration-300 hover:shadow-md">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <Icon className="h-5 w-5" />
-                                                    <span className="font-semibold">Business Brain</span>
+                                        <div className="p-4 rounded-lg border border-border/50 bg-card space-y-3 overflow-hidden transition-all duration-300 hover:shadow-md md:p-6 md:space-y-4">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <Icon className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0" />
+                                                    <span className="font-semibold text-sm truncate md:text-base">Business Brain</span>
                                                 </div>
-                                                {brain.ready && <CheckCircle2 className="h-5 w-5 text-green-600" />}
+                                                {brain.ready && <CheckCircle2 className="h-4 w-4 md:h-5 md:w-5 text-green-600 flex-shrink-0" />}
                                             </div>
-                                            <div className="flex flex-col items-center justify-center space-y-2">
-                                                <div className="relative w-24 h-24">
-                                                    <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
+                                            <div className="flex flex-col items-center justify-center space-y-1.5 md:space-y-2">
+                                                <div className="relative w-20 h-20 md:w-24 md:h-24">
+                                                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                                                         <defs>
                                                             <linearGradient id="toolGradient-Business-Brain" x1="0%" y1="0%" x2="100%" y2="0%">
                                                                 <stop offset="0%" stopColor="#f0b214" />
@@ -1101,14 +1100,14 @@ export default function OrganizationProfilePage() {
                                                         />
                                                     </svg>
                                                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                        <span className="text-xl font-bold">{brain.score}%</span>
-                                                        <span className="text-xs text-muted-foreground">{brain.quality}</span>
+                                                        <span className="text-base font-bold md:text-xl">{brain.score}%</span>
+                                                        <span className="text-[10px] text-muted-foreground md:text-xs">{brain.quality}</span>
                                                     </div>
                                                 </div>
-                                                <Badge variant={brain.ready ? "default" : "secondary"} className="text-xs">
+                                                <Badge variant={brain.ready ? "default" : "secondary"} className="text-[10px] md:text-xs">
                                                     {brain.ready ? "Ready" : "Not yet ready"}
                                                 </Badge>
-                                                <span className="text-xs text-muted-foreground text-center">{brain.message}</span>
+                                                <span className="text-[10px] text-muted-foreground text-center md:text-xs">{brain.message}</span>
                                             </div>
                                             <Button
                                                 onClick={() => {
@@ -1117,7 +1116,7 @@ export default function OrganizationProfilePage() {
                                                     else if (!isAnalyzingQuality) analyzeQuality();
                                                 }}
                                                 disabled={!brain.ready && !qualityAnalysis && isAnalyzingQuality}
-                                                className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                                                className="w-full bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-xs md:text-sm"
                                                 size="sm"
                                             >
                                                 {brain.ready ? (
@@ -1155,17 +1154,17 @@ export default function OrganizationProfilePage() {
                         return (
                             <Accordion type="single" collapsible className="w-full animate-section-in opacity-0" style={{ animationDelay: "200ms" }}>
                                 <AccordionItem value="all-tasks" className="border-none">
-                                    <AccordionTrigger className="hover:no-underline">
-                                        <div className="flex items-center gap-2">
-                                            <ArrowTrendingUpIcon className="h-5 w-5" />
-                                            <h2 className="text-2xl font-semibold">All Tasks</h2>
-                                            <Badge variant="outline" className="ml-2">
+                                    <AccordionTrigger className="hover:no-underline py-2 md:py-4">
+                                        <div className="flex flex-wrap items-center gap-2 text-left">
+                                            <ArrowTrendingUpIcon className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0" />
+                                            <h2 className="text-xl font-semibold md:text-2xl">All Tasks</h2>
+                                            <Badge variant="outline" className="text-xs shrink-0">
                                                 {remainingTasks.length}
                                             </Badge>
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent>
-                                        <div className="space-y-2 pt-4">
+                                        <div className="space-y-2 pt-2 md:pt-4">
                                             {remainingTasks.map((rec, idx) => {
                                                 const isCompletionRec = rec.type === 'completion';
                                                 const fields = isCompletionRec ? (rec as any).fields : ((rec as any).field ? [(rec as any).field] : []);
@@ -1173,31 +1172,33 @@ export default function OrganizationProfilePage() {
                                                 const timeEstimate = fieldCount > 0 ? estimateTimeToReady(fields) : 3;
                                                 const description = isCompletionRec ? (rec as any).benefit : (rec as any).impact;
                                                 return (
-                                                    <div key={idx} className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                                                        <div className="mt-0.5">
-                                                            <div className="w-5 h-5 rounded border-2 border-muted-foreground/30 flex items-center justify-center">
-                                                                {/* Checkbox */}
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex-1 space-y-1">
-                                                            <p className="text-sm font-medium">{rec.message}</p>
-                                                            {description && (
-                                                                <p className="text-xs text-muted-foreground">{description}</p>
-                                                            )}
-                                                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                                                <Badge
-                                                                    variant={rec.priority === 'high' ? 'destructive' : rec.priority === 'medium' ? 'default' : 'secondary'}
-                                                                    className="text-xs"
-                                                                >
-                                                                    {rec.priority === 'high' ? 'High' : rec.priority === 'medium' ? 'Medium' : 'Low'}
-                                                                </Badge>
-                                                                <div className="flex items-center gap-1">
-                                                                    <Clock className="h-3 w-3" />
-                                                                    <span>~{timeEstimate} min</span>
+                                                    <div key={idx} className="flex flex-col gap-2 p-3 rounded-lg border hover:bg-muted/50 transition-colors overflow-hidden sm:flex-row sm:items-start sm:gap-3">
+                                                        <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
+                                                            <div className="mt-0.5 flex-shrink-0">
+                                                                <div className="w-4 h-4 md:w-5 md:h-5 rounded border-2 border-muted-foreground/30 flex items-center justify-center">
+                                                                    {/* Checkbox */}
                                                                 </div>
-                                                                {fieldCount > 0 && (
-                                                                    <span>{fieldCount} field{fieldCount > 1 ? 's' : ''}</span>
+                                                            </div>
+                                                            <div className="flex-1 min-w-0 space-y-1">
+                                                                <p className="text-xs font-medium break-words md:text-sm">{rec.message}</p>
+                                                                {description && (
+                                                                    <p className="text-[10px] text-muted-foreground break-words md:text-xs">{description}</p>
                                                                 )}
+                                                                <div className="flex flex-wrap items-center gap-2 md:gap-3 text-[10px] text-muted-foreground md:text-xs">
+                                                                    <Badge
+                                                                        variant={rec.priority === 'high' ? 'destructive' : rec.priority === 'medium' ? 'default' : 'secondary'}
+                                                                        className="text-[10px] shrink-0 md:text-xs"
+                                                                    >
+                                                                        {rec.priority === 'high' ? 'High' : rec.priority === 'medium' ? 'Medium' : 'Low'}
+                                                                    </Badge>
+                                                                    <div className="flex items-center gap-1">
+                                                                        <Clock className="h-3 w-3" />
+                                                                        <span>~{timeEstimate} min</span>
+                                                                    </div>
+                                                                    {fieldCount > 0 && (
+                                                                        <span>{fieldCount} field{fieldCount > 1 ? 's' : ''}</span>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                         <Button
@@ -1213,6 +1214,7 @@ export default function OrganizationProfilePage() {
                                                                 });
                                                                 setIsToolChatOpen(true);
                                                             }}
+                                                            className="w-full sm:w-auto shrink-0 text-xs md:text-sm"
                                                         >
                                                             Fix
                                                         </Button>

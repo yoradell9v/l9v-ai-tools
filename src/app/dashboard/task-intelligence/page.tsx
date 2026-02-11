@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     Dialog,
     DialogContent,
@@ -32,7 +34,7 @@ import {
     ChevronDown,
     ChevronUp,
     LayoutGrid,
-    Calendar,
+    Calendar as CalendarIcon,
     Link2,
     X,
     FileStack,
@@ -157,6 +159,14 @@ function friendlyErrorMessage(apiError: string | undefined, fallback: string): s
     return technical ? fallback : apiError.length > 120 ? fallback : apiError;
 }
 
+/** Format a Date as YYYY-MM-DD in local time (avoids UTC off-by-one when using toISOString). */
+function toLocalDateString(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+}
+
 function ReviewField({
     label,
     children,
@@ -193,6 +203,7 @@ export default function TaskIntelligencePage() {
     const [editDeliverables, setEditDeliverables] = useState<string[]>([]);
     const [editQC, setEditQC] = useState<string[]>([]);
     const [editRequestedCompletionAt, setEditRequestedCompletionAt] = useState("");
+    const [requestDatePickerOpen, setRequestDatePickerOpen] = useState(false);
     const [editAssetLinks, setEditAssetLinks] = useState<string[]>([]);
     const [assetsSectionExpanded, setAssetsSectionExpanded] = useState(true);
 
@@ -255,7 +266,7 @@ export default function TaskIntelligencePage() {
             setEditQC(currentTask.qualityControlChecklist.length ? [...currentTask.qualityControlChecklist] : [""]);
             setEditRequestedCompletionAt(
                 currentTask.requestedCompletionAt
-                    ? new Date(currentTask.requestedCompletionAt).toISOString().slice(0, 10)
+                    ? toLocalDateString(new Date(currentTask.requestedCompletionAt.slice(0, 10) + "T12:00:00"))
                     : ""
             );
             setEditAssetLinks(
@@ -480,7 +491,7 @@ export default function TaskIntelligencePage() {
             deliverables: editDeliverables.map((d) => d.trim()).filter(Boolean),
             qualityControlChecklist: editQC.map((q) => q.trim()).filter(Boolean),
             requestedCompletionAt: editRequestedCompletionAt.trim()
-                ? new Date(editRequestedCompletionAt).toISOString()
+                ? new Date(editRequestedCompletionAt.trim() + "T12:00:00").toISOString()
                 : currentTask.requestedCompletionAt ?? null,
             assetLinks: editAssetLinks.map((u) => u.trim()).filter(Boolean),
         }
@@ -488,16 +499,16 @@ export default function TaskIntelligencePage() {
 
     return (
         <div className="w-full max-w-screen overflow-x-hidden h-screen flex flex-col">
-            <div className="flex items-center gap-2 p-4 border-b flex-shrink-0">
-                <SidebarTrigger />
-            </div>
             <div className="transition-all duration-300 ease-in-out flex-1 min-h-0 flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full">
                 <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col flex-1 min-h-0 overflow-hidden">
-                    <div className="flex-shrink-0 mb-6">
-                        <h1 className="text-2xl font-bold mb-1">Task Intelligence</h1>
-                        <p className="text-base text-muted-foreground">
-                            Describe what you need done or browse templates
-                        </p>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-shrink-0 mb-6">
+                        <div>
+                            <h1 className="text-2xl font-bold mb-1">Task Intelligence</h1>
+                            <p className="text-base text-muted-foreground">
+                                Describe what you need done or browse templates
+                            </p>
+                        </div>
+                        <SidebarTrigger />
                     </div>
 
                     <Tabs
@@ -517,7 +528,7 @@ export default function TaskIntelligencePage() {
                         </TabsList>
 
                         <TabsContent value="new-task" className="flex-1 mt-0 min-h-0 flex flex-col overflow-hidden">
-                            <div className="max-w-3xl mx-auto w-full flex items-center mb-6 gap-0 flex-shrink-0">
+                            <div className="max-w-3xl mx-auto w-full flex flex-col gap-4 sm:flex-row sm:items-center mb-6 flex-shrink-0">
                                 {STAGES.map((stage, i) => (
                                     <React.Fragment key={stage.key}>
                                         <button
@@ -626,7 +637,7 @@ export default function TaskIntelligencePage() {
                                     </div>
 
                                     <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-muted/10">
-                                        <div className="flex flex-shrink-0 items-center justify-between gap-3 py-2">
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-shrink-0 py-2">
                                             <button
                                                 type="button"
                                                 onClick={() => setRecentTasksOpen((o) => !o)}
@@ -687,7 +698,7 @@ export default function TaskIntelligencePage() {
                                                                     className="cursor-pointer transition-colors hover:bg-muted/50 border-border/60"
                                                                     onClick={() => handleSelectRecentTask(t.id, t.status)}
                                                                 >
-                                                                    <CardContent className="py-3 px-4 flex items-center justify-between gap-2">
+                                                                    <CardContent className="py-3 px-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                                                         <div className="flex items-center gap-3 min-w-0">
                                                                             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-[var(--primary-dark)]/10 text-[var(--primary-dark)]">
                                                                                 <RectangleStackIcon className="h-5 w-5" />
@@ -742,7 +753,7 @@ export default function TaskIntelligencePage() {
                                 <div className="flex flex-col flex-1 min-h-0 gap-6">
                                     <Card className="border border-border/60 rounded-lg flex-1 min-h-0 flex flex-col overflow-hidden">
                                         <CardContent className="pt-4 pb-4 px-6 space-y-5 flex-1 min-h-0 overflow-y-auto">
-                                            <div className="flex items-center justify-between gap-2">
+                                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                                 <div className="flex items-center gap-2">
                                                     <FileStack className="h-5 w-5 text-muted-foreground shrink-0" />
                                                     <h2 className="text-lg font-bold">Edit Task Details</h2>
@@ -809,16 +820,31 @@ export default function TaskIntelligencePage() {
                                                         <span className="inline-flex h-4 w-4 rounded-full bg-muted items-center justify-center text-xs">i</span>
                                                     </span>
                                                 </Label>
-                                                <div className="relative mt-1">
-                                                    <Input
-                                                        id="edit-requested-date"
-                                                        type="date"
-                                                        value={editRequestedCompletionAt}
-                                                        onChange={(e) => setEditRequestedCompletionAt(e.target.value)}
-                                                        className="pr-9 bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/50 dark:border-amber-800/30"
-                                                    />
-                                                    <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                                                </div>
+                                                <Popover open={requestDatePickerOpen} onOpenChange={setRequestDatePickerOpen}>
+                                                    <PopoverTrigger asChild>
+                                                        <button
+                                                            id="edit-requested-date"
+                                                            type="button"
+                                                            className="mt-1 flex h-9 w-full items-center rounded-md border border-amber-200/50 bg-amber-50/50 px-3 py-2 text-left text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-amber-800/30 dark:bg-amber-950/20 [&_svg]:pointer-events-none [&_svg]:shrink-0"
+                                                        >
+                                                            {editRequestedCompletionAt
+                                                                ? new Date(editRequestedCompletionAt + "T12:00:00").toLocaleDateString(undefined, { dateStyle: "medium" })
+                                                                : "Select date"}
+                                                            <CalendarIcon className="ml-auto h-4 w-4 text-muted-foreground" />
+                                                        </button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-auto p-0" align="start">
+                                                        <Calendar
+                                                            mode="single"
+                                                            selected={editRequestedCompletionAt ? new Date(editRequestedCompletionAt + "T12:00:00") : undefined}
+                                                            onSelect={(d) => {
+                                                                setEditRequestedCompletionAt(d ? toLocalDateString(d) : "");
+                                                                setRequestDatePickerOpen(false);
+                                                            }}
+                                                            className="rounded-lg border-0"
+                                                        />
+                                                    </PopoverContent>
+                                                </Popover>
                                             </div>
 
                                             <div className="rounded-lg overflow-hidden">
@@ -847,7 +873,7 @@ export default function TaskIntelligencePage() {
                                                         </p>
                                                         <div className="space-y-2">
                                                             {editAssetLinks.map((url, i) => (
-                                                                <div key={i} className="flex gap-2">
+                                                                <div key={i} className="flex flex-col gap-2 sm:flex-row">
                                                                     <Input
                                                                         value={url}
                                                                         onChange={(e) =>
@@ -931,7 +957,7 @@ export default function TaskIntelligencePage() {
                                                     <Label className="mb-2 block">Subtasks</Label>
                                                     <div className="space-y-2">
                                                         {editSubtasks.map((s, i) => (
-                                                            <div key={i} className="flex gap-2">
+                                                            <div key={i} className="flex flex-col gap-2 sm:flex-row">
                                                                 <Input
                                                                     value={s}
                                                                     onChange={(e) =>
@@ -966,7 +992,7 @@ export default function TaskIntelligencePage() {
                                                     <Label className="mb-2 block">Deliverables</Label>
                                                     <div className="space-y-2">
                                                         {editDeliverables.map((d, i) => (
-                                                            <div key={i} className="flex gap-2">
+                                                            <div key={i} className="flex flex-col gap-2 sm:flex-row">
                                                                 <Input
                                                                     value={d}
                                                                     onChange={(e) =>
@@ -1003,7 +1029,7 @@ export default function TaskIntelligencePage() {
                                                     <Label className="mb-2 block">Quality control checklist</Label>
                                                     <div className="space-y-2">
                                                         {editQC.map((q, i) => (
-                                                            <div key={i} className="flex gap-2">
+                                                            <div key={i} className="flex flex-col gap-2 sm:flex-row">
                                                                 <Input
                                                                     value={q}
                                                                     onChange={(e) => updateList(editQC, setEditQC, i, e.target.value)}
@@ -1035,7 +1061,7 @@ export default function TaskIntelligencePage() {
                                             </div>
                                         </CardContent>
                                     </Card>
-                                    <div className="flex gap-2 flex-shrink-0">
+                                    <div className="flex flex-col gap-2 sm:flex-row flex-shrink-0">
                                         <Button
                                             type="button"
                                             variant="outline"
@@ -1091,7 +1117,7 @@ export default function TaskIntelligencePage() {
                                             </ReviewField>
                                             {displayTask.requestedCompletionAt && (
                                                 <ReviewField label="Requested completion date">
-                                                    <p>{new Date(displayTask.requestedCompletionAt).toLocaleDateString()}</p>
+                                                    <p>{new Date(displayTask.requestedCompletionAt.slice(0, 10) + "T12:00:00").toLocaleDateString()}</p>
                                                 </ReviewField>
                                             )}
                                             {displayTask.assetLinks && displayTask.assetLinks.length > 0 && (
@@ -1147,7 +1173,7 @@ export default function TaskIntelligencePage() {
                                             )}
                                         </CardContent>
                                     </Card>
-                                    <div className="flex gap-2 flex-shrink-0">
+                                    <div className="flex flex-col gap-2 sm:flex-row flex-shrink-0">
                                         <Button
                                             variant="ghost"
                                             className="gap-2 text-muted-foreground"

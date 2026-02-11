@@ -307,7 +307,7 @@ export default function AIBusinessBrainPage() {
                     }),
                 }
             );
-            
+
             if (isRateLimitError(messageResponse)) {
                 const rateLimitError = await parseRateLimitError(messageResponse);
                 const errorMessage = getRateLimitErrorMessage(rateLimitError);
@@ -390,14 +390,15 @@ export default function AIBusinessBrainPage() {
     if (!knowledgeBase) {
         return (
             <>
-                <div className="flex items-center gap-2 p-4 border-b">
-                    <SidebarTrigger />
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-6 px-4 md:py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
+                    <h1 className="text-xl font-semibold sm:text-2xl">AI Business Brain</h1>
+                    <SidebarTrigger className="self-start sm:self-auto" />
                 </div>
-                <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
+                <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] py-6 px-4 md:py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
                     <div className="max-w-2xl w-full space-y-6">
                         <div className="text-center space-y-4">
-                            <div className="w-16 h-16 rounded-lg bg-[var(--accent)]/20 flex items-center justify-center mx-auto">
-                                <Brain size={48} className="text-[var(--accent)]" />
+                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg bg-[var(--accent)]/20 flex items-center justify-center mx-auto">
+                                <Brain className="h-10 w-10 text-[var(--accent)] sm:h-12 sm:w-12" />
                             </div>
                             <h1 className="text-2xl font-semibold text-[var(--text-primary)]">
                                 Setup Your AI Business Brain
@@ -457,7 +458,7 @@ export default function AIBusinessBrainPage() {
                                         </ul>
                                     </div>
 
-                                    <div className="flex gap-2 pt-2">
+                                    <div className="flex flex-col gap-2 sm:flex-row pt-2">
                                         <Button
                                             onClick={handleCompleteKnowledgeBase}
                                             className="flex-1 bg-[color:var(--accent-strong)] hover:bg-[color:var(--accent-strong)]/90"
@@ -487,58 +488,56 @@ export default function AIBusinessBrainPage() {
     }
 
     return (
-        <>
-            <div className="flex flex-col h-screen">
-                <div className="flex items-center gap-2 p-4 border-b flex-shrink-0">
-                    <SidebarTrigger />
-                    <div className="flex-1 flex items-center justify-between">
-                        <div>
-                            <h1 className="text-lg font-semibold text-[var(--text-primary)]">
-                                AI Business Brain
-                            </h1>
-                            {knowledgeBase.businessName && (
-                                <p className="text-base text-[var(--text-secondary)]">
-                                    {knowledgeBase.businessName}
-                                </p>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Button
-                                size="sm"
-                                onClick={handleCreateConversation}
-                                disabled={isCreatingConversation}
-                                className="gap-2"
-                            >
-                                <Plus size={16} />
-                                {isCreatingConversation ? "Creating..." : "New Chat"}
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => setIsConversationSidebarOpen((prev) => !prev)}
-                                title="Conversation History"
-                            >
-                                <History size={18} className="text-[var(--accent-strong)]" />
-                            </Button>
-                        </div>
+        <div className="h-screen flex flex-col overflow-hidden">
+            <header className="flex-shrink-0 py-4 px-4 md:py-6 md:px-8 lg:px-16 xl:px-24 2xl:px-32 border-b border-[var(--border-color)] bg-[var(--bg-color)]">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 space-y-0.5">
+                        <h1 className="text-xl font-semibold text-[var(--text-primary)] truncate sm:text-2xl">
+                            AI Business Brain
+                        </h1>
+                        {knowledgeBase.businessName && (
+                            <p className="text-sm text-[var(--text-secondary)] truncate md:text-base">
+                                {knowledgeBase.businessName}
+                            </p>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        <Button
+                            size="sm"
+                            onClick={handleCreateConversation}
+                            disabled={isCreatingConversation}
+                            className="gap-2"
+                        >
+                            <Plus size={16} />
+                            {isCreatingConversation ? "Creating..." : "New Chat"}
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setIsConversationSidebarOpen((prev) => !prev)}
+                            title="Conversation History"
+                        >
+                            <History size={18} className="text-[var(--accent-strong)]" />
+                        </Button>
+                        <SidebarTrigger />
                     </div>
                 </div>
+            </header>
 
-                <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-                    <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-                        <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 min-h-0">
                             {chatMessages.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-full text-center">
-                                    <div className="w-16 h-16 rounded-lg bg-[var(--accent)]/20 flex items-center justify-center mb-4">
-                                        <Bot size={48} className="text-[var(--accent)]" />
+                                <div className="flex flex-col items-center justify-center min-h-0 py-6 sm:py-0 text-center">
+                                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg bg-[var(--accent)]/20 flex items-center justify-center mb-3 sm:mb-4">
+                                        <Bot className="h-10 w-10 text-[var(--accent)] sm:h-12 sm:w-12" />
                                     </div>
-                                    <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
+                                    <h3 className="text-base font-semibold text-[var(--text-primary)] mb-1.5 sm:mb-2 sm:text-lg">
                                         {getCurrentGreeting()}
                                     </h3>
-                                    <p className="text-base text-[var(--text-secondary)] mb-6 max-w-md">
+                                    <p className="text-sm text-[var(--text-secondary)] mb-4 sm:mb-6 max-w-md px-2 sm:px-0 sm:text-base">
                                         Ask me anything about your business, or use a slash command to get started.
                                     </p>
-                                    <div className="grid grid-cols-2 gap-2 max-w-md">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md px-2 sm:px-0">
                                         {slashCommands.slice(0, 4).map((cmd) => (
                                             <button
                                                 key={cmd.command}
@@ -549,12 +548,12 @@ export default function AIBusinessBrainPage() {
                                                 className="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-left transition-colors"
                                             >
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <cmd.icon size={16} className="text-[var(--primary)]" />
-                                                    <span className="text-base font-medium text-[var(--text-primary)]">
+                                                    <cmd.icon size={16} className="text-[var(--primary)] shrink-0" />
+                                                    <span className="text-sm font-medium text-[var(--text-primary)] sm:text-base truncate">
                                                         {cmd.command}
                                                     </span>
                                                 </div>
-                                                <p className="text-base text-[var(--text-secondary)]">
+                                                <p className="text-sm text-[var(--text-secondary)] line-clamp-2 sm:text-base">
                                                     {cmd.description}
                                                 </p>
                                             </button>
@@ -569,9 +568,9 @@ export default function AIBusinessBrainPage() {
                                             className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                                         >
                                             <div
-                                                className={`max-w-[80%] rounded-lg ${message.role === "user"
-                                                    ? "bg-[var(--primary)] text-white px-4 py-2"
-                                                    : "bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-primary)] p-4"
+                                                className={`max-w-[85%] sm:max-w-[80%] rounded-lg ${message.role === "user"
+                                                    ? "bg-[var(--primary)] text-white px-3 py-2 sm:px-4"
+                                                    : "bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-primary)] p-3 sm:p-4"
                                                     }`}
                                                 style={{
                                                     wordWrap: 'break-word',
@@ -743,93 +742,90 @@ export default function AIBusinessBrainPage() {
                                     <div ref={messagesEndRef} />
                                 </div>
                             )}
-                        </div>
+                </div>
 
-                        {/* Input Area */}
-                        <div className="flex-shrink-0 px-4 md:px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-color)]">
-                            <div className="relative">
-                                {showSlashCommands && (
-                                    <div className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg shadow-lg max-h-64 overflow-y-auto z-10">
-                                        <div className="p-2 border-b border-[var(--border-color)]">
-                                            <Input
-                                                type="text"
-                                                placeholder="Search commands..."
-                                                value={slashCommandFilter}
-                                                onChange={(e) => setSlashCommandFilter(e.target.value)}
-                                                className="text-base"
-                                                autoFocus
-                                            />
-                                        </div>
-                                        <div className="p-2">
-                                            {filteredSlashCommands.map((cmd) => (
-                                                <Button
-                                                    variant="ghost"
-                                                    key={cmd.command}
-                                                    onClick={() => {
-                                                        setInputValue(cmd.command);
-                                                        setShowSlashCommands(false);
-                                                        setSlashCommandFilter("");
-                                                    }}
-                                                    className="w-full justify-start gap-3 px-2 py-2"
-                                                >
-                                                    <cmd.icon
-                                                        size={18}
-                                                        className="text-[var(--primary)] flex-shrink-0"
-                                                    />
-                                                    <div className="flex-1 min-w-0 text-left">
-                                                        <div className="text-base font-medium text-[var(--text-primary)]">
-                                                            {cmd.command}
-                                                        </div>
-                                                        <div className="text-base text-[var(--text-secondary)]">
-                                                            {cmd.description}
-                                                        </div>
-                                                    </div>
-                                                </Button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                                <div className="flex items-end gap-2">
-                                    <Textarea
-                                        ref={chatInputRef}
-                                        value={inputValue}
-                                        onChange={(e) => {
-                                            setInputValue(e.target.value);
-                                            if (e.target.value.startsWith("/")) {
-                                                setShowSlashCommands(true);
-                                            }
-                                        }}
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter" && !e.shiftKey) {
-                                                e.preventDefault();
-                                                handleSendMessage();
-                                            }
-                                            if (e.key === "Escape") {
-                                                setShowSlashCommands(false);
-                                            }
-                                        }}
-                                        placeholder="Type a message or use / for commands..."
-                                        className="flex-1 min-h-[52px] max-h-32"
-                                        rows={1}
+                {/* Input Area - always at bottom */}
+                <div className="flex-shrink-0 px-4 md:px-6 py-3 md:py-4 border-t border-[var(--border-color)] bg-[var(--bg-color)]">
+                    <div className="relative">
+                        {showSlashCommands && (
+                            <div className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg shadow-lg max-h-64 overflow-y-auto z-10">
+                                <div className="p-2 border-b border-[var(--border-color)]">
+                                    <Input
+                                        type="text"
+                                        placeholder="Search commands..."
+                                        value={slashCommandFilter}
+                                        onChange={(e) => setSlashCommandFilter(e.target.value)}
+                                        className="text-base"
+                                        autoFocus
                                     />
-                                    <Button
-                                        onClick={handleSendMessage}
-                                        disabled={!inputValue.trim() || isSending}
-                                        className="p-3"
-                                        size="icon"
-                                    >
-                                        <Send size={20} />
-                                    </Button>
+                                </div>
+                                <div className="p-2">
+                                    {filteredSlashCommands.map((cmd) => (
+                                        <Button
+                                            variant="ghost"
+                                            key={cmd.command}
+                                            onClick={() => {
+                                                setInputValue(cmd.command);
+                                                setShowSlashCommands(false);
+                                                setSlashCommandFilter("");
+                                            }}
+                                            className="w-full justify-start gap-3 px-2 py-2"
+                                        >
+                                            <cmd.icon
+                                                size={18}
+                                                className="text-[var(--primary)] flex-shrink-0"
+                                            />
+                                            <div className="flex-1 min-w-0 text-left">
+                                                <div className="text-base font-medium text-[var(--text-primary)]">
+                                                    {cmd.command}
+                                                </div>
+                                                <div className="text-base text-[var(--text-secondary)]">
+                                                    {cmd.description}
+                                                </div>
+                                            </div>
+                                        </Button>
+                                    ))}
                                 </div>
                             </div>
+                        )}
+                        <div className="flex items-end gap-2">
+                            <Textarea
+                                ref={chatInputRef}
+                                value={inputValue}
+                                onChange={(e) => {
+                                    setInputValue(e.target.value);
+                                    if (e.target.value.startsWith("/")) {
+                                        setShowSlashCommands(true);
+                                    }
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleSendMessage();
+                                    }
+                                    if (e.key === "Escape") {
+                                        setShowSlashCommands(false);
+                                    }
+                                }}
+                                placeholder="Type a message or use / for commands..."
+                                className="flex-1 min-h-[48px] md:min-h-[52px] max-h-32 resize-none"
+                                rows={1}
+                            />
+                            <Button
+                                onClick={handleSendMessage}
+                                disabled={!inputValue.trim() || isSending}
+                                className="p-3 shrink-0"
+                                size="icon"
+                            >
+                                <Send size={20} />
+                            </Button>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div
-                className={`fixed top-0 right-0 h-full w-80 bg-[var(--card-bg)] border-l border-[var(--border-color)] shadow-lg transform transition-transform duration-300 ${isConversationSidebarOpen ? "translate-x-0" : "translate-x-full"
-                    }`}
+                className={"fixed top-0 right-0 h-full w-full sm:w-80 bg-[var(--card-bg)] border-l border-[var(--border-color)] shadow-lg transform transition-transform duration-300 ".concat(isConversationSidebarOpen ? "translate-x-0" : "translate-x-full")}
                 style={{ zIndex: 30 }}
             >
                 <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)]">
@@ -902,6 +898,6 @@ export default function AIBusinessBrainPage() {
                     </div>
                 )}
             </div>
-        </>
+        </div>
     );
 }

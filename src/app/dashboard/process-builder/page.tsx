@@ -753,31 +753,30 @@ export default function SopPage() {
   return (
     <>
       <div className="w-full max-w-screen overflow-x-hidden h-screen flex flex-col">
-        <div className="flex items-center gap-2 p-4 border-b flex-shrink-0">
-          <SidebarTrigger />
-        </div>
         <div
           className="transition-all duration-300 ease-in-out flex-1 min-h-0 flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full"
         >
-          <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col flex-1 min-h-0">
-            <div className="flex-shrink-0 p-2">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
-                <div className="space-y-1">
-                  <h1 className="text-2xl font-semibold mb-1">
+          <div className="w-full max-w-full py-6 px-4 flex flex-col flex-1 min-h-0 md:py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
+            <div className="flex-shrink-0 p-1 md:p-2">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3 md:mb-4">
+                <div className="space-y-0.5 min-w-0 md:space-y-1">
+                  <h1 className="text-xl font-semibold mb-0 truncate md:mb-1 md:text-2xl">
                     Process Builder AI
                   </h1>
-                  <p className="text-base text-muted-foreground">
+                  <p className="text-sm text-muted-foreground md:text-base">
                     Automatically generate standard operating procedures for your business
                   </p>
                 </div>
-                <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-4 mt-1 md:mt-0">
+                <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-4 mt-0 flex-shrink-0">
+                  <SidebarTrigger />
                   {!isProcessing && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white">
+                        <Button className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-sm md:text-base">
                           <Plus className="h-4 w-4" />
-                          <span>Generate SOP</span>
-                          <ChevronDown className="h-4 w-4 ml-2" />
+                          <span className="sm:hidden">SOP</span>
+                          <span className="hidden sm:inline">Generate SOP</span>
+                          <ChevronDown className="h-4 w-4 ml-1 md:ml-2" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
@@ -794,26 +793,26 @@ export default function SopPage() {
                   )}
                   <Button
                     variant="outline"
+                    size="sm"
                     onClick={() => router.push("/dashboard/process-builder/history")}
-                    className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10"
+                    className="border-[var(--primary-dark)] text-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/10 text-sm"
                   >
                     <History className="h-4 w-4" />
                     History
                   </Button>
                 </div>
               </div>
-              <Separator />
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+            <div className="flex-1 min-h-0 overflow-x-hidden">
 
               {isLoadingLatest && !generatedSOP && !isProcessing && (
                 <Card>
-                  <CardContent className="py-6">
-                    <div className="flex items-center gap-3">
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                      <div className="space-y-2 flex-1">
-                        <p className="text-base font-medium text-foreground">
+                  <CardContent className="py-4 px-4 md:py-6">
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin text-primary flex-shrink-0" />
+                      <div className="space-y-2 flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground md:text-base">
                           Loading your latest SOP...
                         </p>
                         <div className="space-y-2">
@@ -828,8 +827,8 @@ export default function SopPage() {
 
               {isProcessing && (
                 <Card>
-                  <CardContent className="py-6">
-                    <div className="flex items-center gap-3">
+                  <CardContent className="py-4 px-4 md:py-6">
+                    <div className="flex items-center gap-2 md:gap-3">
                       <Loader2 className="h-5 w-5 animate-spin text-primary" />
                       <div className="space-y-1 flex-1">
                         <p className="text-base font-medium text-foreground">
@@ -845,12 +844,12 @@ export default function SopPage() {
               )}
 
               {error && !isProcessing && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription className="space-y-3">
-                    <p>{error}</p>
-                    <div className="flex items-center gap-2 mt-2">
+                <Alert variant="destructive" className="p-3 md:p-4">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  <AlertTitle className="text-sm md:text-base">Error</AlertTitle>
+                  <AlertDescription className="space-y-2 md:space-y-3">
+                    <p className="text-sm md:text-base">{error}</p>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center gap-2 mt-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -877,28 +876,28 @@ export default function SopPage() {
               )}
 
               {generatedSOP && !isProcessing && (
-                <div className="flex flex-col h-full overflow-hidden animate-analysis-in">
+                <div className="flex flex-col h-full overflow-hidden overflow-y-auto animate-analysis-in">
                   {/* Draft Banner */}
                   {generatedSOP.isDraft && (
-                    <div className="flex-shrink-0 p-4 pb-0">
-                      <Alert className="border-amber-500/50 bg-amber-500/10">
-                        <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                        <AlertTitle className="text-amber-900 dark:text-amber-100">Draft (Not Saved)</AlertTitle>
-                        <AlertDescription className="text-amber-800 dark:text-amber-200">
+                    <div className="flex-shrink-0 p-3 pb-0 md:p-4">
+                      <Alert className="border-amber-500/50 bg-amber-500/10 p-3 md:p-4">
+                        <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                        <AlertTitle className="text-sm text-amber-900 dark:text-amber-100 md:text-base">Draft (Not Saved)</AlertTitle>
+                        <AlertDescription className="text-xs text-amber-800 dark:text-amber-200 md:text-sm">
                           This SOP was generated from chat and hasn't been saved yet. Save it to keep it permanently.
                         </AlertDescription>
                       </Alert>
                     </div>
                   )}
 
-                  <div className="flex-shrink-0 space-y-4 p-6 pb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b sticky top-0 z-10">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="flex-1 space-y-3">
-                        <div className="flex items-start gap-3">
-                          <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                          <div className="flex-1 space-y-2">
+                  <div className="flex-shrink-0 space-y-3 p-4 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b sticky top-0 z-10 overflow-hidden md:space-y-4 md:p-6 md:pb-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between md:gap-4">
+                      <div className="flex-1 space-y-2 min-w-0 md:space-y-3">
+                        <div className="flex items-start gap-2 md:gap-3">
+                          <CheckCircle2 className="h-4 w-4 md:h-5 md:w-5 text-primary mt-0.5 shrink-0" />
+                          <div className="flex-1 space-y-1 min-w-0 md:space-y-2">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h2 className="text-xl sm:text-2xl font-semibold">
+                              <h2 className="text-lg font-semibold truncate md:text-xl sm:text-2xl">
                                 {generatedSOP.metadata.title}
                               </h2>
                               {generatedSOP.isDraft && (
@@ -907,8 +906,8 @@ export default function SopPage() {
                                 </Badge>
                               )}
                             </div>
-                            <div className="flex flex-wrap items-center gap-2 text-base text-muted-foreground">
-                              <span>Generated on {new Date(generatedSOP.metadata.generatedAt).toLocaleString()}</span>
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground md:gap-2 md:text-base">
+                              <span className="break-words">Generated on {new Date(generatedSOP.metadata.generatedAt).toLocaleString()}</span>
                               {generatedSOP.metadata.organizationProfileUsed && (
                                 <>
                                   <Separator orientation="vertical" className="h-4" />
@@ -923,14 +922,15 @@ export default function SopPage() {
                         </div>
 
                         {generatedSOP.isDraft && (
-                          <div className="flex flex-wrap gap-3 pt-2">
+                          <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:flex-wrap md:gap-3">
                             <Button
                               onClick={async () => {
                                 await saveSOPAsDraft();
                               }}
                               variant="outline"
+                              size="sm"
                               disabled={isSubmitting}
-                              className="border-amber-500 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
+                              className="w-full sm:w-auto border-amber-500 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950 text-sm"
                             >
                               {isSubmitting ? (
                                 <>
@@ -948,8 +948,9 @@ export default function SopPage() {
                               onClick={async () => {
                                 await saveSOPAndPublish();
                               }}
+                              size="sm"
                               disabled={isSubmitting}
-                              className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                              className="w-full sm:w-auto bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-sm"
                             >
                               {isSubmitting ? (
                                 <>
@@ -1253,21 +1254,21 @@ export default function SopPage() {
               )}
 
               {!generatedSOP && !isProcessing && !error && !isLoadingLatest && hasNoSavedSOPs && (
-                <div className="py-16 space-y-6 text-center">
-                  <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
-                    <Network className="h-12 w-12 text-[color:var(--accent-strong)]" />
+                <div className="py-10 px-4 space-y-4 text-center md:py-16 md:space-y-6">
+                  <div className="mx-auto flex h-20 w-20 md:h-24 md:w-24 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent-strong)]/20 to-[color:var(--primary-dark)]/20">
+                    <Network className="h-10 w-10 md:h-12 md:w-12 text-[color:var(--accent-strong)]" />
                   </div>
-                  <div className="space-y-3 max-w-2xl mx-auto">
-                    <h3 className="text-2xl font-semibold">No Processes Generated Yet</h3>
-                    <p className="text-base text-muted-foreground">
+                  <div className="space-y-2 max-w-2xl mx-auto md:space-y-3">
+                    <h3 className="text-xl font-semibold md:text-2xl">No Processes Generated Yet</h3>
+                    <p className="text-sm text-muted-foreground md:text-base">
                       Create your first Standard Operating Procedure to get started with automated documentation for your business processes.
                     </p>
                   </div>
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3">
                     <Button
                       onClick={() => setIsModalOpen(true)}
                       size="lg"
-                      className="bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white"
+                      className="w-full sm:w-auto bg-[var(--primary-dark)] hover:bg-[var(--primary-dark)]/90 text-white text-sm md:text-base"
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Generate Your First SOP

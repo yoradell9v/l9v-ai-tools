@@ -118,7 +118,7 @@ export function calculateOnboardingCompletion(
     filled++;
 
     if (profile.industry.toLowerCase() === "other") {
-      totalRequired = 5; // Include industryOther in total
+      totalRequired = 5;
       if (profile.industryOther && profile.industryOther.trim() !== "") {
         filled++;
       } else {
@@ -176,13 +176,8 @@ export function checkOnboardingStatus(
   };
 }
 
-// Tool Chat utilities
 import type { ToolId } from "@/lib/tool-chat/types";
 
-/**
- * Returns which KB fields to fetch based on toolId.
- * Optimizes queries by only fetching relevant fields.
- */
 export function getKBFieldsForTool(toolId: ToolId): any {
   const baseFields = {
     id: true,
@@ -214,8 +209,6 @@ export function getKBFieldsForTool(toolId: ToolId): any {
         defaultManagementStyle: true,
       };
     case "organization-profile":
-      // Keep this lightweight: org-profile chat only needs core identity/version.
-      // (The KB update happens via LearningEvents application, which loads KB server-side.)
       return {
         id: true,
         organizationId: true,
@@ -226,14 +219,7 @@ export function getKBFieldsForTool(toolId: ToolId): any {
   }
 }
 
-/**
- * Formats knowledge base data into context string for AI prompts.
- * Tool-specific formatting ensures only relevant KB fields are included.
- * 
- * @param kb - Knowledge base data (can be null)
- * @param toolId - Tool ID to determine which fields to include
- * @returns Formatted context string for AI prompts
- */
+
 export function formatKnowledgeBaseContext(
   kb: OrganizationKnowledgeBase | null,
   toolId: ToolId
@@ -244,7 +230,6 @@ export function formatKnowledgeBaseContext(
   contextParts.push("ORGANIZATION KNOWLEDGE BASE CONTEXT:");
   contextParts.push("Use this existing knowledge about the organization to personalize the extraction:");
 
-  // Common fields for all tools
   if (kb.businessName) {
     contextParts.push(`- Business Name: ${kb.businessName}`);
   }
@@ -263,7 +248,6 @@ export function formatKnowledgeBaseContext(
     contextParts.push(`- Known Bottleneck: ${kb.biggestBottleNeck}`);
   }
 
-  // Tool-specific fields
   switch (toolId) {
     case "role-builder":
       if (kb.toolStack && Array.isArray(kb.toolStack) && kb.toolStack.length > 0) {
@@ -299,7 +283,6 @@ export function formatKnowledgeBaseContext(
       break;
 
     case "organization-profile":
-      // Include all relevant fields for KB updates
       if (kb.idealCustomer) contextParts.push(`- Ideal Customer: ${kb.idealCustomer}`);
       if (kb.topObjection) contextParts.push(`- Top Objection: ${kb.topObjection}`);
       if (kb.coreOffer) contextParts.push(`- Core Offer: ${kb.coreOffer}`);
