@@ -36,7 +36,8 @@ export const RATE_LIMIT_CONFIG: Record<string, RateLimitConfig> = {
   "/api/organization-knowledge-base/conversation": {
     user: { window: 3600, limit: 20 },
     organization: { window: 3600, limit: 100 },
-    failStrategy: "closed",
+    // open when Redis unavailable so AI Business Brain chat still works; limits apply when Redis is up
+    failStrategy: "open",
   },
 
   // TIER 2 - Moderate Cost (OpenAI GPT-4o-mini)
@@ -56,7 +57,8 @@ export const RATE_LIMIT_CONFIG: Record<string, RateLimitConfig> = {
   "/api/task-intelligence/draft": {
     user: { window: 3600, limit: 5 },
     organization: { window: 3600, limit: 20 },
-    failStrategy: "closed",
+    // open when Redis unavailable so Create with AI and Use template still work; limits apply when Redis is up
+    failStrategy: "open",
   },
 
   // TIER 3 - Low Cost/Read Operations
