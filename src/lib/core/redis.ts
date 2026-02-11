@@ -21,15 +21,20 @@ function getRedisClient(): Redis | null {
 
   try {
     const redis = new Redis(redisUrl, {
-      maxRetriesPerRequest: 3,
+      // Allow retries per command so reconnects can succeed; otherwise client stays broken after 3 failures
+      maxRetriesPerRequest: null,
       retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        console.log(`[Redis] Retry attempt ${times}, waiting ${delay}ms`);
+        const delay = Math.min(times * 100, 3000);
+        if (times <= 5 || times % 10 === 0) {
+          console.log(`[Redis] Retry attempt ${times}, waiting ${delay}ms`);
+        }
         return delay;
       },
       enableOfflineQueue: true,
       connectTimeout: 10000,
+      commandTimeout: 5000,
       lazyConnect: true,
+      keepAlive: 10000,
     });
     
     redis.on("error", (error) => {
@@ -84,6 +89,8 @@ export const redis = (() => {
     return null;
   }
 })();
+const REDIS_PING_TIMEOUT_MS = 3000;
+
 export async function isRedisAvailable(): Promise<boolean> {
   if (!redis) {
     console.log("[Redis] Health check: Redis client not initialized");
@@ -91,7 +98,12 @@ export async function isRedisAvailable(): Promise<boolean> {
   }
 
   try {
-    const result = await redis.ping();
+    const result = await Promise.race([
+      redis.ping(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Redis ping timeout")), REDIS_PING_TIMEOUT_MS)
+      ),
+    ]);
     const available = result === "PONG";
     if (available) {
       console.log("[Redis] Health check passed: Redis is available");
