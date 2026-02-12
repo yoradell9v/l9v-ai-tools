@@ -216,6 +216,53 @@ input:-webkit-autofill:active {
   animation: section-fade-in 0.5s ease-out forwards;
 }
 
+/* Task Intelligence: stage content (Draft / Edit / Review) switch */
+@keyframes stage-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-stage-in {
+  animation: stage-fade-in 0.35s ease-out forwards;
+}
+
+/* Task Intelligence: Template Library – category row and cards */
+@keyframes template-category-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-template-category-in {
+  animation: template-category-in 0.3s ease-out forwards;
+}
+
+@keyframes template-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-template-card-in {
+  animation: template-card-in 0.35s ease-out forwards;
+}
+
 /* Generated analysis / SOP result appearance */
 @keyframes analysis-in {
   from {

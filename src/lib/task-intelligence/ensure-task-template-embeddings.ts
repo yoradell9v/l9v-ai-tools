@@ -8,7 +8,8 @@ import { generateEmbedding } from "@/lib/ai/embeddings";
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
 
-function templateToSearchText(t: {
+/** Build searchable text for embedding (title + description + keyConsiderations). */
+export function templateToSearchText(t: {
   title: string;
   description: string;
   keyConsiderations: string;

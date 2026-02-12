@@ -11,12 +11,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
     DialogFooter,
 } from "@/components/ui/dialog";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
     Paperclip,
     Sparkles,
@@ -40,6 +52,7 @@ import {
     FileStack,
     AlertCircle,
     ArrowUpDown,
+    CloudDownload,
 } from "lucide-react";
 import {
     ChartPieIcon,
@@ -150,6 +163,14 @@ const TEMPLATE_CATEGORY_BUTTON_ICON: Record<string, string> = {
 const DEFAULT_CARD_BOX = "bg-muted/70 text-muted-foreground";
 const DEFAULT_BUTTON_ICON = "text-muted-foreground";
 
+const ASANA_PROJECT_ID = "1211653625969373";
+
+interface AsanaMemberInfo {
+    gid: string;
+    name: string;
+    photoUrl: string | null;
+}
+
 function friendlyErrorMessage(apiError: string | undefined, fallback: string): string {
     if (!apiError || typeof apiError !== "string") return fallback;
     const technical =
@@ -204,6 +225,9 @@ export default function TaskIntelligencePage() {
     const [editQC, setEditQC] = useState<string[]>([]);
     const [editRequestedCompletionAt, setEditRequestedCompletionAt] = useState("");
     const [requestDatePickerOpen, setRequestDatePickerOpen] = useState(false);
+    const [editAssignedToGid, setEditAssignedToGid] = useState<string | null>(null);
+    const [asanaMembers, setAsanaMembers] = useState<AsanaMemberInfo[]>([]);
+    const [asanaMembersLoading, setAsanaMembersLoading] = useState(false);
     const [editAssetLinks, setEditAssetLinks] = useState<string[]>([]);
     const [assetsSectionExpanded, setAssetsSectionExpanded] = useState(true);
 
@@ -216,6 +240,7 @@ export default function TaskIntelligencePage() {
     const [recentTaskSearch, setRecentTaskSearch] = useState("");
     const [recentTasksSortOrder, setRecentTasksSortOrder] = useState<"desc" | "asc">("desc");
     const [recentTasksOpen, setRecentTasksOpen] = useState(true);
+    const [isSyncingAsana, setIsSyncingAsana] = useState(false);
 
     const fetchRecentTasks = useCallback(async () => {
         try {
@@ -254,6 +279,52 @@ export default function TaskIntelligencePage() {
     useEffect(() => {
         if (activeTab === "templates") fetchTemplates();
     }, [activeTab, fetchTemplates]);
+
+    const handleSyncFromAsana = async () => {
+        setIsSyncingAsana(true);
+        try {
+            const res = await fetch("/api/task-intelligence/sync-asana-templates", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+            });
+            const json = await res.json();
+            if (!res.ok) {
+                toast.error(json.error || "Sync failed.");
+                return;
+            }
+            const { templatesCreated, tasksFetched, repetitiveClusters } = json.data ?? {};
+            toast.success(
+                `Sync complete. ${templatesCreated} template(s) created from ${repetitiveClusters ?? 0} repetitive pattern(s) (${tasksFetched ?? 0} tasks).`
+            );
+            fetchTemplates();
+        } catch {
+            toast.error("Sync from Asana failed.");
+        } finally {
+            setIsSyncingAsana(false);
+        }
+    };
+
+    const fetchAsanaMembers = useCallback(async () => {
+        setAsanaMembersLoading(true);
+        try {
+            const res = await fetch(`/api/asana/project-members?projectId=${ASANA_PROJECT_ID}`);
+            const json = await res.json();
+            if (json.success && json.data?.members) {
+                setAsanaMembers(json.data.members);
+            }
+        } catch {
+            toast.error("Failed to load project members.");
+        } finally {
+            setAsanaMembersLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (currentStage === 1 && currentTask) {
+            fetchAsanaMembers();
+        }
+    }, [currentStage, currentTask, fetchAsanaMembers]);
 
     useEffect(() => {
         if (currentTask) {
@@ -500,7 +571,7 @@ export default function TaskIntelligencePage() {
     return (
         <div className="w-full max-w-screen overflow-x-hidden h-screen flex flex-col">
             <div className="transition-all duration-300 ease-in-out flex-1 min-h-0 flex flex-col overflow-hidden overflow-x-hidden w-full max-w-full">
-                <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="w-full max-w-full py-10 md:px-8 lg:px-16 xl:px-24 2xl:px-32 flex flex-col flex-1 min-h-0 overflow-hidden animate-section-in">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-shrink-0 mb-6">
                         <div>
                             <h1 className="text-2xl font-bold mb-1">Task Intelligence</h1>
@@ -534,13 +605,13 @@ export default function TaskIntelligencePage() {
                                         <button
                                             type="button"
                                             onClick={() => setCurrentStage(i)}
-                                            className={`flex items-center gap-2 rounded-lg border transition-colors flex-shrink-0 ${currentStage === i
+                                            className={`flex items-center gap-2 rounded-lg border transition-all duration-300 ease-in-out flex-shrink-0 ${currentStage === i
                                                 ? "border-muted-foreground/30 bg-blue-50 dark:bg-blue-950/30 px-3 py-2"
                                                 : "border-transparent bg-transparent px-0 py-2 hover:opacity-80"
                                                 }`}
                                         >
                                             <span
-                                                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base font-medium ${currentStage === i
+                                                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base font-medium transition-all duration-300 ease-in-out ${currentStage === i
                                                     ? "bg-[var(--primary-dark)] text-white"
                                                     : "bg-muted text-muted-foreground"
                                                     }`}
@@ -548,7 +619,7 @@ export default function TaskIntelligencePage() {
                                                 {i + 1}
                                             </span>
                                             <span
-                                                className={`text-base font-medium whitespace-nowrap ${currentStage === i
+                                                className={`text-base font-medium whitespace-nowrap transition-colors duration-300 ease-in-out ${currentStage === i
                                                     ? "text-[var(--primary-dark)]"
                                                     : "text-muted-foreground"
                                                     }`}
@@ -567,7 +638,7 @@ export default function TaskIntelligencePage() {
                             </div>
 
                             {currentStage === 0 && (
-                                <div className="flex flex-col flex-1 min-h-0 gap-6">
+                                <div key="stage-0" className="flex flex-col flex-1 min-h-0 gap-6 animate-stage-in">
                                     <div className="flex-shrink-0 rounded-lg border border-border/60 bg-muted/20 p-4 space-y-4">
                                         <h2 className="text-lg font-bold mb-3">What do you need done?</h2>
                                         <div className="relative">
@@ -732,7 +803,7 @@ export default function TaskIntelligencePage() {
                             )}
 
                             {currentStage === 1 && !currentTask && (
-                                <div className="flex flex-col flex-1 min-h-0 gap-6">
+                                <div key="stage-1-empty" className="flex flex-col flex-1 min-h-0 gap-6 animate-stage-in">
                                     <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 p-8 flex flex-col items-center justify-center text-center gap-4 flex-1 min-h-0">
                                         <ClipboardDocumentCheckIcon className="h-12 w-12 text-muted-foreground" />
                                         <p className="text-base font-medium text-muted-foreground">
@@ -750,7 +821,7 @@ export default function TaskIntelligencePage() {
                             )}
 
                             {currentStage === 1 && currentTask && (
-                                <div className="flex flex-col flex-1 min-h-0 gap-6">
+                                <div key="stage-1-edit" className="flex flex-col flex-1 min-h-0 gap-6 animate-stage-in">
                                     <Card className="border border-border/60 rounded-lg flex-1 min-h-0 flex flex-col overflow-hidden">
                                         <CardContent className="pt-4 pb-4 px-6 space-y-5 flex-1 min-h-0 overflow-y-auto">
                                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -812,39 +883,72 @@ export default function TaskIntelligencePage() {
                                                 </div>
                                             </div>
 
-                                            <div>
-                                                <Label htmlFor="edit-requested-date" className="flex items-center gap-1.5">
-                                                    Requested Completion Date
-                                                    <span className="text-muted-foreground" title="When should this task be completed?">
-                                                        <span className="sr-only">Info</span>
-                                                        <span className="inline-flex h-4 w-4 rounded-full bg-muted items-center justify-center text-xs">i</span>
-                                                    </span>
-                                                </Label>
-                                                <Popover open={requestDatePickerOpen} onOpenChange={setRequestDatePickerOpen}>
-                                                    <PopoverTrigger asChild>
-                                                        <button
-                                                            id="edit-requested-date"
-                                                            type="button"
-                                                            className="mt-1 flex h-9 w-full items-center rounded-md border border-amber-200/50 bg-amber-50/50 px-3 py-2 text-left text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-amber-800/30 dark:bg-amber-950/20 [&_svg]:pointer-events-none [&_svg]:shrink-0"
-                                                        >
-                                                            {editRequestedCompletionAt
-                                                                ? new Date(editRequestedCompletionAt + "T12:00:00").toLocaleDateString(undefined, { dateStyle: "medium" })
-                                                                : "Select date"}
-                                                            <CalendarIcon className="ml-auto h-4 w-4 text-muted-foreground" />
-                                                        </button>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent className="w-auto p-0" align="start">
-                                                        <Calendar
-                                                            mode="single"
-                                                            selected={editRequestedCompletionAt ? new Date(editRequestedCompletionAt + "T12:00:00") : undefined}
-                                                            onSelect={(d) => {
-                                                                setEditRequestedCompletionAt(d ? toLocalDateString(d) : "");
-                                                                setRequestDatePickerOpen(false);
-                                                            }}
-                                                            className="rounded-lg border-0"
-                                                        />
-                                                    </PopoverContent>
-                                                </Popover>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div>
+                                                    <Label htmlFor="edit-requested-date" className="flex items-center gap-1.5">
+                                                        Requested Completion Date
+                                                        <span className="text-muted-foreground" title="When should this task be completed?">
+                                                            <span className="sr-only">Info</span>
+                                                            <span className="inline-flex h-4 w-4 rounded-full bg-muted items-center justify-center text-xs">i</span>
+                                                        </span>
+                                                    </Label>
+                                                    <Popover open={requestDatePickerOpen} onOpenChange={setRequestDatePickerOpen}>
+                                                        <PopoverTrigger asChild>
+                                                            <button
+                                                                id="edit-requested-date"
+                                                                type="button"
+                                                                className="mt-1 flex h-9 w-full items-center rounded-md border border-amber-200/50 bg-amber-50/50 px-3 py-2 text-left text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-amber-800/30 dark:bg-amber-950/20 [&_svg]:pointer-events-none [&_svg]:shrink-0"
+                                                            >
+                                                                {editRequestedCompletionAt
+                                                                    ? new Date(editRequestedCompletionAt + "T12:00:00").toLocaleDateString(undefined, { dateStyle: "medium" })
+                                                                    : "Select date"}
+                                                                <CalendarIcon className="ml-auto h-4 w-4 text-muted-foreground" />
+                                                            </button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto p-0" align="start">
+                                                            <Calendar
+                                                                mode="single"
+                                                                selected={editRequestedCompletionAt ? new Date(editRequestedCompletionAt + "T12:00:00") : undefined}
+                                                                onSelect={(d) => {
+                                                                    setEditRequestedCompletionAt(d ? toLocalDateString(d) : "");
+                                                                    setRequestDatePickerOpen(false);
+                                                                }}
+                                                                className="rounded-lg border-0"
+                                                            />
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                </div>
+                                                <div>
+                                                    <Label htmlFor="edit-assigned-to">Assigned to</Label>
+                                                    <Select
+                                                        value={editAssignedToGid ?? ""}
+                                                        onValueChange={(v) => setEditAssignedToGid(v || null)}
+                                                        disabled={asanaMembersLoading}
+                                                    >
+                                                        <SelectTrigger id="edit-assigned-to" className="mt-1 w-full h-9">
+                                                            <SelectValue placeholder={asanaMembersLoading ? "Loading..." : "Select assignee"} />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {asanaMembers.map((m) => (
+                                                                <SelectItem key={m.gid} value={m.gid}>
+                                                                    <span className="flex items-center gap-2">
+                                                                        <span className="h-6 w-6 rounded-full overflow-hidden bg-muted flex shrink-0 flex items-center justify-center">
+                                                                            {m.photoUrl ? (
+                                                                                <img src={m.photoUrl} alt="" className="h-full w-full object-cover" />
+                                                                            ) : (
+                                                                                <span className="text-xs text-muted-foreground">?</span>
+                                                                            )}
+                                                                        </span>
+                                                                        <span>{m.name}</span>
+                                                                    </span>
+                                                                </SelectItem>
+                                                            ))}
+                                                            {!asanaMembersLoading && asanaMembers.length === 0 && (
+                                                                <div className="py-2 px-2 text-sm text-muted-foreground">No members found</div>
+                                                            )}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
                                             </div>
 
                                             <div className="rounded-lg overflow-hidden">
@@ -1087,7 +1191,7 @@ export default function TaskIntelligencePage() {
                             )}
 
                             {currentStage === 2 && !displayTask && (
-                                <div className="flex flex-col flex-1 min-h-0 gap-6">
+                                <div key="stage-2-empty" className="flex flex-col flex-1 min-h-0 gap-6 animate-stage-in">
                                     <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 p-8 flex flex-col items-center justify-center text-center gap-4 flex-1 min-h-0">
                                         <ClipboardDocumentCheckIcon className="h-12 w-12 text-muted-foreground" />
                                         <p className="text-base font-medium text-muted-foreground">
@@ -1105,7 +1209,7 @@ export default function TaskIntelligencePage() {
                             )}
 
                             {currentStage === 2 && displayTask && (
-                                <div className="flex flex-col flex-1 min-h-0 gap-6">
+                                <div key="stage-2-review" className="flex flex-col flex-1 min-h-0 gap-6 animate-stage-in">
                                     <h2 className="text-lg font-bold flex-shrink-0">Review & Submit</h2>
                                     <Card className="border border-border/60 rounded-lg flex-1 min-h-0 flex flex-col overflow-hidden">
                                         <CardContent className="pt-6 pb-4 px-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
@@ -1115,11 +1219,36 @@ export default function TaskIntelligencePage() {
                                             <ReviewField label="Category">
                                                 <p>{displayTask.category}</p>
                                             </ReviewField>
-                                            {displayTask.requestedCompletionAt && (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 <ReviewField label="Requested completion date">
-                                                    <p>{new Date(displayTask.requestedCompletionAt.slice(0, 10) + "T12:00:00").toLocaleDateString()}</p>
+                                                    <p>
+                                                        {displayTask.requestedCompletionAt
+                                                            ? new Date(displayTask.requestedCompletionAt.slice(0, 10) + "T12:00:00").toLocaleDateString()
+                                                            : "—"}
+                                                    </p>
                                                 </ReviewField>
-                                            )}
+                                                <ReviewField label="Assigned to">
+                                                    <p>
+                                                        {editAssignedToGid
+                                                            ? (() => {
+                                                                const m = asanaMembers.find((x) => x.gid === editAssignedToGid);
+                                                                return m ? (
+                                                                    <span className="flex items-center gap-2">
+                                                                        <span className="h-6 w-6 rounded-full overflow-hidden bg-muted flex shrink-0 flex items-center justify-center">
+                                                                            {m.photoUrl ? (
+                                                                                <img src={m.photoUrl} alt="" className="h-full w-full object-cover" />
+                                                                            ) : (
+                                                                                <span className="text-xs text-muted-foreground">?</span>
+                                                                            )}
+                                                                        </span>
+                                                                        {m.name}
+                                                                    </span>
+                                                                ) : "—";
+                                                            })()
+                                                            : "—"}
+                                                    </p>
+                                                </ReviewField>
+                                            </div>
                                             {displayTask.assetLinks && displayTask.assetLinks.length > 0 && (
                                                 <ReviewField label="Assets & Resources">
                                                     <ul className="list-disc list-inside space-y-1">
@@ -1212,10 +1341,26 @@ export default function TaskIntelligencePage() {
                                             className="pl-9"
                                         />
                                     </div>
-                                    <Button variant="outline" size="sm" className="gap-2 shrink-0" disabled>
-                                        <Plus className="h-4 w-4" />
-                                        Suggest Template
-                                    </Button>
+                                    <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            size="sm"
+                                            className="gap-2 shrink-0 bg-[var(--primary-dark)] text-white hover:bg-[var(--primary-dark)]/90 [&_svg]:text-white"
+                                            onClick={handleSyncFromAsana}
+                                            disabled={isSyncingAsana}
+                                        >
+                                            Sync from Asana
+                                            {isSyncingAsana ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <CloudDownload className="h-4 w-4" />
+                                            )}
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom" className="max-w-[260px] text-center">
+                                        Fetches tasks from your Asana project and creates reusable templates from tasks that follow similar patterns.
+                                    </TooltipContent>
+                                </Tooltip>
                                 </div>
 
                                 {templatesLoading ? (
@@ -1223,7 +1368,7 @@ export default function TaskIntelligencePage() {
                                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                                     </div>
                                 ) : (
-                                    <>
+                                    <div className="animate-section-in flex flex-col flex-1 min-h-0">
                                         {(() => {
                                             const searchLower = templateSearch.trim().toLowerCase();
                                             const filtered = templates.filter((t) => {
@@ -1252,7 +1397,7 @@ export default function TaskIntelligencePage() {
                                                         <button
                                                             type="button"
                                                             onClick={() => setSelectedTemplateCategory("all")}
-                                                            className={`rounded-full px-3 py-1.5 text-base font-medium transition-colors inline-flex items-center gap-2 ${selectedTemplateCategory === "all"
+                                                            className={`rounded-full px-3 py-1.5 text-base font-medium transition-all duration-300 ease-in-out inline-flex items-center gap-2 ${selectedTemplateCategory === "all"
                                                                 ? "bg-[var(--primary-dark)] text-white"
                                                                 : "bg-muted/80 text-muted-foreground hover:bg-muted"
                                                                 }`}
@@ -1268,13 +1413,13 @@ export default function TaskIntelligencePage() {
                                                                     key={cat}
                                                                     type="button"
                                                                     onClick={() => setSelectedTemplateCategory(cat)}
-                                                                    className={`rounded-full px-3 py-1.5 text-base font-medium transition-colors inline-flex items-center gap-2 ${selectedTemplateCategory === cat
+                                                                    className={`rounded-full px-3 py-1.5 text-base font-medium transition-all duration-300 ease-in-out inline-flex items-center gap-2 ${selectedTemplateCategory === cat
                                                                         ? "bg-[var(--primary-dark)] text-white"
                                                                         : "bg-muted/80 hover:bg-muted"
                                                                         }`}
                                                                 >
                                                                     <CatIcon
-                                                                        className={`h-4 w-4 shrink-0 ${selectedTemplateCategory === cat ? "text-white" : buttonIconClass}`}
+                                                                        className={`h-4 w-4 shrink-0 transition-colors duration-300 ${selectedTemplateCategory === cat ? "text-white" : buttonIconClass}`}
                                                                     />
                                                                     {cat} ({countByCategory[cat] ?? 0})
                                                                 </button>
@@ -1283,7 +1428,7 @@ export default function TaskIntelligencePage() {
                                                     </div>
 
                                                     <div className="space-y-4 flex-1 min-h-0 overflow-auto">
-                                                        {categories.map((category) => {
+                                                        {categories.map((category, categoryIndex) => {
                                                             const categoryTemplates = filtered.filter(
                                                                 (t) => t.category === category
                                                             );
@@ -1296,7 +1441,11 @@ export default function TaskIntelligencePage() {
                                                                 expandedTemplateCategories.has(category);
 
                                                             return (
-                                                                <div key={category} className="space-y-0">
+                                                                <div
+                                                                    key={category}
+                                                                    className="space-y-0 animate-template-category-in"
+                                                                    style={{ animationDelay: `${categoryIndex * 50}ms` }}
+                                                                >
                                                                     <div className="rounded-lg overflow-hidden bg-muted/30">
                                                                         <button
                                                                             type="button"
@@ -1308,7 +1457,7 @@ export default function TaskIntelligencePage() {
                                                                                     return next;
                                                                                 })
                                                                             }
-                                                                            className="w-full flex items-center gap-3 p-4 text-left hover:bg-muted/50 transition-colors"
+                                                                            className="w-full flex items-center gap-3 p-4 text-left hover:bg-muted/50 transition-colors duration-200"
                                                                         >
                                                                             <span
                                                                                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${cardBoxClass}`}
@@ -1323,19 +1472,20 @@ export default function TaskIntelligencePage() {
                                                                                 </p>
                                                                             </div>
                                                                             {isExpanded ? (
-                                                                                <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                                                <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200" />
                                                                             ) : (
-                                                                                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                                                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200" />
                                                                             )}
                                                                         </button>
                                                                     </div>
                                                                     {isExpanded && (
                                                                         <div className="pt-4">
                                                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                                                {categoryTemplates.map((t) => (
+                                                                                {categoryTemplates.map((t, cardIndex) => (
                                                                                     <Card
                                                                                         key={t.id}
-                                                                                        className="overflow-hidden flex flex-col border bg-card cursor-pointer hover:border-muted-foreground/30 transition-colors py-2"
+                                                                                        className="overflow-hidden flex flex-col border bg-card cursor-pointer hover:border-muted-foreground/30 transition-colors duration-200 py-2 animate-template-card-in"
+                                                                                        style={{ animationDelay: `${cardIndex * 45}ms` }}
                                                                                         onClick={() => setSelectedTemplateForDialog(t)}
                                                                                     >
                                                                                         <CardContent className="p-4 flex flex-col flex-1">
@@ -1364,7 +1514,7 @@ export default function TaskIntelligencePage() {
                                                             );
                                                         })}
                                                         {categories.length === 0 && (
-                                                            <div className="py-12 text-center text-muted-foreground">
+                                                            <div className="py-12 text-center text-muted-foreground animate-stage-in">
                                                                 No templates match your search.
                                                             </div>
                                                         )}
@@ -1372,7 +1522,7 @@ export default function TaskIntelligencePage() {
                                                 </>
                                             );
                                         })()}
-                                    </>
+                                    </div>
                                 )}
                             </div>
                         </TabsContent>
